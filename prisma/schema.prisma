@@ -1,0 +1,213 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  firstName    String
+  lastName     String
+  email        String        @unique
+  password     String
+  number       String
+  countryName  String
+  CountryCode  String
+  gender       Gender    
+  userType     UserType       
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  roles        UserRole[]
+  otps         Otp[]
+  donor        Donor?
+  employee     Employee?
+  beneficiary  Beneficiary?
+}
+
+enum UserType {
+  donor
+  beneficiary
+  employee
+  admin
+}
+enum Gender{
+  male
+  Female
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique 
+  label       Json
+  createdAt   DateTime         @default(now())        
+  
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique 
+
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId Int  
+  roleId Int  
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       Int       
+  permissionId Int        
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Otp {
+  id        Int      @id @default(autoincrement())
+  userId    Int  
+  code      String   @db.VarChar(4) 
+  expiresAt DateTime
+  isUsed    Boolean  @default(false) 
+  createdAt DateTime @default(now()) 
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+model Employee {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalPhoto   String
+  dateOfBirth     DateTime    @db.Date
+  createdAt       DateTime @default(now())
+
+  sponsorships    Sponsorship[]
+  annualReports   AnnualReport[]
+
+  
+}
+
+model Donor {
+  id                 Int             @id @default(autoincrement())
+  userId             Int             @unique
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId   String?     
+  zipCode            String?   
+  isSponsor          Boolean
+  transactions       Transaction[]
+  sponsorships       Sponsorship[]
+  wallet             Wallet?
+}
+
+model Beneficiary {
+  id                Int             @id @default(autoincrement())
+  userId            Int             @unique
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalPhoto     String   
+  FamilyStatement   String         
+  address           Json            
+  status            Status?
+  rejectionReason   Json? 
+  socialStatus      SocialStatus
+  numberOfChildren  Int?
+  isUnemployed      Boolean 
+  monthlyIncome     Decimal @db.Decimal(10, 2)
+
+
+  requestAid     RequestAid[]
+}
+
+enum Status{
+  pending 
+  accepted
+  rejected 
+  cancelled 
+}
+
+enum SocialStatus{
+  bachelor  
+  married
+  widower
+  absolute
+}
+
+model Orphan {
+  id                      Int           @id @default(autoincrement())
+  firstName               String       
+  lastName                String
+  fatherName              String
+  motherName              String
+  birthOfDate             DateTime       @db.Date
+  gender                  Gender
+  class                   Json 
+  Diseases                Json
+  FamilyStatement         String 
+  brotherAndSisterNumber  Int 
+  guardianName            String
+  guaranteedPhone         String  
+  isSupported             Boolean       @default(false)
+  createdAt               DateTime      @default(now()) 
+  
+  sponsorships     Sponsorship[]
+  annualReports    AnnualReport[]
+}
+
+model AnnualReport {
+  id               Int      @id @default(autoincrement())
+  orphanId         Int 
+  orphan           Orphan      @relation(fields: [orphanId], references: [id], onDelete: Cascade)
+  employeeId       Int
+  employee         Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year             Int
+  content          Json     
+  mediaUrls        String 
+  createdAt        DateTime @default(now()) 
+}
+
+model Sponsorship {
+  id             Int               @id @default(autoincrement())
+  donorId        Int              
+  donor          Donor             @relation(fields: [donorId], references: [userId], onDelete: Restrict)
+  orphanId       Int               
+  orphan         Orphan            @relation(fields: [orphanId], references: [id], onDelete: Restrict)
+  employeeId     Int
+  employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount         Decimal           @db.Decimal(10, 2)
+  status         Status            @default(pending)
+  startDate      DateTime?         @db.Date
+  endDate        DateTime?         @db.Date
+  createdAt      DateTime          @default(now()) 
+  
+}
+
+model RequestAid {
+  id            Int         @id @default(autoincrement())
+  beneficiaryId Int     
+  beneficiary   Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+
+}
+
+model Wallet {
+  id      Int         @id @default(autoincrement())
+  donorId Int         @unique
+  donor   Donor @relation(fields: [donorId], references: [id], onDelete: Cascade)
+
+}
+
+model Transaction {
+  id            Int         @id @default(autoincrement())
+  donorId Int   
+  donor   Donor @relation(fields: [donorId], references: [id], onDelete: Cascade)
+
+}
