@@ -13,8 +13,8 @@ model User {
   email        String        @unique
   password     String
   number       String
-  countryName  String
-  CountryCode  String
+  countryName  String        @default("syria")
+  CountryCode  String        @default("+963")
   gender       Gender    
   userType     UserType       
   createdAt    DateTime      @default(now())
@@ -76,6 +76,7 @@ model RolePermission {
 model Otp {
   id        Int      @id @default(autoincrement())
   userId    Int  
+  number    String
   code      String   @db.VarChar(4) 
   expiresAt DateTime
   isUsed    Boolean  @default(false) 
@@ -101,8 +102,8 @@ model Donor {
   userId             Int             @unique
   user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   stripeCustomerId   String?     
-  zipCode            String?   
-  isSponsor          Boolean
+  zipCode            String?      
+  isSponsor          Boolean         @default(false)
   transactions       Transaction[]
   sponsorships       Sponsorship[]
   wallet             Wallet?

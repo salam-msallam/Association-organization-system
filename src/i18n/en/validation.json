@@ -1,0 +1,4 @@
+{
+  "NOT_EMPTY": "This field is required and cannot be empty.",
+  "PASSWORD_TOO_SHORT": "Password is too short. It must be at least 6 characters."
+}

@@ -23,6 +23,11 @@ async function bootstrap() {
       exceptionFactory: i18nValidationErrorFactory,
     }),
   );
+
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true, 
+    transform: true, 
+  }));
   app.useGlobalFilters(new I18nValidationExceptionFilter());
   await app.listen(process.env.PORT ?? 3000);
 }
