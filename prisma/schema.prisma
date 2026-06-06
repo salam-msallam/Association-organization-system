@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js" 
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum SocialStatus {
+  SINGLE
+  MARRIED
+  WIDOWED
+  DIVORCED
+}
+
+enum TypeAid {
+  FOOD_BASKET  
+  BABY_MILK
+}
+
+enum AcademicAchievement {      
+  HIGH_SCHOOL  
+  DIPLOMA 
+  BACHELOR         
+  MASTER           
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+}
+
+enum TransactionType {
+  CHARGE     
+  Deposit    
+  WITHDRAWAL  
+}
+
+model RequestAid {
+  id                        Int          @id @default(autoincrement()) 
+  beneficiary_id            Int      
+  employee_id               Int      
+  category_id               Int      
+  sub_category_id           Int?     
+
+  first_name                String     
+  last_name                 String    
+  beneficiary_father_name   String   
+  social_status             SocialStatus     
+  address                   Json     
+
+  age                       Int      
+  isUnemployed              Boolean      @default(false) 
+  gender                    String   
+  number                    String  
+
+  title                     Json     
+  details                   Json     
+  description               Json     
+
+  cost                      Decimal      @db.Decimal(10, 2) 
+  current_payment           Decimal      @db.Decimal(10, 2) @default(0.00) 
+  status                    String       @default("pending")
+  is_urgent                 Boolean      @default(false) 
+
+  createdAt                 DateTime     @default(now()) 
+  updatedAt                 DateTime     @updatedAt   
+
+  category                  Category     @relation(fields: [category_id], references: [id])
+  sub_category              SubCategory? @relation(fields: [sub_category_id], references: [id])
+  aid_details               AidDetails?   
+
+  @@map("request_aid") 
+}
+
+model AidDetails {
+  id                         Int                  @id @default(autoincrement())  
+  request_id                 Int                  @unique   
+  request_aid                RequestAid           @relation(fields: [request_id], references: [id], onDelete: Cascade)
+
+  academic_achievement       AcademicAchievement?    
+  institution_name           Json?    
+  year                       String?    
+
+  number_individuals         Int?       
+
+  project_name               Json?    
+  project_category           Json?    
+  number_of_people_supported  Int?      
+
+  current_housing_situation  Json?    
+  type_aid                   TypeAid?    
+  current_rent               Decimal?             @db.Decimal(10, 2)
+  current_place_of_residence Json?   
+  reason_for_lock            Json?    
+  housing_specifications     Json?    
+
+  media_urls                 Json?      
+
+  @@map("aid_details")
+}
+
+model Category {
+  id              Int           @id @default(autoincrement())
+  name            Json          
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  sub_categories  SubCategory[] 
+  requests        RequestAid[]  
+
+  @@map("categories")
+}
+
+model SubCategory {
+  id              Int           @id @default(autoincrement())
+  category_id     Int           
+  name            Json          
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  category        Category      @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  requests        RequestAid[]  
+
+  @@map("sub_categories")
+}
+
+model Wallet {
+  id              Int                 @id @default(autoincrement())
+  donor_id        Int                 @unique 
+  running_balance Decimal             @db.Decimal(10, 2) @default(0.00)
+
+  transactions    WalletTransaction[] 
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id                       Int               @id @default(autoincrement())
+  donor_id                 Int              
+  stripe_payment_intent_id String            @unique 
+  amount                   Decimal           @db.Decimal(10, 2) 
+  payment_status           TransactionStatus @default(PENDING)  
+  reference_type           String?        
+  reference_id             Int?              
+  type                     TransactionType   
+  createdAt                DateTime          @default(now()) @map("created_at")
+
+  @@map("transactions")
+}
+
+model WalletTransaction {
+  id              Int             @id @default(autoincrement())
+  wallet_id       Int            
+  amount          Decimal         @db.Decimal(10, 2) 
+  type            TransactionType 
+  reference_type  String?         
+  reference_id    Int?            
+  balance_after   Decimal         @db.Decimal(10, 2) 
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  wallet          Wallet          @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  @@map("wallet_transactions")
+}
+
+model Notification {
+  id           Int      @id @default(autoincrement())
+  user_id      Int    
+  title        Json    
+  message      Json    
+  target_type  String?  
+  target_id    Int?    
+  is_read      Boolean  @default(false) 
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
