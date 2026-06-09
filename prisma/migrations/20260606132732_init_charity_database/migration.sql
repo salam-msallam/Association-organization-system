@@ -7,7 +7,7 @@ CREATE TABLE `User` (
     `password` VARCHAR(191) NOT NULL,
     `number` VARCHAR(191) NOT NULL,
     `countryName` VARCHAR(191) NOT NULL,
-    `CountryCode` VARCHAR(191) NOT NULL,
+    `countryCode` VARCHAR(191) NOT NULL,
     `gender` ENUM('MALE', 'FEMALE') NOT NULL,
     `userType` ENUM('DONOR', 'BENEFICIARY', 'EMPLOYEE', 'ADMIN') NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

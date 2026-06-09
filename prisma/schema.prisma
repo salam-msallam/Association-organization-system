@@ -12,9 +12,9 @@ model User {
   lastName     String
   email        String        @unique
   password     String
-  number       String
+  number       String 
   countryName  String        @default("syria")
-  CountryCode  String        @default("+963")
+  countryCode  String        @default("+963")
   gender       Gender    
   userType     UserType       
   createdAt    DateTime      @default(now())
@@ -25,6 +25,8 @@ model User {
   donor        Donor?
   employee     Employee?
   beneficiary  Beneficiary?
+
+  
 }
 
 enum UserType {
@@ -75,13 +77,13 @@ model RolePermission {
 
 model Otp {
   id        Int      @id @default(autoincrement())
-  userId    Int  
+  userId    Int?  
   number    String
   code      String   @db.VarChar(4) 
   expiresAt DateTime
   isUsed    Boolean  @default(false) 
   createdAt DateTime @default(now()) 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 model Employee {
   id              Int      @id @default(autoincrement())
@@ -114,7 +116,7 @@ model Beneficiary {
   userId            Int             @unique
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   personalPhoto     String   
-  FamilyStatement   String         
+  familyStatement   String         
   address           Json            
   status            Status?
   rejectionReason   Json? 

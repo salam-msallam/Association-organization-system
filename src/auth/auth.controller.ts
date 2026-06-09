@@ -1,0 +1,87 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { I18nLang } from 'nestjs-i18n';
+import { AuthService } from './auth.service';
+import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
+import { RegisterDonorDto } from './dto/register-donor.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+
+@ApiTags('Auth')
+@ApiHeader({
+  name: 'accept-language', // اسحب نفس الاسم المعرف عندك في الـ HeaderResolver بـ AppModule
+  description: 'Language preferred for the response error/success messages',
+  required: false,
+  schema: { default: 'ar', enum: ['ar', 'en'] }, // يظهر كقائمة منسدلة خياراتها عربي وإنجليزي
+})
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('register/donor')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new donor account' })
+  @ApiResponse({ status: 201, description: 'OTP was sent to the donor phone number.' })
+  @ApiResponse({ status: 400, description: 'Invalid request body.' })
+  async registerDonor(
+    @Body() registerDonorDto: RegisterDonorDto,
+    @I18nLang() lang: string,
+  ) {
+    return this.authService.registerDonor(registerDonorDto, lang);
+  }
+
+  @Post('register/beneficiary')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'personalPhoto', maxCount: 1 },
+        { name: 'familyStatement', maxCount: 1 },
+      ],
+      { dest: './uploads/beneficiaries' },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: RegisterBeneficiaryDto })
+  @ApiOperation({ summary: 'Register a new beneficiary account request' })
+  @ApiResponse({ status: 201, description: 'OTP was sent to the beneficiary phone number.' })
+  @ApiResponse({ status: 400, description: 'Invalid request body.' })
+  async registerBeneficiary(
+    @Body() registerBeneficiaryDto: RegisterBeneficiaryDto,
+    @UploadedFiles()
+    files: {
+      personalPhoto?: Array<{ path: string }>;
+      familyStatement?: Array<{ path: string }>;
+    },
+    @I18nLang() lang: string,
+  ) {
+    const personalPhoto = files?.personalPhoto?.[0]?.path;
+    const familyStatement = files?.familyStatement?.[0]?.path;
+
+    if (!personalPhoto || !familyStatement) {
+      throw new BadRequestException('personalPhoto and familyStatement files are required');
+    }
+
+    registerBeneficiaryDto.personalPhoto = personalPhoto;
+    registerBeneficiaryDto.familyStatement = familyStatement;
+
+    return this.authService.registerBeneficiary(registerBeneficiaryDto, lang);
+  }
+
+  @Post('register/verify-otp')
+  async verifyOtp(
+    @Body() verifyOtpDto: VerifyOtpDto,
+    @I18nLang() lang: string,
+  ) {
+    return this.authService.verifyRegistrationOtp(verifyOtpDto, lang);
+  }
+}

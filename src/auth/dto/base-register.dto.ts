@@ -6,38 +6,38 @@ export class BaseRegisterDto {
   @ApiProperty({ example: 'salam' })
   @IsString()
   @IsNotEmpty()
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({ example: 'msallam' })
   @IsString()
   @IsNotEmpty()
-  lastName: string;
+  lastName!: string;
 
   @ApiProperty({ example: 'salam@example.com' })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'password123', minLength: 6 })
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @ApiProperty({ example: '934206455' })
   @IsString()
   @IsNotEmpty()
-  number: string;
+  number!: string;
 
   @ApiProperty({ example: 'syria' })
   @IsString()
   @IsNotEmpty()
-  countryName: string;
+  countryName!: string;
 
   @ApiProperty({ example: '+963' })
   @IsString()
   @IsNotEmpty()
-  countryCode: string;
+  countryCode!: string;
 
   @ApiProperty({ enum: Gender, example: Gender.MALE })
   @IsEnum(Gender)
-  gender: Gender;
+  gender!: Gender;
 }

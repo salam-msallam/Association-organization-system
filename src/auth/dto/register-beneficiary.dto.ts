@@ -1,16 +1,16 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SocialStatus } from '@prisma/client'; 
 import { BaseRegisterDto } from './base-register.dto';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class RegisterBeneficiaryDto extends BaseRegisterDto {
-  @ApiProperty({ example: 'https://example.com/photo.jpg' })
+  @ApiProperty({ type: 'string', format: 'binary' })
   @IsString()
   @IsNotEmpty()
   personalPhoto!: string;
 
-  @ApiProperty({ example: 'https://example.com/family-statement.pdf' })
+  @ApiProperty({ type: 'string', format: 'binary' })
   @IsString()
   @IsNotEmpty()
   familyStatement!: string;
@@ -24,16 +24,20 @@ export class RegisterBeneficiaryDto extends BaseRegisterDto {
   socialStatus!: SocialStatus;
 
   @ApiProperty({ example: true })
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   isUnemployed!: boolean;
 
   @ApiProperty({ example: 500.0 })
+  @ValidateIf((o) => o.isUnemployed === false) 
+  @IsNotEmpty({ message: 'When employed, monthlyIncome is required.' }) 
   @Type(() => Number) 
   @IsNumber()
   monthlyIncome!: number;
 
   @ApiPropertyOptional({ example: 3 })
-  @IsOptional()
+  @ValidateIf((o) => o.socialStatus !== SocialStatus.SINGLE) 
+  @IsNotEmpty() 
   @Type(() => Number)
   @IsNumber()
   numberOfChildren?: number;

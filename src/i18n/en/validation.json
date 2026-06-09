@@ -1,4 +1,11 @@
 {
-  "NOT_EMPTY": "This field is required and cannot be empty.",
-  "PASSWORD_TOO_SHORT": "Password is too short. It must be at least 6 characters."
+ "isNotEmpty": "This field is required and cannot be empty.",
+    "isString": "This field must be a string.",
+    "isNumber": "This field must be a number.",
+    "isBoolean": "This field must be a boolean value (true or false).",
+    "isEmail": "Please enter a valid email address.",
+    "minLength": "This field must be at least {constraints.0} characters long.",
+    "length": "This field must be exactly {constraints.0} characters long.",
+    "isEnum": "The selected value is invalid. It must be one of: ({constraints.1}).",
+    "matches": "The format of this field is invalid and does not match the required pattern."
 }

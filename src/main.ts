@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { i18nValidationErrorFactory, I18nValidationExceptionFilter } from 'nestjs-i18n'; 
+import { i18nValidationErrorFactory, I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n'; 
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -19,15 +19,13 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document); 
 
   app.useGlobalPipes(
-    new ValidationPipe({
-      exceptionFactory: i18nValidationErrorFactory,
+    new I18nValidationPipe({
+      whitelist: true,
+      transform: true,
     }),
   );
 
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, 
-    transform: true, 
-  }));
+  // 3. الفلتر العالمي لمعالجة وعرض الأخطاء المترجمة
   app.useGlobalFilters(new I18nValidationExceptionFilter());
   await app.listen(process.env.PORT ?? 3000);
 }
