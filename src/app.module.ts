@@ -6,6 +6,7 @@ import { AcceptLanguageResolver, I18nModule, QueryResolver } from 'nestjs-i18n';
 import { AuthModule } from './auth/auth.module';
 import * as path from 'path'; 
 import { ConfigModule } from '@nestjs/config';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: 
@@ -26,6 +27,8 @@ import { ConfigModule } from '@nestjs/config';
       ],
     }),
     AuthModule,
+    UsersModule,
+    
 
   ],
   controllers: [AppController],

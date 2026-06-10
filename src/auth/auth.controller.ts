@@ -15,13 +15,14 @@ import { AuthService } from './auth.service';
 import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
 import { RegisterDonorDto } from './dto/register-donor.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { LoginDto } from './dto/login.dto';
 
 @ApiTags('Auth')
 @ApiHeader({
-  name: 'accept-language', // اسحب نفس الاسم المعرف عندك في الـ HeaderResolver بـ AppModule
+  name: 'accept-language',
   description: 'Language preferred for the response error/success messages',
   required: false,
-  schema: { default: 'ar', enum: ['ar', 'en'] }, // يظهر كقائمة منسدلة خياراتها عربي وإنجليزي
+  schema: { default: 'ar', enum: ['ar', 'en'] },  
 })
 @Controller('auth')
 export class AuthController {
@@ -83,5 +84,12 @@ export class AuthController {
     @I18nLang() lang: string,
   ) {
     return this.authService.verifyRegistrationOtp(verifyOtpDto, lang);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('login')
+  async login(@Body() loginDto: LoginDto,
+         @I18nLang() lang:string) {
+    return this.authService.login(loginDto, lang);
   }
 }

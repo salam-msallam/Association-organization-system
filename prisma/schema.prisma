@@ -26,6 +26,8 @@ model User {
   employee     Employee?
   beneficiary  Beneficiary?
 
+  @@unique([countryCode, number])
+
   
 }
 

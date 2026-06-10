@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -18,6 +19,10 @@ import {
 import { OtpService } from './otp.service';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { WhatsappService } from './whatsapp.service';
+import { UsersService } from 'src/users/users.service';
+import { JwtService } from '@nestjs/jwt';
+import parsePhoneNumberFromString from 'libphonenumber-js';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +32,8 @@ export class AuthService {
     private readonly otpService: OtpService,
     private readonly whatsappService: WhatsappService,
     private readonly i18n: I18nService,
+    private usersService: UsersService, 
+    private jwtService: JwtService,
   ) {}
 
   private getRegistrationCacheKey(countryCode: string, number: string): string {
@@ -206,5 +213,54 @@ if (existingUserByEmail) {
         this.i18n.t('auth.errors.TRANSACTION_FAILED', { lang }),
       );
     }
+  }
+
+  async login(loginDto: LoginDto , lang:string) {
+
+    const { phoneNumber, password } = loginDto;
+    const parsedNumber = parsePhoneNumberFromString(phoneNumber);
+    
+   
+    if (!parsedNumber || !parsedNumber.isValid()) {
+      throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
+    }
+
+    // استخراج الأجزاء المتوافقة مع أسلوب تخزينك في قاعدة البيانات
+    const countryCode = `+${parsedNumber.countryCallingCode}`; // مثل: +963 أو +1
+    const nationalNumber = parsedNumber.nationalNumber;       // مثل: 912345678
+
+    // 2. البحث عن المستخدم في الـ UsersService بتركيبة (رمز الدولة + الرقم)
+    const user = await this.usersService.findByPhoneComponents(countryCode, nationalNumber);
+    
+    // رسالة حماية عامة لكي لا يعرف المخترق هل الخطأ في الرقم أم كلمة المرور
+    if (!user) {
+      throw new UnauthorizedException(this.i18n.t('auth.INVALID_PHONE_OR_PASSWORD', { lang }));
+    }
+
+    // 3. التحقق من تطابق كلمة المرور المشفرة (Bcrypt)
+    const isPasswordMatching = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatching) {
+      throw new UnauthorizedException(this.i18n.t('auth.INVALID_PASSWORD',{lang}));
+    }
+
+    
+    const payload = { 
+      sub: user.id, 
+      countryCode: user.countryCode, 
+      number: user.number,
+      type: user.userType
+    };
+
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: {
+        id: user.id,
+        firstNama: user.firstName,
+        lastName: user.lastName,
+        countryCode: user.countryCode,
+        number: user.number,
+        type: user.userType,
+      },
+    };
   }
 }
