@@ -7,12 +7,12 @@ import { Transform, Type } from 'class-transformer';
 export class RegisterBeneficiaryDto extends BaseRegisterDto {
   @ApiProperty({ type: 'string', format: 'binary' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   personalPhoto!: string;
 
   @ApiProperty({ type: 'string', format: 'binary' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   familyStatement!: string;
 
   @ApiProperty({ example: 'Mezzeh' }) 

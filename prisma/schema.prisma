@@ -120,7 +120,7 @@ model Beneficiary {
   personalPhoto     String   
   familyStatement   String         
   address           Json            
-  status            Status?
+  status            Status          @default(PENDING)
   rejectionReason   Json? 
   socialStatus      SocialStatus
   numberOfChildren  Int?
@@ -132,10 +132,10 @@ model Beneficiary {
 }
 
 enum Status{
-  pending 
-  accepted
-  rejected 
-  cancelled 
+  PENDING 
+  ACCEPTED
+  REJECTED
+  CANCELLEd
 }
 
 model Orphan {
@@ -180,7 +180,7 @@ model Sponsorship {
   employeeId     Int
   employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   amount         Decimal           @db.Decimal(10, 2)
-  status         Status            @default(pending)
+  status         Status            @default(PENDING)
   startDate      DateTime?         @db.Date
   endDate        DateTime?         @db.Date
   createdAt      DateTime          @default(now()) 
@@ -243,7 +243,7 @@ model RequestAid {
 
   cost                      Decimal      @db.Decimal(10, 2) 
   currentPayment           Decimal      @db.Decimal(10, 2) @default(0.00) 
-  status                    String       @default("pending")
+  status                    Status      @default(PENDING)
   isUrgent                 Boolean      @default(false) 
 
   createdAt                 DateTime     @default(now()) 

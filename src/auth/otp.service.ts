@@ -28,14 +28,14 @@ export class OtpService {
     // If your schema has an 'isUsed' boolean field, you can do:
     await this.prisma.otp.updateMany({
       where: {
-        number: fullPhoneNumber,
-        userId: null,
-        // Depending on your schema, optionally filter where expiresAt > current time
-      },
-      data: {
-        // Mark them as expired or used so they can't be reused maliciously
-        expiresAt: new Date(), 
-      },
+    number: fullPhoneNumber,
+    userId: null,
+    expiresAt: { gt: new Date() }, // تحديث فقط الرموز التي لم تنتهِ صلاحيتها بعد
+    isUsed: false, 
+  },
+  data: {
+    expiresAt: new Date(), // جعلها تنتهي الآن
+  },
     });
 
     // 5. Create the new Otp record
@@ -60,23 +60,53 @@ export class OtpService {
   }
   async verifyRegistrationOtp(fullPhoneNumber: string, code: string, lang: string) {
     const otpRecord = await this.prisma.otp.findFirst({
-      where: { number: fullPhoneNumber, code },
-    });
+    where: { 
+      number: fullPhoneNumber, 
+      code,
+      isUsed: false // يفضل فلترتها هنا مباشرة إن وجدت في الـ Schema
+    },
+    orderBy: {
+      createdAt: 'desc', // تأكد أن لديك حقل createdAt في جدول الـ OTP وترتيبه تنازلياً ليجلب الأحدث
+    },
+  });
 
     if (!otpRecord) {
-      throw new BadRequestException(this.i18n.t('auth.errors.OTP_NOT_FOUND', { lang }));
+      throw new BadRequestException(this.i18n.t('auth.OTP_NOT_FOUND', { lang }));
     }
 
     if (otpRecord.isUsed) {
       throw new BadRequestException(this.i18n.t('auth.OTP_ALREADY_USED', { lang }));
     }
 
-    if (new Date() > otpRecord.expiresAt) {
-      throw new BadRequestException(this.i18n.t('auth.OTP_EXPIRED', { lang }));
-    }
+   // تحويل كلا الوقتين إلى الـ Timestamp الرقمي الموحد لإلغاء تأثير الـ Timezone تماماً
+if (Date.now() > new Date(otpRecord.expiresAt).getTime()) {
+  throw new BadRequestException(this.i18n.t('auth.OTP_EXPIRED', { lang }));
+}
 
     return true;
   }
+
+//   async verifyRegistrationOtp(fullPhoneNumber: string, code: string, lang: string) {
+//   const otpRecord = await this.prisma.otp.findFirst({
+//     where: {
+//       number: fullPhoneNumber,
+//       code,
+//       isUsed: false,
+//       expiresAt: { gt: new Date() }, // ← فقط الصالح
+//     },
+//     orderBy: { createdAt: 'desc' }, // ← الأحدث
+//   });
+
+//   if (!otpRecord) {
+//     // هون بتغطي حالتين: ما موجود + منتهي الصلاحية
+//     throw new BadRequestException(this.i18n.t('auth.OTP_NOT_FOUND', { lang }));
+//   }
+
+//   // ما بقى محتاج تتحقق من isUsed و expiresAt بشكل منفصل
+//   // لأنهم صاروا جزء من الـ query
+
+//   return true;
+// }
 
   async markOtpAsUsed(fullPhoneNumber: string, code: string) {
     await this.prisma.otp.updateMany({

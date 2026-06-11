@@ -57,26 +57,38 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'OTP was sent to the beneficiary phone number.' })
   @ApiResponse({ status: 400, description: 'Invalid request body.' })
   async registerBeneficiary(
+
     @Body() registerBeneficiaryDto: RegisterBeneficiaryDto,
+
     @UploadedFiles()
+
     files: {
+
       personalPhoto?: Array<{ path: string }>;
+
       familyStatement?: Array<{ path: string }>;
+
     },
+
     @I18nLang() lang: string,
+
   ) {
+
     const personalPhoto = files?.personalPhoto?.[0]?.path;
     const familyStatement = files?.familyStatement?.[0]?.path;
 
     if (!personalPhoto || !familyStatement) {
       throw new BadRequestException('personalPhoto and familyStatement files are required');
+
     }
 
     registerBeneficiaryDto.personalPhoto = personalPhoto;
     registerBeneficiaryDto.familyStatement = familyStatement;
 
     return this.authService.registerBeneficiary(registerBeneficiaryDto, lang);
-  }
+
+  } 
+
 
   @Post('register/verify-otp')
   async verifyOtp(
