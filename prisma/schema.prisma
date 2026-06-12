@@ -213,9 +213,8 @@ enum TransactionStatus {
 }
 
 enum TransactionType {
-  CHARGE     
-  Deposit    
-  WITHDRAWAL  
+  DIRECT_DONATION  
+  WALLET_DONATION 
 }
 
 model RequestAid {
@@ -234,7 +233,7 @@ model RequestAid {
 
   age                       Int      
   isUnemployed              Boolean      @default(false) 
-  gender                    String   
+  gender                    Gender  
   number                    String  
 
   title                     Json     
