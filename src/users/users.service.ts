@@ -14,6 +14,9 @@ export class UsersService {
       countryCode: countryCode,
       number: number,
       },
+      include: {
+      beneficiary: true, 
+    },
     });
   }
 

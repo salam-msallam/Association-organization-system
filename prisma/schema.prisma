@@ -131,11 +131,11 @@ model Beneficiary {
   requestAid     RequestAid[]
 }
 
-enum Status{
+enum Status{    
   PENDING 
   ACCEPTED
   REJECTED
-  CANCELLEd
+  CANCELLED
 }
 
 model Orphan {

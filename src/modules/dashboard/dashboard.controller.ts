@@ -10,9 +10,6 @@ export class DashboardController {
 
   @ApiBearerAuth()
   @Get('summary')
-    @ApiOperation({ summary: 'Register a new donor account' })
-    @ApiResponse({ status: 201, description: 'OTP was sent to the donor phone number.' })
-    @ApiResponse({ status: 400, description: 'Invalid request body.' })
   async getDashboardStatistics() {
     return await this.dashboardService.getDashboardStats();
   }

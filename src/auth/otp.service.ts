@@ -18,10 +18,15 @@ export class OtpService {
     const fullPhoneNumber = `${cleanCountry}${number}`;
 
     // 2. Set expiration time to 10 minutes from now
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    //const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const now = new Date();
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+  console.log('Server now:', now.toISOString());
+  console.log('Expires at:', expiresAt.toISOString());
 
     // 3. Generate a 4-digit numeric code string
     const code = Math.floor(1000 + Math.random() * 9000).toString();
+
 
     // 4. Clean up / Invalidate previous unused OTPs for this number
     // We assume your table has an 'isUsed' or similar flag, or we simply invalidate them by expiring them out.
@@ -47,6 +52,7 @@ export class OtpService {
         expiresAt,
       },
     });
+    console.log('Expires at:', expiresAt.toISOString());
 
     return { code, fullPhoneNumber, expiresAt };
   }
@@ -66,9 +72,11 @@ export class OtpService {
       isUsed: false // يفضل فلترتها هنا مباشرة إن وجدت في الـ Schema
     },
     orderBy: {
-      createdAt: 'desc', // تأكد أن لديك حقل createdAt في جدول الـ OTP وترتيبه تنازلياً ليجلب الأحدث
+      createdAt: 'desc', 
     },
   });
+  console.log('Checking at:', new Date().toISOString());
+console.log('OTP expires:', otpRecord?.expiresAt?.toISOString());
 
     if (!otpRecord) {
       throw new BadRequestException(this.i18n.t('auth.OTP_NOT_FOUND', { lang }));

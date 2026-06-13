@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -23,6 +24,7 @@ import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 import { LoginDto } from './dto/login.dto';
+import { Status } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -97,9 +99,9 @@ if (existingUserByEmail) {
       return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
     } catch (error) {
       await this.clearPendingRegistration(dto.countryCode, dto.number);
-      if (otpResult) {
-        await this.otpService.forceExpireOtp(otpResult.fullPhoneNumber, otpResult.code);
-      }
+      // if (otpResult) {
+      //   await this.otpService.forceExpireOtp(otpResult.fullPhoneNumber, otpResult.code);
+      // }
       throw error;
     }
   }
@@ -225,19 +227,23 @@ if (existingUserByEmail) {
       throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
     }
 
-    // استخراج الأجزاء المتوافقة مع أسلوب تخزينك في قاعدة البيانات
-    const countryCode = `+${parsedNumber.countryCallingCode}`; // مثل: +963 أو +1
-    const nationalNumber = parsedNumber.nationalNumber;       // مثل: 912345678
-
-    // 2. البحث عن المستخدم في الـ UsersService بتركيبة (رمز الدولة + الرقم)
-    const user = await this.usersService.findByPhoneComponents(countryCode, nationalNumber);
     
-    // رسالة حماية عامة لكي لا يعرف المخترق هل الخطأ في الرقم أم كلمة المرور
+    const countryCode = `+${parsedNumber.countryCallingCode}`; 
+    const nationalNumber = parsedNumber.nationalNumber;       
+
+    const user = await this.usersService.findByPhoneComponents(countryCode, nationalNumber);
+      
     if (!user) {
       throw new UnauthorizedException(this.i18n.t('auth.INVALID_PHONE_OR_PASSWORD', { lang }));
     }
+    if (user.userType === 'BENEFICIARY') {
+  if (!user.beneficiary || user.beneficiary.status !== Status.ACCEPTED) {
+    throw new ForbiddenException(
+      this.i18n.t('auth.ACCOUNT_NOT_APPROVED_YET', { lang })
+    );
+  }
+}
 
-    // 3. التحقق من تطابق كلمة المرور المشفرة (Bcrypt)
     const isPasswordMatching = await bcrypt.compare(password, user.password);
     if (!isPasswordMatching) {
       throw new UnauthorizedException(this.i18n.t('auth.INVALID_PASSWORD',{lang}));
