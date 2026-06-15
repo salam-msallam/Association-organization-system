@@ -13,18 +13,13 @@ export class OtpService {
       countryCode: string,
       number: string,
     ): Promise<{ code: string; fullPhoneNumber: string; expiresAt: Date }> {
-    // 1. Normalize the phone number format
+   
     const cleanCountry = countryCode.startsWith('+') ? countryCode : `+${countryCode}`;
     const fullPhoneNumber = `${cleanCountry}${number}`;
 
-    // 2. Set expiration time to 10 minutes from now
-    //const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+   
     const now = new Date();
-  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
-  console.log('Server now:', now.toISOString());
-  console.log('Expires at:', expiresAt.toISOString());
-
-    // 3. Generate a 4-digit numeric code string
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
     const code = Math.floor(1000 + Math.random() * 9000).toString();
 
 
@@ -35,11 +30,11 @@ export class OtpService {
       where: {
     number: fullPhoneNumber,
     userId: null,
-    expiresAt: { gt: new Date() }, // تحديث فقط الرموز التي لم تنتهِ صلاحيتها بعد
+    expiresAt: { gt: new Date() }, 
     isUsed: false, 
   },
   data: {
-    expiresAt: new Date(), // جعلها تنتهي الآن
+    expiresAt: new Date(), 
   },
     });
 
@@ -52,7 +47,7 @@ export class OtpService {
         expiresAt,
       },
     });
-    console.log('Expires at:', expiresAt.toISOString());
+
 
     return { code, fullPhoneNumber, expiresAt };
   }
@@ -69,14 +64,12 @@ export class OtpService {
     where: { 
       number: fullPhoneNumber, 
       code,
-      isUsed: false // يفضل فلترتها هنا مباشرة إن وجدت في الـ Schema
+      isUsed: false 
     },
     orderBy: {
       createdAt: 'desc', 
     },
   });
-  console.log('Checking at:', new Date().toISOString());
-console.log('OTP expires:', otpRecord?.expiresAt?.toISOString());
 
     if (!otpRecord) {
       throw new BadRequestException(this.i18n.t('auth.OTP_NOT_FOUND', { lang }));
@@ -86,7 +79,6 @@ console.log('OTP expires:', otpRecord?.expiresAt?.toISOString());
       throw new BadRequestException(this.i18n.t('auth.OTP_ALREADY_USED', { lang }));
     }
 
-   // تحويل كلا الوقتين إلى الـ Timestamp الرقمي الموحد لإلغاء تأثير الـ Timezone تماماً
 if (Date.now() > new Date(otpRecord.expiresAt).getTime()) {
   throw new BadRequestException(this.i18n.t('auth.OTP_EXPIRED', { lang }));
 }

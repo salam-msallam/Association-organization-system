@@ -88,23 +88,27 @@ if (existingUserByEmail) {
     await this.cacheManager.del(cacheKey);
   }
 
-  async registerDonor(dto: RegisterDonorDto, lang: string): Promise<{ message: string }> {
-    await this.storePendingRegistration('DONOR', dto, lang);
+ async registerDonor(dto: RegisterDonorDto, lang: string): Promise<{ message: string }> {
+  await this.storePendingRegistration('DONOR', dto, lang);
 
-    let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
-    try {
-      otpResult = await this.otpService.createRegistrationOtp(dto.countryCode, dto.number);
-      await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
-
-      return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
-    } catch (error) {
-      await this.clearPendingRegistration(dto.countryCode, dto.number);
-      // if (otpResult) {
-      //   await this.otpService.forceExpireOtp(otpResult.fullPhoneNumber, otpResult.code);
-      // }
-      throw error;
-    }
+  let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
+  
+  try {
+    otpResult = await this.otpService.createRegistrationOtp(dto.countryCode, dto.number);
+  } catch (error) {
+    await this.clearPendingRegistration(dto.countryCode, dto.number);
+    throw error;
   }
+
+  try {
+    await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
+  } catch (whatsappError) {
+    console.error('WhatsApp sending failed, but OTP is kept in DB for testing:');
+    return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
+  }
+
+  return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
+}
 
   async registerBeneficiary(
     dto: RegisterBeneficiaryDto,
@@ -113,18 +117,20 @@ if (existingUserByEmail) {
     await this.storePendingRegistration('BENEFICIARY', dto, lang);
 
     let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
-    try {
+  try {
       otpResult = await this.otpService.createRegistrationOtp(dto.countryCode, dto.number);
-      await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
+  } catch (error) {
+    await this.clearPendingRegistration(dto.countryCode, dto.number);
+    throw error;
+  }
+  try {
+    await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
+  } catch (whatsappError) {
+    console.error('WhatsApp sending failed, but OTP is kept in DB for testing:');
+    return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
+  }
 
-      return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
-    } catch (error) {
-      await this.clearPendingRegistration(dto.countryCode, dto.number);
-      if (otpResult) {
-        await this.otpService.forceExpireOtp(otpResult.fullPhoneNumber, otpResult.code);
-      }
-      throw error;
-    }
+  return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
   }
 
   async getPendingRegistration(
