@@ -13,15 +13,15 @@ export class OtpService {
       countryCode: string,
       number: string,
     ): Promise<{ code: string; fullPhoneNumber: string; expiresAt: Date }> {
-    // 1. Normalize the phone number format
+   
     const cleanCountry = countryCode.startsWith('+') ? countryCode : `+${countryCode}`;
     const fullPhoneNumber = `${cleanCountry}${number}`;
 
-    // 2. Set expiration time to 10 minutes from now
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    // 3. Generate a 4-digit numeric code string
+   
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
     const code = Math.floor(1000 + Math.random() * 9000).toString();
+
 
     // 4. Clean up / Invalidate previous unused OTPs for this number
     // We assume your table has an 'isUsed' or similar flag, or we simply invalidate them by expiring them out.
@@ -30,11 +30,11 @@ export class OtpService {
       where: {
     number: fullPhoneNumber,
     userId: null,
-    expiresAt: { gt: new Date() }, // تحديث فقط الرموز التي لم تنتهِ صلاحيتها بعد
+    expiresAt: { gt: new Date() }, 
     isUsed: false, 
   },
   data: {
-    expiresAt: new Date(), // جعلها تنتهي الآن
+    expiresAt: new Date(), 
   },
     });
 
@@ -47,6 +47,7 @@ export class OtpService {
         expiresAt,
       },
     });
+
 
     return { code, fullPhoneNumber, expiresAt };
   }
@@ -63,10 +64,10 @@ export class OtpService {
     where: { 
       number: fullPhoneNumber, 
       code,
-      isUsed: false // يفضل فلترتها هنا مباشرة إن وجدت في الـ Schema
+      isUsed: false 
     },
     orderBy: {
-      createdAt: 'desc', // تأكد أن لديك حقل createdAt في جدول الـ OTP وترتيبه تنازلياً ليجلب الأحدث
+      createdAt: 'desc', 
     },
   });
 
@@ -78,7 +79,6 @@ export class OtpService {
       throw new BadRequestException(this.i18n.t('auth.OTP_ALREADY_USED', { lang }));
     }
 
-   // تحويل كلا الوقتين إلى الـ Timestamp الرقمي الموحد لإلغاء تأثير الـ Timezone تماماً
 if (Date.now() > new Date(otpRecord.expiresAt).getTime()) {
   throw new BadRequestException(this.i18n.t('auth.OTP_EXPIRED', { lang }));
 }
