@@ -14,12 +14,9 @@ export class AbilitiesGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    console.log('--- فحص الطلب في الـ Guard ---');
-    console.log('المستخدم القادم من التوكن:', request.user);
     
     const userPayload = request.user; 
     if (!userPayload) {
-      console.log('❌ فشل الحارس: لم يتم العثور على user داخل الـ request');
       throw new UnauthorizedException('يرجى تسجيل الدخول أولاً');
     }
 
@@ -41,7 +38,6 @@ export class AbilitiesGuard implements CanActivate {
       }
     });
 
-    console.log('المستخدم الكامل من الـ DB:', fullUser);
 
     if (!fullUser) {
       throw new UnauthorizedException('المستخدم غير موجود في النظام');
