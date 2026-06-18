@@ -1,0 +1,11 @@
+{
+  "read:orphans": "استعراض بيانات الأيتام",
+  "create:orphans": "تسجيل يتيم جديد",
+  "update:orphans": "تعديل بيانات اليتيم",
+  "delete:orphans": "حذف سجل يتيم",
+  
+  "read:employees": "عرض قائمة الموظفين",
+  "create:employees": "إنشاء حساب موظف جديد",
+  "update:employees": "تعديل معلومات موظف",
+  "delete:employees": "حذف حساب موظف"
+}
