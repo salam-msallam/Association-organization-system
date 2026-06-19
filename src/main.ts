@@ -2,7 +2,7 @@ import { NestFactory,Reflector} from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe ,ClassSerializerInterceptor } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { i18nValidationErrorFactory, I18nValidationExceptionFilter } from 'nestjs-i18n'; 
+import { i18nValidationErrorFactory, I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n'; 
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,7 +21,7 @@ async function bootstrap() {
         description: 'أدخل التوكن الصافي هنا',
         in: 'header',
       },
-      'jwt'
+      'jwt',
     )
     .build();
     
@@ -29,10 +29,13 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document); 
 
   app.useGlobalPipes(
-    new ValidationPipe({
-      exceptionFactory: i18nValidationErrorFactory,
+    new I18nValidationPipe({
+      whitelist: true,
+      transform: true,
     }),
   );
+
+  // 3. الفلتر العالمي لمعالجة وعرض الأخطاء المترجمة
   app.useGlobalFilters(new I18nValidationExceptionFilter());
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   await app.listen(process.env.PORT ?? 3000);

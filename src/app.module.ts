@@ -5,15 +5,21 @@ import { PrismaModule } from './prisma/prisma.module';
 import { EmployeeModule } from './employee/employee.module';
 import { TranslationInterceptor } from './interceptors/translation.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core'; 
-import { I18nModule, AcceptLanguageResolver } from 'nestjs-i18n';
-import * as path from 'path'; 
 import { CaslModule } from './casl/casl.module';
 import { RoleModule } from './role/role.module';
+import { AcceptLanguageResolver, I18nModule, QueryResolver } from 'nestjs-i18n';
 import { AuthModule } from './auth/auth.module';
+import * as path from 'path'; 
+import { ConfigModule } from '@nestjs/config';
+import { UsersModule } from './users/users.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
-  imports: [
-    PrismaModule,
+  imports: 
+  [PrismaModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     EmployeeModule,
     CaslModule,
     I18nModule.forRoot({
@@ -28,6 +34,11 @@ import { AuthModule } from './auth/auth.module';
     }),
     RoleModule,
     AuthModule,
+    AuthModule,
+    UsersModule,
+    DashboardModule,
+    
+
   ],
   controllers: [AppController],
   providers: [

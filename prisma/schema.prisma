@@ -12,9 +12,9 @@ model User {
   lastName     String
   email        String        @unique
   password     String
-  number       String
-  countryName  String
-  CountryCode  String
+  number       String 
+  countryName  String        @default("syria")
+  countryCode  String        @default("+963")
   gender       Gender    
   userType     UserType       
   createdAt    DateTime      @default(now())
@@ -25,6 +25,10 @@ model User {
   donor        Donor?
   employee     Employee?
   beneficiary  Beneficiary?
+
+  @@unique([countryCode, number])
+
+  
 }
 
 enum UserType {
@@ -75,12 +79,13 @@ model RolePermission {
 
 model Otp {
   id        Int      @id @default(autoincrement())
-  userId    Int  
+  userId    Int?  
+  number    String
   code      String   @db.VarChar(4) 
   expiresAt DateTime
   isUsed    Boolean  @default(false) 
   createdAt DateTime @default(now()) 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 model Employee {
   id              Int      @id @default(autoincrement())
@@ -101,8 +106,8 @@ model Donor {
   userId             Int             @unique
   user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   stripeCustomerId   String?     
-  zipCode            String?   
-  isSponsor          Boolean
+  zipCode            String?      
+  isSponsor          Boolean         @default(false)
   transactions       Transaction[]
   sponsorships       Sponsorship[]
   wallet             Wallet?
@@ -113,9 +118,9 @@ model Beneficiary {
   userId            Int             @unique
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   personalPhoto     String   
-  FamilyStatement   String         
+  familyStatement   String         
   address           Json            
-  status            Status?
+  status            Status          @default(PENDING)
   rejectionReason   Json? 
   socialStatus      SocialStatus
   numberOfChildren  Int?
@@ -126,11 +131,11 @@ model Beneficiary {
   requestAid     RequestAid[]
 }
 
-enum Status{
-  pending 
-  accepted
-  rejected 
-  cancelled 
+enum Status{    
+  PENDING 
+  ACCEPTED
+  REJECTED
+  CANCELLED
 }
 
 model Orphan {
@@ -175,7 +180,7 @@ model Sponsorship {
   employeeId     Int
   employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   amount         Decimal           @db.Decimal(10, 2)
-  status         Status            @default(pending)
+  status         Status            @default(PENDING)
   startDate      DateTime?         @db.Date
   endDate        DateTime?         @db.Date
   createdAt      DateTime          @default(now()) 
@@ -208,9 +213,8 @@ enum TransactionStatus {
 }
 
 enum TransactionType {
-  CHARGE     
-  Deposit    
-  WITHDRAWAL  
+  DIRECT_DONATION  
+  WALLET_DONATION 
 }
 
 model RequestAid {
@@ -229,7 +233,7 @@ model RequestAid {
 
   age                       Int      
   isUnemployed              Boolean      @default(false) 
-  gender                    String   
+  gender                    Gender  
   number                    String  
 
   title                     Json     
@@ -238,7 +242,7 @@ model RequestAid {
 
   cost                      Decimal      @db.Decimal(10, 2) 
   currentPayment           Decimal      @db.Decimal(10, 2) @default(0.00) 
-  status                    String       @default("pending")
+  status                    Status      @default(PENDING)
   isUrgent                 Boolean      @default(false) 
 
   createdAt                 DateTime     @default(now()) 

@@ -33,7 +33,7 @@ export class EmployeeService {
         password: hashedPassword,
         userType: UserType.EMPLOYEE, 
         countryName: 'Syria',       
-        CountryCode: '963',        
+        countryCode: '963',        
         
         employee: {
           create: {

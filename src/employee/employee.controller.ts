@@ -9,7 +9,8 @@ import { ApiBearerAuth} from '@nestjs/swagger';
 
 
 @Controller('employee')
-@UseGuards(AuthGuard('jwt'), AbilitiesGuard) 
+// @UseGuards(AuthGuard('jwt'), AbilitiesGuard) 
+@UseGuards(AuthGuard('jwt')) // 👈 اتركي حارس التوكن فقط
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 

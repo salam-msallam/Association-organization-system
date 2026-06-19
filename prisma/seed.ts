@@ -134,7 +134,7 @@ async function main() {
       password: hashedPassword, 
       number: '123456789',
       countryName: 'Syria',
-      CountryCode: '963',
+      countryCode: '963',
       gender: Gender.MALE,
       userType: UserType.ADMIN,
       roles: {
