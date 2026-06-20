@@ -1,5 +1,5 @@
 // src/employee/dto/create-employee.dto.ts
-import { IsEmail, IsString, IsEnum, IsInt, IsNotEmpty, IsDateString, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsEnum, IsInt, IsNotEmpty, IsDateString, MinLength, IsArray,IsNumber } from 'class-validator';
 import { Gender } from '@prisma/client';
 
 export class CreateEmployeeDto {
@@ -15,10 +15,10 @@ export class CreateEmployeeDto {
   @IsNotEmpty()
   email: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
+  // @IsString()
+  // @IsNotEmpty()
+  // @MinLength(6)
+  // password: string;
 
   @IsString()
   @IsNotEmpty()
@@ -34,7 +34,8 @@ export class CreateEmployeeDto {
   @IsDateString({},{message: 'The date of birth must be YY-MM-dd' })
   dateOfBirth: string;
 
-  @IsInt()
+  @IsArray()
+  @IsNumber({}, { each: true })
   @IsNotEmpty()
-  roleId: number;
+  roleIds: number[];
 }

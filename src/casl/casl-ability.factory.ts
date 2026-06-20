@@ -14,7 +14,9 @@ export class CaslAbilityFactory {
     if (user.userType === 'ADMIN') {
       can('manage', 'Employee'); 
       can('manage', 'Role');     
-      can('read', 'Donor');      
+      can('read', 'Donor');  
+      can ('read','Orphan');
+      can('read','Beneficiary');    
     } else {
       const userPermissions: string[] = user.permissions || [];
 
