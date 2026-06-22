@@ -6,10 +6,16 @@ import { AbilitiesGuard} from '../guards/abilities.guard';
 import { CheckAbilities } from '../decorators/abilities.decorator'; 
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { AuthGuard } from '@nestjs/passport'; 
-import { ApiBearerAuth} from '@nestjs/swagger'; 
+import { ApiBearerAuth, ApiHeader} from '@nestjs/swagger'; 
 
 
 @Controller('employee')
+@ApiHeader({
+  name: 'accept-language',
+  description: 'Language preferred for the response error/success messages',
+  required: false,
+  schema: { default: 'ar', enum: ['ar', 'en'] },  
+})
 @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
