@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, UsePipes, Param, Delete, ValidationPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, UsePipes, Param, Delete, ValidationPipe, UseGuards, Query } from '@nestjs/common';
 import { EmployeeService } from './employee.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -9,8 +9,7 @@ import { ApiBearerAuth} from '@nestjs/swagger';
 
 
 @Controller('employee')
-// @UseGuards(AuthGuard('jwt'), AbilitiesGuard) 
-@UseGuards(AuthGuard('jwt')) // 👈 اتركي حارس التوكن فقط
+@UseGuards(AuthGuard('jwt')) 
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 
@@ -30,8 +29,10 @@ export class EmployeeController {
   @Get()
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'read', subject: 'Employee' })
-  findAll() {
-    return this.employeeService.findAll();
+  findAll(@Query('page') page?: string,@Query('limit') limit?: string) {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 10;
+    return this.employeeService.findAll(pageNumber,limitNumber);
   }
 
   @Get(':id')

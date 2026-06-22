@@ -5,12 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { UserType } from '@prisma/client';
 import { Employee } from './entities/employee.entity';
+import * as generatePassword from 'generate-password'; 
 
 @Injectable()
 export class EmployeeService {
   constructor(private prisma: PrismaService) {}
   async create(createEmployeeDto: CreateEmployeeDto) {
-      const { roleId, dateOfBirth, personalPhoto, password, ...restData } = createEmployeeDto;
+      const { roleIds, dateOfBirth, personalPhoto,...restData } = createEmployeeDto;
 
     const userExists = await this.prisma.user.findUnique({
       where: { email: restData.email },
@@ -19,13 +20,23 @@ export class EmployeeService {
       throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
     }
 
-    const role = await this.prisma.role.findUnique({
-      where: { id: roleId },
+
+    const existingRoles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
     });
-    if (!role) {
-      throw new BadRequestException('الدور المحدد غير موجود في النظام، يرجى اختيار دور صالح');
+    if (existingRoles.length !== roleIds.length) {
+      throw new BadRequestException('بعض الأدوار المحددة غير موجودة في النظام، يرجى التحقق من المدخلات');
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const generatedPassword = generatePassword.generate({
+      length: 8,        
+      numbers: true,    
+      uppercase: true,  
+      lowercase: true,   
+    });
+
+
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
     return this.prisma.user.create({
       data: {
@@ -42,9 +53,9 @@ export class EmployeeService {
           },
         },
         roles: {
-          create: {
-            roleId: roleId,
-          },
+          create:roleIds.map((id) =>({
+            roleId: id,
+          })),
         },
       },
       include: {
@@ -59,14 +70,46 @@ export class EmployeeService {
   }
   
 
-  async findAll() {
-    return this.prisma.user.findMany({
-      where:{userType: UserType.EMPLOYEE},
+  async findAll(page: number = 1, limit: number = 10) {
+
+    const skip = (page - 1) * limit;
+    const [employees, totalCount] = await Promise.all([
+    this.prisma.user.findMany({
+      where: { userType: UserType.EMPLOYEE },
+      skip: skip,   
+      take: limit,  
       include: {
-        employee:true,
-        roles:{include:{role:true}},
-      }
-    });
+        employee: true,
+        roles: { include: { role: true } },
+      },
+      orderBy: {
+        id: 'desc', 
+      },
+    }),
+    this.prisma.user.count({
+      where: { userType: UserType.EMPLOYEE },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / limit);
+  return {
+    data: employees,
+    meta: {
+      totalCount,   
+      page,         
+      limit,       
+      totalPages,   
+      hasNextPage: page < totalPages,     
+      hasPreviousPage: page > 1,         
+    },
+  };
+    // return this.prisma.user.findMany({
+    //   where:{userType: UserType.EMPLOYEE},
+    //   include: {
+    //     employee:true,
+    //     roles:{include:{role:true}},
+    //   }
+    // });
   }
 
    async findOne(id: number) {
@@ -85,7 +128,7 @@ export class EmployeeService {
 
   async update(id: number, updateEmployeeDto: UpdateEmployeeDto) {
      await this.findOne(id);
-     const {roleId, dateOfBirth,personalPhoto,email,...restData} =updateEmployeeDto;
+     const {roleIds, dateOfBirth,personalPhoto,email,...restData} =updateEmployeeDto;
      if(email){
       const emailExists = await this.prisma.user.findFirst({
         where:{
@@ -108,12 +151,12 @@ export class EmployeeService {
               ...(dateOfBirth && {dateOfBirth:new Date(dateOfBirth)}),
             },
           },
-          ...(roleId &&{
+          ...(roleIds &&{
             roles:{
               deleteMany:{},
-              create:{
-                roleId:roleId,
-              },
+              create: roleIds.map((id) => ({
+                roleId: id,
+              })),
             },
           }),
         },
