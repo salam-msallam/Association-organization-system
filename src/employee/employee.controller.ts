@@ -4,12 +4,13 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { AbilitiesGuard} from '../guards/abilities.guard'; 
 import { CheckAbilities } from '../decorators/abilities.decorator'; 
+import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { AuthGuard } from '@nestjs/passport'; 
 import { ApiBearerAuth} from '@nestjs/swagger'; 
 
 
 @Controller('employee')
-@UseGuards(AuthGuard('jwt')) 
+@UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 

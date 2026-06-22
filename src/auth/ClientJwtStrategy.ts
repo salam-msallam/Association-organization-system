@@ -17,7 +17,7 @@ export class ClientJwtStrategy extends PassportStrategy(Strategy) {
       id: payload.sub, 
       countryCode: payload.countryCode, 
       number: payload.number, 
-      type: payload.role 
+      type: payload.type 
     };
   }
 }
