@@ -2,11 +2,12 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import { RoleService } from './role.service';
 import { AbilitiesGuard} from '../guards/abilities.guard';
 import { CheckAbilities } from '../decorators/abilities.decorator'; 
+import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { AuthGuard } from '@nestjs/passport'; 
 import { ApiBearerAuth} from '@nestjs/swagger'; 
 
 @Controller('role')
-@UseGuards(AuthGuard('jwt'), AbilitiesGuard) 
+@UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard) 
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
