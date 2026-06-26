@@ -44,7 +44,16 @@ export class AuthService {
   async validateUser(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({ 
+    where: { email },
+    include: {
+      roles: {
+        include: {
+          role: true,
+        },
+      },
+    },
+  });
     if (!user) {
       throw new UnauthorizedException('البريد الإلكتروني أو كلمة المرور غير صحيحة');
     }
@@ -64,10 +73,19 @@ export class AuthService {
       userType: user.userType 
     };
 
+    let userRoles = [];
+   if (user.roles && user.roles.length > 0) {
+    userRoles = user.roles.map((userRole: any) => ({
+      id: userRole.role.id,
+      name: userRole.role.name,
+      label: userRole.role.label,
+    }));
+  }
     return {
       success: true,
       message: 'تم تسجيل الدخول بنجاح',
       accessToken: this.jwtService.sign(payload), 
+      roles: userRoles,
     };
   }
 

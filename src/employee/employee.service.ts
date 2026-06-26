@@ -10,16 +10,16 @@ import * as generatePassword from 'generate-password';
 @Injectable()
 export class EmployeeService {
   constructor(private prisma: PrismaService) {}
-  async create(createEmployeeDto: CreateEmployeeDto) {
-      const { roleIds, dateOfBirth, personalPhoto,...restData } = createEmployeeDto;
+  async create(createEmployeeDto: CreateEmployeeDto ,fileUrl:string) {
+      const { roleIds, dateOfBirth,...restData } = createEmployeeDto;
 
     const userExists = await this.prisma.user.findUnique({
       where: { email: restData.email },
     });
+
     if (userExists) {
       throw new ConflictException('البريد الإلكتروني مستخدم بالفعل');
     }
-
 
     const existingRoles = await this.prisma.role.findMany({
       where: { id: { in: roleIds } },
@@ -48,7 +48,7 @@ export class EmployeeService {
         
         employee: {
           create: {
-            personalPhoto,
+            personalPhoto:fileUrl,
             dateOfBirth: new Date(dateOfBirth),
           },
         },
@@ -103,13 +103,6 @@ export class EmployeeService {
       hasPreviousPage: page > 1,         
     },
   };
-    // return this.prisma.user.findMany({
-    //   where:{userType: UserType.EMPLOYEE},
-    //   include: {
-    //     employee:true,
-    //     roles:{include:{role:true}},
-    //   }
-    // });
   }
 
    async findOne(id: number) {
@@ -126,44 +119,55 @@ export class EmployeeService {
     return empolyee;
   }
 
-  async update(id: number, updateEmployeeDto: UpdateEmployeeDto) {
-     await this.findOne(id);
-     const {roleIds, dateOfBirth,personalPhoto,email,...restData} =updateEmployeeDto;
-     if(email){
+  async update(id: number, updateEmployeeDto: UpdateEmployeeDto, fileUrl?: string) {
+     const currentEmployee = await this.findOne(id);
+     const { roleIds, dateOfBirth, personalPhoto, email, ...restData } = updateEmployeeDto;
+
+     if (email) {
       const emailExists = await this.prisma.user.findFirst({
-        where:{
+        where: {
           email,
-          NOT:{id}
+          NOT: { id }
         }
       });
-      if(emailExists){
-        throw new ConflictException('البريد الإلكتروني الجديد مستخدم بالفعل من قبل مستخدم آخر ');
+      if (emailExists) {
+        throw new ConflictException('البريد الإلكتروني الجديد مستخدم بالفعل من قبل مستخدم آخر');
       }
      }
+
+     if (roleIds && roleIds.length > 0) {
+        const existingRoles = await this.prisma.role.findMany({
+          where: { id: { in: roleIds } },
+        });
+        if (existingRoles.length !== roleIds.length) {
+          throw new BadRequestException('بعض الأدوار المحددة غير موجودة في النظام');
+        }
+     }
+
      return this.prisma.user.update({
-        where:{id},
-        data:{
+        where: { id },
+        data: {
           ...restData,
-          ...(email && {email}),
-          employee:{
-            update:{
-              ...(personalPhoto && {personalPhoto}),
-              ...(dateOfBirth && {dateOfBirth:new Date(dateOfBirth)}),
+          ...(email && { email }),
+          employee: {
+            update: {
+              ...(fileUrl && { personalPhoto: fileUrl }), 
+              ...(dateOfBirth && { dateOfBirth: new Date(dateOfBirth) }),
             },
           },
-          ...(roleIds &&{
-            roles:{
-              deleteMany:{},
+          ...(roleIds && {
+            roles: {
+              deleteMany: {}, 
               create: roleIds.map((id) => ({
                 roleId: id,
               })),
             },
           }),
         },
-        include:{
-          employee:true,
-          roles:{
-            include:{role:true},
+        include: {
+          employee: true,
+          roles: {
+            include: { role: true },
           },
         },
      });
@@ -171,9 +175,13 @@ export class EmployeeService {
 
   async remove(id: number) {
     await this.findOne(id);
-    return this.prisma.user.delete({
-      where:{id},
-    });
+    await this.prisma.user.delete({
+    where: { id },
+  });
+    return {
+    success: true,
+    message: 'تم حذف حساب الموظف وكافة البيانات المرتبطة به بنجاح',
+  };
   }
 }
 

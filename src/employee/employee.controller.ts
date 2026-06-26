@@ -5,20 +5,46 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { AbilitiesGuard} from '../guards/abilities.guard'; 
 import { CheckAbilities } from '../decorators/abilities.decorator'; 
 import { AuthGuard } from '@nestjs/passport'; 
-import { ApiBearerAuth} from '@nestjs/swagger'; 
-
+import { ApiBearerAuth ,ApiBody, ApiOperation,ApiConsumes} from '@nestjs/swagger'; 
+import { UseInterceptors, UploadedFile, BadRequestException} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 
 @Controller('employee')
 @UseGuards(AuthGuard('jwt')) 
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 
-  @Post()
+ @Post()
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'create', subject: 'Employee' })
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  async create(@Body() createEmployeeDto: CreateEmployeeDto) {
-    const employee = await this.employeeService.create(createEmployeeDto);
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('personalPhoto', {
+    storage: diskStorage({
+      destination: './uploads/employees',
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = extname(file.originalname);
+        callback(null, `${uniqueSuffix}${ext}`);
+      },
+    }),
+    fileFilter: (req, file, callback) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+        return callback(new BadRequestException('يُسمح برفع الصور فقط'), false);
+      }
+      callback(null, true);
+    },
+  }))
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  async create(@Body() createEmployeeDto: CreateEmployeeDto, @UploadedFile() file: any) {
+    if (!file) {
+      throw new BadRequestException('الصورة الشخصية للموظف مطلوبة');
+    }
+
+    const fileUrl = `http://localhost:3000/uploads/employees/${file.filename}`;
+    const employee = await this.employeeService.create(createEmployeeDto, fileUrl);
+    
     return {
       success: true,
       message: 'تم إنشاء حساب الموظف بنجاح وإسناد الدور المطلوب له',
@@ -42,12 +68,45 @@ export class EmployeeController {
     return this.employeeService.findOne(+id);
   }
 
-  @Patch(':id')
+ @Patch(':id')
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'update', subject: 'Employee' })
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  update(@Param('id') id: string, @Body() updateEmployeeDto: UpdateEmployeeDto) {
-    return this.employeeService.update(+id, updateEmployeeDto);
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('personalPhoto', { 
+    storage: diskStorage({
+      destination: './uploads/employees',
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = extname(file.originalname);
+        callback(null, `${uniqueSuffix}${ext}`);
+      },
+    }),
+    fileFilter: (req, file, callback) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+        return callback(new BadRequestException('يُسمح برفع الصور فقط'), false);
+      }
+      callback(null, true);
+    },
+  }))
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  async update(
+    @Param('id') id: string, 
+    @Body() updateEmployeeDto: UpdateEmployeeDto,
+    @UploadedFile() file: any 
+  ) {
+   let fileUrl: string | undefined = undefined;
+    
+    if (file) {
+      fileUrl = `http://localhost:3000/uploads/employees/${file.filename}`;
+    }
+
+    const employee = await this.employeeService.update(+id, updateEmployeeDto, fileUrl);
+    
+    return {
+      success: true,
+      message: 'تم تحديث بيانات الموظف بنجاح',
+      data: employee,
+    };
   }
 
   @Delete(':id')
@@ -56,4 +115,5 @@ export class EmployeeController {
   remove(@Param('id') id: string) {
     return this.employeeService.remove(+id);
   }
+
 }
