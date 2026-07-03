@@ -17,18 +17,18 @@ export class CaslAbilityFactory {
       can('read', 'Donor');  
       can ('read','Orphan');
       can('read','Beneficiary');    
-    } else {
-      const userPermissions: string[] = user.permissions || [];
-
-      userPermissions.forEach((permission) => {
-        const [action, subject] = permission.split(':');
-        const formattedSubject = this.mapSubject(subject);
-
-        if (formattedSubject) {
-          can(action as Action, formattedSubject);
-        }
-      });
     }
+
+    const userPermissions: string[] = user.permissions || [];
+
+    userPermissions.forEach((permission) => {
+      const [action, subject] = permission.split(':');
+      const formattedSubject = this.mapSubject(subject);
+
+      if (formattedSubject) {
+        can(action as Action, formattedSubject);
+      }
+    });
 
     return build({
       detectSubjectType: (item) => item as ExtractSubjectType<Subjects>,

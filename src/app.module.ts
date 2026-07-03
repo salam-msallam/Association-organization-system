@@ -13,6 +13,7 @@ import * as path from 'path';
 import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { OrphanModule } from './orphan/orphan.module';
 
 @Module({
   imports: 
@@ -34,9 +35,9 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     }),
     RoleModule,
     AuthModule,
-    AuthModule,
     UsersModule,
     DashboardModule,
+    OrphanModule,
     
 
   ],

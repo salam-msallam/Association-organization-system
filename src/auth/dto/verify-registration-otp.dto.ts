@@ -14,6 +14,6 @@ export class VerifyRegistrationOtpDto {
 
   @ApiProperty({ example: '1234', description: 'يجب أن يتكون رمز الـ OTP من 4 أرقام تماماً' })
   @IsString()
-  @Matches(/^\d{4}$/, { message: 'OTP code must be exactly 4 digits' })
+  @Matches(/^\d{4}$/, { message: 'validation.OTP_CODE_MUST_BE_4_DIGITS' })
   code!: string;
 }

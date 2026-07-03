@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { I18nLang } from 'nestjs-i18n';
+import { I18nLang, I18nService } from 'nestjs-i18n';
 import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
 import { RegisterDonorDto } from './dto/register-donor.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -25,16 +25,19 @@ import {
 })
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK) 
   @ApiOperation({ summary: 'تسجيل دخول الأدمن والموظفين' })
   @ApiResponse({ status: 200, description: 'تم تسجيل الدخول بنجاح وعاد التوكن.' })
   @ApiResponse({ status: 401, description: 'البيانات المدخلة خاطئة.' })
-  async login(@Body() loginDto: LoginDto) {
-    const user = await this.authService.validateUser(loginDto);
-    return this.authService.login(user);
+  async login(@Body() loginDto: LoginDto, @I18nLang() lang: string) {
+    const user = await this.authService.validateUser(loginDto, lang);
+    return this.authService.login(user, lang);
   }
 
 
@@ -88,7 +91,7 @@ export class AuthController {
     const familyStatement = files?.familyStatement?.[0]?.path;
 
     if (!personalPhoto || !familyStatement) {
-      throw new BadRequestException('personalPhoto and familyStatement files are required');
+      throw new BadRequestException(this.i18n.t('auth.BENEFICIARY_FILES_REQUIRED', { lang }));
 
     }
 

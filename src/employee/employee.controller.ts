@@ -1,60 +1,90 @@
-import { Controller, Get, Post, Body, Patch, UsePipes, Param, Delete, ValidationPipe, UseGuards, Query } from '@nestjs/common';
-import { EmployeeService } from './employee.service';
-import { CreateEmployeeDto } from './dto/create-employee.dto';
-import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { AbilitiesGuard} from '../guards/abilities.guard'; 
-import { CheckAbilities } from '../decorators/abilities.decorator'; 
-import { StaffOnlyGuard } from '../guards/staff-only.guard';
-import { AuthGuard } from '@nestjs/passport'; 
-import { ApiBearerAuth ,ApiBody, ApiOperation,ApiConsumes,ApiHeader} from '@nestjs/swagger'; 
-import { UseInterceptors, UploadedFile, BadRequestException} from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiHeader } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { I18nContext, I18nLang, I18nService } from 'nestjs-i18n';
+import { CheckAbilities } from '../decorators/abilities.decorator';
+import { AbilitiesGuard } from '../guards/abilities.guard';
+import { StaffOnlyGuard } from '../guards/staff-only.guard';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { EmployeeService } from './employee.service';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
+
+const translateEmployeeMessage = (key: string, fallback: string) =>
+  I18nContext.current()?.t(`employee.${key}`) ?? fallback;
 
 @Controller('employee')
 @ApiHeader({
   name: 'accept-language',
   description: 'Language preferred for the response error/success messages',
   required: false,
-  schema: { default: 'ar', enum: ['ar', 'en'] },  
+  schema: { default: 'ar', enum: ['ar', 'en'] },
 })
 @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
 export class EmployeeController {
-  constructor(private readonly employeeService: EmployeeService) {}
+  constructor(
+    private readonly employeeService: EmployeeService,
+    private readonly i18n: I18nService,
+  ) {}
 
- @Post()
+  @Post()
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'create', subject: 'Employee' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('personalPhoto', {
-    storage: diskStorage({
-      destination: './uploads/employees',
-      filename: (req, file, callback) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const ext = extname(file.originalname);
-        callback(null, `${uniqueSuffix}${ext}`);
+  @UseInterceptors(
+    FileInterceptor('personalPhoto', {
+      storage: diskStorage({
+        destination: './uploads/employees',
+        filename: (req, file, callback) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return callback(
+            new BadRequestException(
+              translateEmployeeMessage('ONLY_IMAGES_ALLOWED', 'Only image uploads are allowed.'),
+            ),
+            false,
+          );
+        }
+
+        callback(null, true);
       },
     }),
-    fileFilter: (req, file, callback) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-        return callback(new BadRequestException('يُسمح برفع الصور فقط'), false);
-      }
-      callback(null, true);
-    },
-  }))
-  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
-  async create(@Body() createEmployeeDto: CreateEmployeeDto, @UploadedFile() file: any) {
+  )
+  async create(
+    @Body() createEmployeeDto: CreateEmployeeDto,
+    @UploadedFile() file: any,
+    @I18nLang() lang: string,
+  ) {
     if (!file) {
-      throw new BadRequestException('الصورة الشخصية للموظف مطلوبة');
+      throw new BadRequestException(this.i18n.t('employee.PERSONAL_PHOTO_REQUIRED', { lang }));
     }
 
     const fileUrl = `http://localhost:3000/uploads/employees/${file.filename}`;
-    const employee = await this.employeeService.create(createEmployeeDto, fileUrl);
-    
+    const employee = await this.employeeService.create(createEmployeeDto, fileUrl, lang);
+
     return {
       success: true,
-      message: 'تم إنشاء حساب الموظف بنجاح وإسناد الدور المطلوب له',
+      message: this.i18n.t('employee.CREATE_SUCCESS', { lang }),
       data: employee,
     };
   }
@@ -62,56 +92,59 @@ export class EmployeeController {
   @Get()
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'read', subject: 'Employee' })
-  findAll(@Query('page') page?: string,@Query('limit') limit?: string) {
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
     const pageNumber = page ? parseInt(page, 10) : 1;
     const limitNumber = limit ? parseInt(limit, 10) : 10;
-    return this.employeeService.findAll(pageNumber,limitNumber);
+    return this.employeeService.findAll(pageNumber, limitNumber);
   }
 
   @Get(':id')
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'read', subject: 'Employee' })
-  findOne(@Param('id') id: string) {
-    return this.employeeService.findOne(+id);
+  findOne(@Param('id') id: string, @I18nLang() lang: string) {
+    return this.employeeService.findOne(+id, lang);
   }
 
- @Patch(':id')
+  @Patch(':id')
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'update', subject: 'Employee' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('personalPhoto', { 
-    storage: diskStorage({
-      destination: './uploads/employees',
-      filename: (req, file, callback) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const ext = extname(file.originalname);
-        callback(null, `${uniqueSuffix}${ext}`);
+  @UseInterceptors(
+    FileInterceptor('personalPhoto', {
+      storage: diskStorage({
+        destination: './uploads/employees',
+        filename: (req, file, callback) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return callback(
+            new BadRequestException(
+              translateEmployeeMessage('ONLY_IMAGES_ALLOWED', 'Only image uploads are allowed.'),
+            ),
+            false,
+          );
+        }
+
+        callback(null, true);
       },
     }),
-    fileFilter: (req, file, callback) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-        return callback(new BadRequestException('يُسمح برفع الصور فقط'), false);
-      }
-      callback(null, true);
-    },
-  }))
-  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  )
   async update(
-    @Param('id') id: string, 
+    @Param('id') id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
-    @UploadedFile() file: any 
+    @UploadedFile() file: any,
+    @I18nLang() lang: string,
   ) {
-   let fileUrl: string | undefined = undefined;
-    
-    if (file) {
-      fileUrl = `http://localhost:3000/uploads/employees/${file.filename}`;
-    }
+    const fileUrl = file ? `http://localhost:3000/uploads/employees/${file.filename}` : undefined;
+    const employee = await this.employeeService.update(+id, updateEmployeeDto, fileUrl, lang);
 
-    const employee = await this.employeeService.update(+id, updateEmployeeDto, fileUrl);
-    
     return {
       success: true,
-      message: 'تم تحديث بيانات الموظف بنجاح',
+      message: this.i18n.t('employee.UPDATE_SUCCESS', { lang }),
       data: employee,
     };
   }
@@ -119,7 +152,7 @@ export class EmployeeController {
   @Delete(':id')
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'delete', subject: 'Employee' })
-  remove(@Param('id') id: string) {
-    return this.employeeService.remove(+id);
+  remove(@Param('id') id: string, @I18nLang() lang: string) {
+    return this.employeeService.remove(+id, lang);
   }
 }

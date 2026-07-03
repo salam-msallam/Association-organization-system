@@ -42,7 +42,17 @@ async function main() {
 
     const orphanManagerRole = await prisma.role.upsert({
     where: { name: 'orphan_manager' },
-    update: {},
+    update: {
+      permissions: {
+        deleteMany: {},
+        create: [
+          { permissionId: permissions['read:orphans'].id },
+          { permissionId: permissions['create:orphans'].id },
+          { permissionId: permissions['update:orphans'].id },
+          { permissionId: permissions['delete:orphans'].id },
+        ],
+      },
+    },
     create: {
       name: 'orphan_manager',
       label: { ar: 'إدارة الأيتام', en: 'Orphan Management' },

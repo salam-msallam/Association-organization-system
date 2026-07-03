@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Unauthor
 import { Reflector } from '@nestjs/core';
 import { CaslAbilityFactory } from '../casl/casl-ability.factory'; 
 import { PrismaService } from '../prisma/prisma.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class AbilitiesGuard implements CanActivate {
@@ -9,15 +10,17 @@ export class AbilitiesGuard implements CanActivate {
     private reflector: Reflector,
     private caslAbilityFactory: CaslAbilityFactory,
     private prisma: PrismaService, 
+    private readonly i18n: I18nService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const lang = request.headers['accept-language'] || 'ar';
 
     
     const userPayload = request.user; 
     if (!userPayload) {
-      throw new UnauthorizedException('يرجى تسجيل الدخول أولاً');
+      throw new UnauthorizedException(this.i18n.t('auth.LOGIN_REQUIRED', { lang }));
     }
 
     const requiredAbility = this.reflector.get<{ action: string; subject: string }>('check_ability', context.getHandler());
@@ -40,7 +43,7 @@ export class AbilitiesGuard implements CanActivate {
 
 
     if (!fullUser) {
-      throw new UnauthorizedException('المستخدم غير موجود في النظام');
+      throw new UnauthorizedException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
     }
 
     const userPermissions: string[] = [];
@@ -64,7 +67,7 @@ export class AbilitiesGuard implements CanActivate {
     const isAllowed = ability.can(requiredAbility.action as any, requiredAbility.subject as any);
 
     if (!isAllowed) {
-      throw new ForbiddenException('ليس لديك الصلاحية الكافية لإجراء هذه العملية');
+      throw new ForbiddenException(this.i18n.t('auth.INSUFFICIENT_PERMISSIONS', { lang }));
     }
 
     return true;

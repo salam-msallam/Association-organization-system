@@ -30,7 +30,7 @@ export class CreateEmployeeDto {
   })
   personalPhoto: any;
 
-  @IsDateString({},{message: 'The date of birth must be YY-MM-dd' })
+  @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
   dateOfBirth: string;
 
   @ApiProperty({
@@ -38,8 +38,8 @@ export class CreateEmployeeDto {
     description: 'أرقام الأدوار ممررة كمصفوفة نصية مثل [1,2]',
     example: '[1,2]'
   })
-  @IsArray({ message: 'roleIds يجب أن تكون مصفوفة' })
-  @IsNumber({}, { each: true, message: 'كل عنصر في roleIds يجب أن يكون رقماً' })
+  @IsArray({ message: 'validation.ROLE_IDS_MUST_BE_ARRAY' })
+  @IsNumber({}, { each: true, message: 'validation.ROLE_ID_MUST_BE_NUMBER' })
   @IsNotEmpty()
   @Transform(({ value }) => {
     if (typeof value === 'string') {

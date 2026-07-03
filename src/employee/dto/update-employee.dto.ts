@@ -18,7 +18,7 @@ export class UpdateEmployeeDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsEmail({}, { message: 'email must be an email' })
+  @IsEmail({}, { message: 'validation.EMAIL_MUST_BE_VALID' })
   @Transform(({ value }) => value === '' ? undefined : value) 
   email?: string;
 
@@ -45,7 +45,7 @@ export class UpdateEmployeeDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString({}, { message: 'The date of birth must be YY-MM-dd' })
+  @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
   @Transform(({ value }) => value === '' ? undefined : value)
   dateOfBirth?: string;
 
@@ -56,8 +56,8 @@ export class UpdateEmployeeDto {
     required: false
   })
   @IsOptional()
-  @IsArray({ message: 'roleIds يجب أن تكون مصفوفة' })
-  @IsNumber({}, { each: true, message: 'كل عنصر في roleIds يجب أن يكون رقماً' })
+  @IsArray({ message: 'validation.ROLE_IDS_MUST_BE_ARRAY' })
+  @IsNumber({}, { each: true, message: 'validation.ROLE_ID_MUST_BE_NUMBER' })
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {
       return undefined;

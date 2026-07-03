@@ -1,8 +1,8 @@
 import { NestFactory,Reflector} from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe ,ClassSerializerInterceptor } from '@nestjs/common';
+import { ClassSerializerInterceptor } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { i18nValidationErrorFactory, I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n'; 
+import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n'; 
 import { NestExpressApplication } from '@nestjs/platform-express'; 
 import * as express from 'express';
 import { join } from 'path';
@@ -18,8 +18,6 @@ async function bootstrap() {
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
   const config = new DocumentBuilder()
     .setTitle('Charity Management System API')
     .setDescription('توثيق خدمات نظام إدارة الجمعية الخيرية')

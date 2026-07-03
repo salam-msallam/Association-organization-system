@@ -7,5 +7,16 @@
     "minLength": "This field must be at least {constraints.0} characters long.",
     "length": "This field must be exactly {constraints.0} characters long.",
     "isEnum": "The selected value is invalid. It must be one of: ({constraints.1}).",
-    "matches": "The format of this field is invalid and does not match the required pattern."
+    "matches": "The format of this field is invalid and does not match the required pattern.",
+    "INVALID_COUNTRY_CODE": "Invalid country code. It must start with + followed by 1 to 4 digits, for example +963.",
+    "INVALID_DATE_OF_BIRTH": "Date of birth must be a valid date.",
+    "ROLE_IDS_MUST_BE_ARRAY": "roleIds must be an array.",
+    "ROLE_ID_MUST_BE_NUMBER": "Each roleIds item must be a number.",
+    "VALID_PHONE_NUMBER": "Please enter a valid phone number.",
+    "MONTHLY_INCOME_REQUIRED_WHEN_EMPLOYED": "Monthly income is required when employed.",
+    "OTP_CODE_MUST_BE_4_DIGITS": "OTP code must be exactly 4 digits.",
+    "EMAIL_MUST_BE_VALID": "Please enter a valid email address.",
+    "EMAIL_REQUIRED": "Email is required.",
+    "PASSWORD_REQUIRED": "Password is required.",
+    "PASSWORD_MIN_LENGTH": "Password must be at least 6 characters."
 }

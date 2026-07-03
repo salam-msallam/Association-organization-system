@@ -57,4 +57,54 @@ export class WhatsappService {
     }
   }
 
+  async sendEmployeeCredentials(
+  fullPhoneNumber: string,
+  email: string,
+  password: string,
+  lang: string,
+): Promise<void> {
+  const instanceId = this.configService.get<string>('ULTRAMSG_INSTANCE_ID');
+  const token = this.configService.get<string>('ULTRAMSG_TOKEN');
+
+  const dashboardUrl = 'http://localhost:3000';
+
+  const messageBody = this.i18n.t('auth.EMPLOYEE_CREDENTIALS_MESSAGE', {
+    lang,
+    args: {
+      dashboardUrl,
+      email,
+      password,
+    },
+  });
+
+  const url = `https://api.ultramsg.com/${instanceId}/messages/chat`;
+
+  try {
+    const response = await firstValueFrom(
+      this.httpService.post<UltraMsgResponse>(url, {
+        token,
+        to: fullPhoneNumber,
+        body: messageBody,
+      }),
+    );
+
+    if (!response.data || (response.data.sent !== 'true' && !response.data.id)) {
+      const upstreamError = this.i18n.t('auth.WHATSAPP_QUEUE_FAILED', { lang });
+      throw new Error(upstreamError);
+    }
+  } catch (error: any) {
+    const errorData = error.response?.data
+      ? JSON.stringify(error.response.data)
+      : error.message;
+
+    this.logger.error(
+      `Failed to dispatch employee credentials to ${fullPhoneNumber}. Reason:`,
+      errorData,
+    );
+
+    const gatewayError = this.i18n.t('auth.WHATSAPP_DELIVERY_FAILED', { lang });
+    throw new BadGatewayException(gatewayError);
+  }
+}
+
 }

@@ -151,7 +151,12 @@ model Orphan {
   FamilyStatement         String 
   brotherAndSisterNumber  Int 
   guardianName            String
-  guaranteedPhone         String  
+  guaranteedPhone         String 
+  bodySize                Int
+  shoesSize               Int
+  currentAddress          Json
+  previousAddress         Json
+  talent                  Json
   isSupported             Boolean       @default(false)
   createdAt               DateTime      @default(now()) 
   
@@ -181,6 +186,7 @@ model Sponsorship {
   employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   amount         Decimal           @db.Decimal(10, 2)
   status         Status            @default(PENDING)
+  rejectionReason   Json?
   startDate      DateTime?         @db.Date
   endDate        DateTime?         @db.Date
   createdAt      DateTime          @default(now()) 
@@ -243,6 +249,7 @@ model RequestAid {
   cost                      Decimal      @db.Decimal(10, 2) 
   currentPayment           Decimal      @db.Decimal(10, 2) @default(0.00) 
   status                    Status      @default(PENDING)
+  rejectionReason           Json?
   isUrgent                 Boolean      @default(false) 
 
   createdAt                 DateTime     @default(now()) 

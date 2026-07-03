@@ -15,7 +15,7 @@ export class RegisterBeneficiaryDto extends BaseRegisterDto {
   @IsOptional()
   familyStatement!: string;
 
-  @ApiProperty({ example: 'Mezzeh' }) 
+  @ApiProperty({ example:'{"ar":"مزة","en":"mezzeh"}' }) 
   @IsNotEmpty()
   address!: string;
 
@@ -28,12 +28,12 @@ export class RegisterBeneficiaryDto extends BaseRegisterDto {
   @IsBoolean()
   isUnemployed!: boolean;
 
-  @ApiProperty({ example: 500.0 })
+  @ApiPropertyOptional({ example: 500.0 })
   @ValidateIf((o) => o.isUnemployed === false) 
-  @IsNotEmpty({ message: 'When employed, monthlyIncome is required.' }) 
+  @IsNotEmpty({ message: 'validation.MONTHLY_INCOME_REQUIRED_WHEN_EMPLOYED' }) 
   @Type(() => Number) 
   @IsNumber()
-  monthlyIncome!: number;
+  monthlyIncome?: number;
 
   @ApiPropertyOptional({ example: 3 })
   @ValidateIf((o) => o.socialStatus !== SocialStatus.SINGLE) 

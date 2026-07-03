@@ -2,13 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @ApiProperty({ example: 'admin@example.com', description: 'البريد الإلكتروني للمستخدِم' })
-  @IsEmail({}, { message: 'يرجى إدخال بريد إلكتروني صحيح' })
-  @IsNotEmpty({ message: 'البريد الإلكتروني مطلوب' })
+  @ApiProperty({ example: 'admin@gmail.com', description: 'البريد الإلكتروني للمستخدِم' })
+  @IsEmail({}, { message: 'validation.EMAIL_MUST_BE_VALID' })
+  @IsNotEmpty({ message: 'validation.EMAIL_REQUIRED' })
   email: string;
 
-  @ApiProperty({ example: '123456', description: 'كلمة المرور' })
-  @IsNotEmpty({ message: 'كلمة المرور مطلوبة' })
-  @MinLength(6, { message: 'كلمة المرور يجب ألا تقل عن 6 محارف' })
+  @ApiProperty({ example: 'password', description: 'كلمة المرور' })
+  @IsNotEmpty({ message: 'validation.PASSWORD_REQUIRED' })
+  @MinLength(6, { message: 'validation.PASSWORD_MIN_LENGTH' })
   password: string;
 }

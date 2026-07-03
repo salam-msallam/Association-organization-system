@@ -15,7 +15,7 @@ import {
 import { OtpService } from './otp.service';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { WhatsappService } from './whatsapp.service';
-import { UsersService } from 'src/users/users.service';
+import { UsersService } from '../users/users.service';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 import { Status } from '@prisma/client';
 import {LoginClientDto} from './dto/login_client.dto';
@@ -41,7 +41,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(loginDto: LoginDto) {
+  async validateUser(loginDto: LoginDto, lang = 'ar') {
     const { email, password } = loginDto;
 
     const user = await this.prisma.user.findUnique({ 
@@ -53,20 +53,20 @@ export class AuthService {
         },
       },
     },
-  });
+    });
     if (!user) {
-      throw new UnauthorizedException('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      throw new UnauthorizedException(this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }));
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      throw new UnauthorizedException(this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }));
     }
 
     return user; 
   }
 
-  async login(user: any) {
+  async login(user: any, lang = 'ar') {
     const payload = { 
       sub: user.id, 
       email: user.email, 
@@ -83,7 +83,7 @@ export class AuthService {
   }
     return {
       success: true,
-      message: 'تم تسجيل الدخول بنجاح',
+      message: this.i18n.t('auth.LOGIN_SUCCESS', { lang }),
       accessToken: this.jwtService.sign(payload), 
       roles: userRoles,
     };
@@ -139,6 +139,21 @@ if (existingUserByEmail) {
   private async clearPendingRegistration(countryCode: string, number: string): Promise<void> {
     const cacheKey = this.getRegistrationCacheKey(countryCode, number);
     await this.cacheManager.del(cacheKey);
+  }
+
+  private parseJson(value: any, fieldName: string, lang: string) {
+    if (typeof value === 'object') return value;
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      throw new BadRequestException(
+        this.i18n.t('auth.INVALID_JSON_FIELD', {
+          lang,
+          args: { field: fieldName },
+        }),
+      );
+    }
   }
 
  async registerDonor(dto: RegisterDonorDto, lang: string): Promise<{ message: string }> {
@@ -212,6 +227,14 @@ if (existingUserByEmail) {
     }
 
     const pendingData = pendingRegistration.data;
+    const beneficiaryAddress =
+      pendingRegistration.type === 'BENEFICIARY'
+        ? this.parseJson(
+            (pendingData as RegisterBeneficiaryDto).address,
+            'address',
+            lang,
+          )
+        : undefined;
     const hashedPassword = await bcrypt.hash(pendingData.password, 10);
 
     try {
@@ -248,7 +271,7 @@ if (existingUserByEmail) {
               userId: newUser.id,
               personalPhoto: beneficiaryData.personalPhoto,
               familyStatement: beneficiaryData.familyStatement,
-              address: beneficiaryData.address,
+              address: beneficiaryAddress,
               socialStatus: beneficiaryData.socialStatus,
               isUnemployed: beneficiaryData.isUnemployed,
               numberOfChildren: beneficiaryData.numberOfChildren,
@@ -272,7 +295,7 @@ if (existingUserByEmail) {
       console.error('Registration transaction failed:', error);
 
       throw new InternalServerErrorException(
-        this.i18n.t('auth.errors.TRANSACTION_FAILED', { lang }),
+        this.i18n.t('auth.TRANSACTION_FAILED', { lang }),
       );
     }
   }
