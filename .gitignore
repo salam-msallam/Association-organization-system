@@ -56,3 +56,14 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Uploaded runtime files
+/uploads/**
+!/uploads/
+!/uploads/.gitkeep
+!/uploads/beneficiaries/
+!/uploads/beneficiaries/.gitkeep
+!/uploads/employees/
+!/uploads/employees/.gitkeep
+!/uploads/orphans/
+!/uploads/orphans/.gitkeep
