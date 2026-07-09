@@ -1,7 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrphanDto } from './dto/create-orphan.dto';
-import { I18nService } from 'nestjs-i18n';
+import { UpdateOrphanDto } from './dto/update-orphan.dto';
 
 @Injectable()
 export class OrphanService {
@@ -14,37 +16,164 @@ export class OrphanService {
     if (!dto.FamilyStatement) {
       throw new BadRequestException(
         this.i18n.t('orphan.FAMILY_STATEMENT_REQUIRED', { lang }),
-      );    
+      );
     }
 
-    const orphan = await this.prisma.orphan.create({
-      data: {
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        fatherName: dto.fatherName,
-        motherName: dto.motherName,
-        birthOfDate: new Date(dto.birthOfDate),
-        gender: dto.gender,
+    const orphan = await this.handleUniqueConstraint(
+      this.prisma.orphan.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          fatherName: dto.fatherName,
+          motherName: dto.motherName,
+          birthOfDate: new Date(dto.birthOfDate),
+          gender: dto.gender,
 
-        class: this.parseJson(dto.class, 'class', lang),
-        Diseases: this.parseJson(dto.Diseases, 'Diseases', lang),
-        currentAddress: this.parseJson(dto.currentAddress, 'currentAddress', lang),
-        previousAddress: this.parseJson(dto.previousAddress, 'previousAddress', lang),
-        talent: this.parseJson(dto.talent, 'talent', lang),
+          class: this.parseJson(dto.class, 'class', lang),
+          Diseases: this.parseJson(dto.Diseases, 'Diseases', lang),
+          currentAddress: this.parseJson(dto.currentAddress, 'currentAddress', lang),
+          previousAddress: this.parseJson(dto.previousAddress, 'previousAddress', lang),
+          talent: this.parseJson(dto.talent, 'talent', lang),
 
-        FamilyStatement: dto.FamilyStatement,
-        brotherAndSisterNumber: Number(dto.brotherAndSisterNumber),
-        guardianName: dto.guardianName,
-        guaranteedPhone: dto.guaranteedPhone,
-        bodySize: Number(dto.bodySize),
-        shoesSize: Number(dto.shoesSize),
-        ...(dto.isSupported !== undefined && { isSupported: dto.isSupported }),
-      },
-    });
+          FamilyStatement: dto.FamilyStatement,
+          brotherAndSisterNumber: Number(dto.brotherAndSisterNumber),
+          guardianName: dto.guardianName,
+          guaranteedPhone: dto.guaranteedPhone,
+          bodySize: Number(dto.bodySize),
+          shoesSize: Number(dto.shoesSize),
+          ...(dto.isSupported !== undefined && { isSupported: dto.isSupported }),
+        },
+      }),
+      lang,
+    );
 
     return {
       message: this.i18n.t('orphan.CREATE_SUCCESS', { lang }),
       data: orphan,
+    };
+  }
+
+  async findAll(page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+    const [orphans, totalCount] = await Promise.all([
+      this.prisma.orphan.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+          id: 'desc',
+        },
+      }),
+      this.prisma.orphan.count(),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      data: orphans,
+      meta: {
+        totalCount,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  async findOne(id: number, lang = 'ar') {
+    const orphan = await this.prisma.orphan.findUnique({
+      where: { id },
+    });
+
+    if (!orphan) {
+      throw new BadRequestException(this.i18n.t('orphan.ORPHAN_NOT_FOUND', { lang }));
+    }
+
+    return {
+      message: this.i18n.t('orphan.FETCH_ONE_SUCCESS', { lang }),
+      data: orphan,
+    };
+  }
+
+  async update(
+    id: number,
+    dto: UpdateOrphanDto,
+    familyStatementPath?: string,
+    lang = 'ar',
+  ) {
+    await this.findOne(id, lang);
+
+    const data: any = {
+      ...(dto.firstName && { firstName: dto.firstName }),
+      ...(dto.lastName && { lastName: dto.lastName }),
+      ...(dto.fatherName && { fatherName: dto.fatherName }),
+      ...(dto.motherName && { motherName: dto.motherName }),
+      ...(dto.birthOfDate && { birthOfDate: new Date(dto.birthOfDate) }),
+      ...(dto.gender && { gender: dto.gender }),
+      ...(dto.class !== undefined && {
+        class: this.parseJson(dto.class, 'class', lang),
+      }),
+      ...(dto.Diseases !== undefined && {
+        Diseases: this.parseJson(dto.Diseases, 'Diseases', lang),
+      }),
+      ...(dto.currentAddress !== undefined && {
+        currentAddress: this.parseJson(dto.currentAddress, 'currentAddress', lang),
+      }),
+      ...(dto.previousAddress !== undefined && {
+        previousAddress: this.parseJson(dto.previousAddress, 'previousAddress', lang),
+      }),
+      ...(dto.talent !== undefined && {
+        talent: this.parseJson(dto.talent, 'talent', lang),
+      }),
+      ...(familyStatementPath && { FamilyStatement: familyStatementPath }),
+      ...(dto.brotherAndSisterNumber !== undefined && {
+        brotherAndSisterNumber: Number(dto.brotherAndSisterNumber),
+      }),
+      ...(dto.guardianName && { guardianName: dto.guardianName }),
+      ...(dto.guaranteedPhone && { guaranteedPhone: dto.guaranteedPhone }),
+      ...(dto.bodySize !== undefined && { bodySize: Number(dto.bodySize) }),
+      ...(dto.shoesSize !== undefined && { shoesSize: Number(dto.shoesSize) }),
+      ...(dto.isSupported !== undefined && { isSupported: dto.isSupported }),
+    };
+
+    const orphan = await this.handleUniqueConstraint(
+      this.prisma.orphan.update({
+        where: { id },
+        data,
+      }),
+      lang,
+    );
+
+    return {
+      message: this.i18n.t('orphan.UPDATE_SUCCESS', { lang }),
+      data: orphan,
+    };
+  }
+
+  async remove(id: number, lang = 'ar') {
+    await this.findOne(id, lang);
+
+    try {
+      await this.prisma.orphan.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          this.i18n.t('orphan.DELETE_BLOCKED_BY_SPONSORSHIP', { lang }),
+        );
+      }
+
+      throw error;
+    }
+
+    return {
+      success: true,
+      message: this.i18n.t('orphan.DELETE_SUCCESS', { lang }),
     };
   }
 
@@ -60,6 +189,21 @@ export class OrphanService {
           args: { field: fieldName },
         }),
       );
+    }
+  }
+
+  private async handleUniqueConstraint<T>(operation: Promise<T>, lang: string): Promise<T> {
+    try {
+      return await operation;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(this.i18n.t('orphan.ORPHAN_ALREADY_EXISTS', { lang }));
+      }
+
+      throw error;
     }
   }
 }

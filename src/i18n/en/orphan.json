@@ -1,5 +1,12 @@
 {
   "CREATE_SUCCESS": "Orphan created successfully.",
+  "FETCH_SUCCESS": "Orphans fetched successfully.",
+  "FETCH_ONE_SUCCESS": "Orphan fetched successfully.",
+  "UPDATE_SUCCESS": "Orphan updated successfully.",
+  "DELETE_SUCCESS": "Orphan deleted successfully.",
+  "ORPHAN_NOT_FOUND": "Orphan record was not found.",
+  "ORPHAN_ALREADY_EXISTS": "An orphan with the same first name, last name, and guardian name already exists.",
+  "DELETE_BLOCKED_BY_SPONSORSHIP": "Cannot delete this orphan because it has related sponsorship records.",
   "FAMILY_STATEMENT_REQUIRED": "Family statement file is required.",
   "ROLE_REQUIRED": "You do not have the required role.",
   "YOU_ARE_NOT_AUTHORIZED": "You are not authorized to perform this action.",

@@ -159,9 +159,12 @@ model Orphan {
   talent                  Json
   isSupported             Boolean       @default(false)
   createdAt               DateTime      @default(now()) 
+  updatedAt               DateTime      @updatedAt
   
   sponsorships     Sponsorship[]
   annualReports    AnnualReport[]
+
+  @@unique([firstName, lastName, guardianName])
 }
 
 model AnnualReport {

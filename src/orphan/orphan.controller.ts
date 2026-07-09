@@ -2,28 +2,45 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
   Post,
+  Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiHeader, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiHeader,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { I18nLang, I18nService } from 'nestjs-i18n';
 
 import { OrphanService } from './orphan.service';
 import { CreateOrphanDto } from './dto/create-orphan.dto';
+import { UpdateOrphanDto } from './dto/update-orphan.dto';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
-import { AbilitiesGuard} from '../guards/abilities.guard';  
-import { CheckAbilities } from '../decorators/abilities.decorator'; 
-import { RoleGuard } from '../guards/role/role.guard';
-import { RequireRole } from '../guards/decorators/require-role/require-role.decorator';
+import { AbilitiesGuard } from '../guards/abilities.guard';
+import { CheckAbilities } from '../decorators/abilities.decorator';
 
 @Controller('orphan')
 @ApiBearerAuth('jwt')
+@ApiHeader({
+  name: 'accept-language',
+  description: 'Language preferred for the response error/success messages',
+  required: false,
+  schema: { default: 'ar', enum: ['ar', 'en'] },
+})
 export class OrphanController {
   constructor(
     private readonly orphanService: OrphanService,
@@ -32,14 +49,7 @@ export class OrphanController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, RoleGuard, AbilitiesGuard)
-  @ApiHeader({
-  name: 'accept-language',
-  description: 'Language preferred for the response error/success messages',
-  required: false,
-  schema: { default: 'ar', enum: ['ar', 'en'] },  
-})
-  @RequireRole('orphan_manager')
+  @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'create', subject: 'Orphan' })
   @UseInterceptors(
     FileFieldsInterceptor(
@@ -70,5 +80,60 @@ export class OrphanController {
     dto.FamilyStatement = familyStatement;
 
     return this.orphanService.create(dto, lang);
+  }
+
+  @Get()
+  @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
+  @CheckAbilities({ action: 'read', subject: 'Orphan' })
+  @ApiOperation({ summary: 'Get paginated orphan records' })
+  @ApiResponse({ status: 200, description: 'Orphans fetched successfully.' })
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 10;
+    return this.orphanService.findAll(pageNumber, limitNumber);
+  }
+
+  @Get(':id')
+  @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
+  @CheckAbilities({ action: 'read', subject: 'Orphan' })
+  @ApiOperation({ summary: 'Get orphan record by id' })
+  @ApiResponse({ status: 200, description: 'Orphan fetched successfully.' })
+  findOne(@Param('id') id: string, @I18nLang() lang: string) {
+    return this.orphanService.findOne(+id, lang);
+  }
+
+  @Patch(':id')
+  @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
+  @CheckAbilities({ action: 'update', subject: 'Orphan' })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [{ name: 'FamilyStatement', maxCount: 1 }],
+      { dest: './uploads/orphans' },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateOrphanDto })
+  @ApiOperation({ summary: 'Update orphan record' })
+  @ApiResponse({ status: 200, description: 'Orphan updated successfully.' })
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrphanDto,
+    @UploadedFiles()
+    files: {
+      FamilyStatement?: Array<{ path: string }>;
+    },
+    @I18nLang() lang: string,
+  ) {
+    const familyStatement = files?.FamilyStatement?.[0]?.path;
+    return this.orphanService.update(+id, dto, familyStatement, lang);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
+  @CheckAbilities({ action: 'delete', subject: 'Orphan' })
+  @ApiOperation({ summary: 'Delete orphan record' })
+  @ApiResponse({ status: 200, description: 'Orphan deleted successfully.' })
+  remove(@Param('id') id: string, @I18nLang() lang: string) {
+    return this.orphanService.remove(+id, lang);
   }
 }

@@ -1,8 +1,14 @@
-    {
+{
   "CREATE_SUCCESS": "تم إنشاء سجل اليتيم بنجاح.",
+  "FETCH_SUCCESS": "تم جلب سجلات الأيتام بنجاح.",
+  "FETCH_ONE_SUCCESS": "تم جلب سجل اليتيم بنجاح.",
+  "UPDATE_SUCCESS": "تم تحديث سجل اليتيم بنجاح.",
+  "DELETE_SUCCESS": "تم حذف سجل اليتيم بنجاح.",
+  "ORPHAN_NOT_FOUND": "لم يتم العثور على سجل اليتيم.",
+  "ORPHAN_ALREADY_EXISTS": "يوجد يتيم بنفس الاسم الأول والاسم الأخير واسم الوصي بالفعل.",
+  "DELETE_BLOCKED_BY_SPONSORSHIP": "لا يمكن حذف هذا اليتيم بسبب وجود سجلات كفالة مرتبطة به.",
   "FAMILY_STATEMENT_REQUIRED": "ملف بيان العائلة مطلوب.",
   "ROLE_REQUIRED": "لا تملك الدور المطلوب.",
   "YOU_ARE_NOT_AUTHORIZED": "أنت غير مخول لأداء هذا الإجراء.",
   "INVALID_JSON_FIELD": "يجب أن يكون الحقل {field} بصيغة JSON صحيحة."
-
 }
