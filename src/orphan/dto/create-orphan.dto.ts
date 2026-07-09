@@ -101,5 +101,6 @@ export class CreateOrphanDto {
   isSupported?: boolean;
 
   @ApiProperty({ type: 'string', format: 'binary' })
+  @IsOptional()
   FamilyStatement?: string;
 }

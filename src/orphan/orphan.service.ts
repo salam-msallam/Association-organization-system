@@ -49,27 +49,30 @@ export class OrphanService {
 
     return {
       message: this.i18n.t('orphan.CREATE_SUCCESS', { lang }),
-      data: orphan,
+      data: this.localizeOrphan(orphan, lang),
     };
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
+  async findAll(page: number = 1, limit: number = 10, isSupported?: boolean, lang = 'ar') {
     const skip = (page - 1) * limit;
+    const where = isSupported === undefined ? {} : { isSupported };
+
     const [orphans, totalCount] = await Promise.all([
       this.prisma.orphan.findMany({
+        where,
         skip,
         take: limit,
         orderBy: {
           id: 'desc',
         },
       }),
-      this.prisma.orphan.count(),
+      this.prisma.orphan.count({ where }),
     ]);
 
     const totalPages = Math.ceil(totalCount / limit);
 
     return {
-      data: orphans,
+      data: orphans.map((orphan) => this.localizeOrphan(orphan, lang)),
       meta: {
         totalCount,
         page,
@@ -92,7 +95,7 @@ export class OrphanService {
 
     return {
       message: this.i18n.t('orphan.FETCH_ONE_SUCCESS', { lang }),
-      data: orphan,
+      data: this.localizeOrphan(orphan, lang),
     };
   }
 
@@ -147,7 +150,7 @@ export class OrphanService {
 
     return {
       message: this.i18n.t('orphan.UPDATE_SUCCESS', { lang }),
-      data: orphan,
+      data: this.localizeOrphan(orphan, lang),
     };
   }
 
@@ -205,5 +208,37 @@ export class OrphanService {
 
       throw error;
     }
+  }
+
+  private localizeOrphan(orphan: any, lang: string) {
+    if (!orphan) return orphan;
+
+    return {
+      ...orphan,
+      class: this.localizeJsonValue(orphan.class, lang),
+      Diseases: this.localizeJsonValue(orphan.Diseases, lang),
+      currentAddress: this.localizeJsonValue(orphan.currentAddress, lang),
+      previousAddress: this.localizeJsonValue(orphan.previousAddress, lang),
+      talent: this.localizeJsonValue(orphan.talent, lang),
+    };
+  }
+
+  private localizeJsonValue(value: any, lang: string): any {
+    if (!value || typeof value !== 'object') return value;
+
+    if (!Array.isArray(value) && ('ar' in value || 'en' in value)) {
+      return value[lang] ?? value.ar ?? value.en;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.localizeJsonValue(item, lang));
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        this.localizeJsonValue(item, lang),
+      ]),
+    );
   }
 }

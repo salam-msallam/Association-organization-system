@@ -10,5 +10,6 @@
   "FAMILY_STATEMENT_REQUIRED": "ملف بيان العائلة مطلوب.",
   "ROLE_REQUIRED": "لا تملك الدور المطلوب.",
   "YOU_ARE_NOT_AUTHORIZED": "أنت غير مخول لأداء هذا الإجراء.",
+  "INVALID_SUPPORT_STATUS": "يجب أن تكون قيمة supported إما true أو false.",
   "INVALID_JSON_FIELD": "يجب أن يكون الحقل {field} بصيغة JSON صحيحة."
 }

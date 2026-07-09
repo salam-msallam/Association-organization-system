@@ -85,12 +85,31 @@ export class OrphanController {
   @Get()
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'read', subject: 'Orphan' })
-  @ApiOperation({ summary: 'Get paginated orphan records' })
+  @ApiOperation({ summary: 'Get paginated orphan records with optional support status filter' })
   @ApiResponse({ status: 200, description: 'Orphans fetched successfully.' })
-  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('supported') supported?: string,
+    @I18nLang() lang?: string,
+  ) {
     const pageNumber = page ? parseInt(page, 10) : 1;
     const limitNumber = limit ? parseInt(limit, 10) : 10;
-    return this.orphanService.findAll(pageNumber, limitNumber);
+    let supportedFilter: boolean | undefined;
+
+    if (supported !== undefined) {
+      if (supported === 'true') {
+        supportedFilter = true;
+      } else if (supported === 'false') {
+        supportedFilter = false;
+      } else {
+        throw new BadRequestException(
+          this.i18n.t('orphan.INVALID_SUPPORT_STATUS', { lang }),
+        );
+      }
+    }
+
+    return this.orphanService.findAll(pageNumber, limitNumber, supportedFilter, lang);
   }
 
   @Get(':id')

@@ -23,7 +23,7 @@ import { ClientJwtStrategy } from './ClientJwtStrategy';
     PassportModule.register({ defaultStrategy: 'jwt' }), // 3. تسجيل الباسبورت
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '1h' },   //   secret: 'SUPER_SECRET_KEY_123', 
+      signOptions: { expiresIn: '7d' },   //   secret: 'SUPER_SECRET_KEY_123', 
 
     }),
   ],

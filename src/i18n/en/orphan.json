@@ -10,5 +10,6 @@
   "FAMILY_STATEMENT_REQUIRED": "Family statement file is required.",
   "ROLE_REQUIRED": "You do not have the required role.",
   "YOU_ARE_NOT_AUTHORIZED": "You are not authorized to perform this action.",
+  "INVALID_SUPPORT_STATUS": "supported must be either true or false.",
   "INVALID_JSON_FIELD": "{field} must be valid JSON."
 }
