@@ -13,6 +13,7 @@ import * as path from 'path';
 import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { RequestsModule } from './requests/requests.module';
 
 @Module({
   imports: 
@@ -37,6 +38,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     AuthModule,
     UsersModule,
     DashboardModule,
+    RequestsModule,
     
 
   ],
