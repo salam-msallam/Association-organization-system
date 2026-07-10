@@ -157,6 +157,80 @@ async function main() {
     },
   });
 
+  // ==========================================================
+  // 🌱 Categories & SubCategories (ثابتة - Seed فقط)
+  // ==========================================================
+
+  const healthCategory = await prisma.category.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      name: { ar: 'صحي', en: 'Health' },
+    },
+  });
+
+  const foodCategory = await prisma.category.upsert({
+    where: { id: 2 },
+    update: {},
+    create: {
+      name: { ar: 'غذائي', en: 'Food' },
+    },
+  });
+
+  const housingCategory = await prisma.category.upsert({
+    where: { id: 3 },
+    update: {},
+    create: {
+      name: { ar: 'سكني', en: 'Housing' },
+    },
+  });
+
+  const educationCategory = await prisma.category.upsert({
+    where: { id: 4 },
+    update: {},
+    create: {
+      name: { ar: 'تعليمي', en: 'Education' },
+    },
+  });
+
+  const smallProjectsCategory = await prisma.category.upsert({
+    where: { id: 5 },
+    update: {},
+    create: {
+      name: { ar: 'مشاريع صغيرة', en: 'Small Projects' },
+    },
+  });
+
+
+  // SubCategory - فقط تحت "سكني"
+  await prisma.subCategory.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      categoryId: housingCategory.id,
+      name: { ar: 'تأمين منزل', en: 'Home Insurance' },
+    },
+  });
+
+  await prisma.subCategory.upsert({
+    where: { id: 2 },
+    update: {},
+    create: {
+      categoryId: housingCategory.id,
+      name: { ar: 'مساعدة في إيجار البيت', en: 'Rent Assistance' },
+    },
+  });
+
+  await prisma.subCategory.upsert({
+    where: { id: 3 },
+    update: {},
+    create: {
+      categoryId: housingCategory.id,
+      name: { ar: 'إصلاحات منزلية', en: 'Home Repairs' },
+    },
+  });
+
+ 
 }
 
 main()
