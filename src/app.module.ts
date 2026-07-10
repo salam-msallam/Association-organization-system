@@ -15,6 +15,7 @@ import { UsersModule } from './users/users.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OrphanModule } from './orphan/orphan.module';
 import { RequestsModule } from './requests/requests.module';
+import { CategoryModule } from './category/category.module';
 
 @Module({
   imports: 
@@ -40,6 +41,7 @@ import { RequestsModule } from './requests/requests.module';
     DashboardModule,
     OrphanModule,
     RequestsModule,
+    CategoryModule,
     
 
   ],
