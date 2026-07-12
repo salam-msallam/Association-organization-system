@@ -6,6 +6,7 @@ import { FoodRequestController } from './controllers/food-request.controller';
 import { HousingRequestController } from './controllers/housing-request.controller';
 import { EducationRequestController } from './controllers/education-request.controller';
 import { SmallProjectRequestController } from './controllers/small-project-request.controller';
+import { RequestsController } from './controllers/request.controller';
 
 @Module({
   imports: [PrismaModule],
@@ -15,6 +16,7 @@ import { SmallProjectRequestController } from './controllers/small-project-reque
     HousingRequestController,
     EducationRequestController,
     SmallProjectRequestController,
+    RequestsController,
   ],
   providers: [RequestAidService],
   exports: [RequestAidService],

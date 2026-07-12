@@ -6,12 +6,12 @@ export class BilingualTextDto {
   @ApiProperty({ example: 'دمشق - المزة' })
   @IsString()
   @IsNotEmpty()
-  ar: string;
+  ar!: string;
 
   @ApiProperty({ example: 'Damascus - Al Mazzeh' })
   @IsString()
   @IsNotEmpty()
-  en: string;
+  en!: string;
 }
 
 export function ParseBilingualText() {

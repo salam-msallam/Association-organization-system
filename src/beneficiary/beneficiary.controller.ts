@@ -50,7 +50,7 @@ export class AdminBeneficiariesController {
   @Get(':id')
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'read', subject: 'Beneficiary' })
-  @ApiOperation({ summary: 'Get full beneficiary account details for admin' })
+  @ApiOperation({ summary: 'Get full beneficiary account details for employee' })
   findOne(@Param('id') id: string, @I18nLang() lang = 'ar') {
     return this.beneficiaryService.findOne(+id, lang);
   }

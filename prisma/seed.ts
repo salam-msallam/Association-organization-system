@@ -405,6 +405,7 @@ async function main() {
     `All seeded beneficiary passwords are "${BENEFICIARY_TEST_PASSWORD}".`,
   );
   console.log('Run this seeder with: npm run seed');
+ 
 }
 
 main()

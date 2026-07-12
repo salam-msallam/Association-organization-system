@@ -20,7 +20,7 @@ export class BaseRequestAidDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  categoryId: number;
+  categoryId!: number;
 
   @ApiPropertyOptional({ example: 2 })
   @IsOptional()
@@ -35,21 +35,21 @@ export class BaseRequestAidDto {
   @ApiProperty({ example: 'Ahmad' })
   @IsString()
   @MaxLength(50)
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({ example: 'Ali' })
   @IsString()
   @MaxLength(50)
-  lastName: string;
+  lastName!: string;
 
   @ApiProperty({ example: 'Mohammad' })
   @IsString()
   @MaxLength(50)
-  beneficiaryFatherName: string;
+  beneficiaryFatherName!: string;
 
   @ApiProperty({ enum: SocialStatus, example: SocialStatus.WIDOWED })
   @IsEnum(SocialStatus)
-  socialStatus: SocialStatus;
+  socialStatus!: SocialStatus;
 
   @ApiProperty({
     type: BilingualTextDto,
@@ -57,27 +57,27 @@ export class BaseRequestAidDto {
   })
   @IsDefined({ message: 'address is required' })
   @ParseBilingualText()
-  address: BilingualTextDto;
+  address!: BilingualTextDto;
 
   @ApiProperty({ example: 35 })
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  age: number;
+  age!: number;
 
   @ApiProperty({ example: true })
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
-  isUnemployed: boolean;
+  isUnemployed!: boolean;
 
   @ApiProperty({ enum: Gender, example: Gender.MALE })
   @IsEnum(Gender)
-  gender: Gender;
+  gender!: Gender;
 
   @ApiProperty({ example: '0999999999' })
   @IsString()
   @MaxLength(20)
-  number: string;
+  number!: string;
 
   @ApiProperty({
     type: BilingualTextDto,
@@ -87,11 +87,11 @@ export class BaseRequestAidDto {
     },
   })
   @ParseBilingualText()
-  details: BilingualTextDto;
+  details!: BilingualTextDto;
 
   @ApiProperty({ example: 100 })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  cost: number;
+  cost!: number;
 }
