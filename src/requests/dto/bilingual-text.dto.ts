@@ -17,8 +17,6 @@ export class BilingualTextDto {
 export function ParseBilingualText() {
   return function (target: object, propertyKey: string) {
     Transform(({ value }) => {
-      // فاضي / غير موجود -> لازم نرجع undefined (مش القيمة كما هي)
-      // حتى تقدر @IsOptional() تتجاهل باقي الـ validators بشكل صحيح
       if (value === undefined || value === null || value === '') {
         return undefined;
       }

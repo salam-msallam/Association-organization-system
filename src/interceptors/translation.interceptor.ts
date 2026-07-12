@@ -20,6 +20,12 @@ export class TranslationInterceptor implements NestInterceptor {
   private processTranslation(data: any, lang: string): any {
     if (!data || typeof data !== 'object') return data;
     if (data instanceof Date) return data;
+
+   
+    if (typeof data.toJSON === 'function') {
+      return data.toJSON();
+    }
+
     if (Array.isArray(data)) {
       return data.map((item) => this.processTranslation(item, lang));
     }
