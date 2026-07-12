@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-import { PrismaClient, UserType, Gender } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
-
-async function main() {
-  const hashedPassword = await bcrypt.hash('password', 10);
-=======
 import {
   Gender,
   Prisma,
@@ -115,7 +106,6 @@ async function main() {
     BENEFICIARY_TEST_PASSWORD,
     10,
   );
->>>>>>> Developing a function that allows the employee to view the beneficiary's account
 
   const permissionsData = [
     { name: 'read:orphans' },

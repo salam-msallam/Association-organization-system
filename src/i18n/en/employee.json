@@ -1,5 +1,6 @@
 {
   "EMAIL_ALREADY_USED": "Email is already in use.",
+  "PHONE_ALREADY_USED": "Phone number is already in use.",
   "SOME_ROLES_NOT_FOUND": "Some selected roles do not exist. Please check the input.",
   "EMPLOYEE_NOT_FOUND": "Employee not found.",
   "NEW_EMAIL_ALREADY_USED": "The new email is already used by another user.",

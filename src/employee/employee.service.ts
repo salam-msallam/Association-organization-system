@@ -29,6 +29,19 @@ export class EmployeeService {
       throw new ConflictException(this.i18n.t('employee.EMAIL_ALREADY_USED', { lang }));
     }
 
+    const phoneExists = await this.prisma.user.findUnique({
+      where: {
+        countryCode_number: {
+          countryCode: '+963',
+          number: restData.number,
+        },
+      },
+    });
+
+    if (phoneExists) {
+      throw new ConflictException(this.i18n.t('employee.PHONE_ALREADY_USED', { lang }));
+    }
+
     const existingRoles = await this.prisma.role.findMany({
       where: { id: { in: roleIds } },
     });
@@ -163,6 +176,20 @@ export class EmployeeService {
 
       if (emailExists) {
         throw new ConflictException(this.i18n.t('employee.NEW_EMAIL_ALREADY_USED', { lang }));
+      }
+    }
+
+    if (restData.number) {
+      const phoneExists = await this.prisma.user.findFirst({
+        where: {
+          countryCode: '+963',
+          number: restData.number,
+          NOT: { id },
+        },
+      });
+
+      if (phoneExists) {
+        throw new ConflictException(this.i18n.t('employee.PHONE_ALREADY_USED', { lang }));
       }
     }
 
