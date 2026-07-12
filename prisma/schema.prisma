@@ -259,6 +259,10 @@ model RequestAid {
   rejectionReason           Json?
   isUrgent                 Boolean? 
 
+  withdrawalRequested    Boolean   @default(false)
+  withdrawalRequestedAt DateTime?
+  withdrawalReason       Json?
+
   createdAt                 DateTime     @default(now()) 
   updatedAt                 DateTime     @updatedAt   
 
