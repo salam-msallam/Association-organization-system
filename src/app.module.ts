@@ -14,6 +14,8 @@ import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OrphanModule } from './orphan/orphan.module';
+import { RequestsModule } from './requests/requests.module';
+import { BeneficiaryModule } from './beneficiary/beneficiary.module';
 
 @Module({
   imports: 
@@ -38,6 +40,8 @@ import { OrphanModule } from './orphan/orphan.module';
     UsersModule,
     DashboardModule,
     OrphanModule,
+    RequestsModule,
+    BeneficiaryModule,
     
 
   ],

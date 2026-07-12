@@ -1,0 +1,6 @@
+{
+  "FETCH_SUCCESS": "Beneficiaries fetched successfully.",
+  "FETCH_ONE_SUCCESS": "Beneficiary details fetched successfully.",
+  "NOT_FOUND": "Beneficiary account was not found.",
+  "INVALID_STATUS": "Invalid beneficiary status."
+}

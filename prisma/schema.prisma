@@ -12,8 +12,8 @@ model User {
   lastName     String
   email        String        @unique
   password     String
-  number       String 
-  countryName  String        @default("syria")
+  number       String        @db.VarChar(20)
+  countryName  String        @default("syria") @db.VarChar(10)
   countryCode  String        @default("+963")
   gender       Gender    
   userType     UserType       
@@ -164,7 +164,7 @@ model Orphan {
   sponsorships     Sponsorship[]
   annualReports    AnnualReport[]
 
-  @@unique([firstName, lastName, guardianName])
+  @@unique([firstName(length:50), lastName(length:50), guardianName(length:50)])
 }
 
 model AnnualReport {
@@ -206,6 +206,10 @@ enum SocialStatus {
 enum TypeAid {
   FOOD_BASKET  
   BABY_MILK
+  
+  MEDICINE_INSURANCE
+  SURGERY
+  MEDICAL_DEVICES
 }
 
 enum AcademicAchievement {      
@@ -230,7 +234,7 @@ model RequestAid {
   id                       Int          @id @default(autoincrement()) 
   beneficiaryId            Int 
   beneficiary           Beneficiary   @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)     
-  employeeId               Int      
+  employeeId               Int?      
   categoryId               Int      
   subCategoryId           Int?     
 
@@ -245,15 +249,15 @@ model RequestAid {
   gender                    Gender  
   number                    String  
 
-  title                     Json     
+  title                     Json?     
   details                   Json     
-  description               Json     
+  description               Json?     
 
   cost                      Decimal      @db.Decimal(10, 2) 
   currentPayment           Decimal      @db.Decimal(10, 2) @default(0.00) 
   status                    Status      @default(PENDING)
   rejectionReason           Json?
-  isUrgent                 Boolean      @default(false) 
+  isUrgent                 Boolean? 
 
   createdAt                 DateTime     @default(now()) 
   updatedAt                 DateTime     @updatedAt   
