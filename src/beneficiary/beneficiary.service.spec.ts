@@ -92,7 +92,9 @@ describe('BeneficiaryService', () => {
     await expect(service.findAll('waiting', 1, 10, 'en')).rejects.toThrow(
       BadRequestException,
     );
-    expect(i18n.t).toHaveBeenCalledWith('beneficiary.INVALID_STATUS', { lang: 'en' });
+    expect(i18n.t).toHaveBeenCalledWith('beneficiary.INVALID_STATUS', {
+      lang: 'en',
+    });
   });
 
   it('returns full beneficiary details by user account id', async () => {
@@ -134,10 +136,14 @@ describe('BeneficiaryService', () => {
         },
       }),
     );
-    expect(result.data.beneficiary.address).toBe('Damascus');
+    expect(result.data.beneficiary.address).toEqual({
+      ar: 'دمشق',
+      en: 'Damascus',
+    });
+    expect(result.data.beneficiary.rejectionReason).toBeNull();
   });
 
-  it('returns Arabic value from bilingual address when lang is ar', async () => {
+  it('returns both languages from bilingual fields when lang is ar', async () => {
     prisma.user.findFirst.mockResolvedValue({
       id: 7,
       firstName: 'Mona',
@@ -165,14 +171,22 @@ describe('BeneficiaryService', () => {
 
     const result = await service.findOne(7, 'ar');
 
-    expect(result.data.beneficiary.address).toBe('دمشق');
-    expect(result.data.beneficiary.rejectionReason).toBe('سبب');
+    expect(result.data.beneficiary.address).toEqual({
+      ar: 'دمشق',
+      en: 'Damascus',
+    });
+    expect(result.data.beneficiary.rejectionReason).toEqual({
+      ar: 'سبب',
+      en: 'Reason',
+    });
   });
 
   it('throws a translated not found error when the user account is missing', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
 
     await expect(service.findOne(404, 'en')).rejects.toThrow(NotFoundException);
-    expect(i18n.t).toHaveBeenCalledWith('beneficiary.NOT_FOUND', { lang: 'en' });
+    expect(i18n.t).toHaveBeenCalledWith('beneficiary.NOT_FOUND', {
+      lang: 'en',
+    });
   });
 });

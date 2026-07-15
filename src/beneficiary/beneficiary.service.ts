@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, Status, UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-
-type SupportedLanguage = 'ar' | 'en';
 
 @Injectable()
 export class BeneficiaryService {
@@ -102,10 +104,10 @@ export class BeneficiaryService {
     });
 
     if (!user || !user.beneficiary) {
-      throw new NotFoundException(this.i18n.t('beneficiary.NOT_FOUND', { lang }));
+      throw new NotFoundException(
+        this.i18n.t('beneficiary.NOT_FOUND', { lang }),
+      );
     }
-
-    const responseLanguage = this.toSupportedLanguage(lang);
 
     return {
       success: true,
@@ -122,50 +124,26 @@ export class BeneficiaryService {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         beneficiary: {
-           ...user.beneficiary,
-  monthlyIncome: Number(user.beneficiary.monthlyIncome),
-  address: this.translateJsonValue(user.beneficiary.address, responseLanguage),
-  rejectionReason: this.translateJsonValue(
-    user.beneficiary.rejectionReason,
-    responseLanguage,
-          ),
+          ...user.beneficiary,
+          monthlyIncome: Number(user.beneficiary.monthlyIncome),
         },
       },
     };
   }
 
-  private normalizeStatus(status: string | undefined, lang: string): Status | undefined {
+  private normalizeStatus(
+    status: string | undefined,
+    lang: string,
+  ): Status | undefined {
     if (!status) return undefined;
 
     const normalizedStatus = status.toUpperCase() as Status;
     if (!Object.values(Status).includes(normalizedStatus)) {
-      throw new BadRequestException(this.i18n.t('beneficiary.INVALID_STATUS', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('beneficiary.INVALID_STATUS', { lang }),
+      );
     }
 
     return normalizedStatus;
-  }
-
-  private translateJsonValue(value: Prisma.JsonValue, lang: SupportedLanguage): unknown {
-    if (!value || typeof value !== 'object') return value;
-
-    if (Array.isArray(value)) {
-      return value.map((item) => this.translateJsonValue(item, lang));
-    }
-
-    const record = value as Record<string, Prisma.JsonValue>;
-    if ('ar' in record || 'en' in record) {
-      return record[lang] ?? record.ar ?? record.en ?? value;
-    }
-
-    return Object.fromEntries(
-      Object.entries(record).map(([key, item]) => [
-        key,
-        this.translateJsonValue(item, lang),
-      ]),
-    );
-  }
-
-  private toSupportedLanguage(lang: string): SupportedLanguage {
-    return lang === 'en' ? 'en' : 'ar';
   }
 }

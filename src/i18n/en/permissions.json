@@ -3,9 +3,10 @@
   "create:orphans": "Register New Orphan",
   "update:orphans": "Update Orphan Details",
   "delete:orphans": "Delete Orphan Record",
-  
+
   "read:employees": "View Employees List",
   "create:employees": "Create New Employee Account",
   "update:employees": "Update Employee Permissions",
-  "delete:employees": "Delete Employee Account"
+  "delete:employees": "Delete Employee Account",
+  "read:aid_requests": "View Assistance Requests"
 }

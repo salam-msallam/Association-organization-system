@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Status, TransactionStatus } from '@prisma/client';
+import { Prisma, Status, TransactionStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { HelpRequestStatsResponseDto } from './dto/help-request-stats-response.dto';
 
 @Injectable()
 export class DashboardService {
@@ -64,6 +65,50 @@ export class DashboardService {
       donations_growth_percentage: Math.round((growthRate + Number.EPSILON) * 100) / 100,
       completed_cases: completedCasesCount,
       targeted_completed_cases: targetedCasesCount,
+    };
+  }
+
+  async getHelpRequestStats(): Promise<HelpRequestStatsResponseDto> {
+    const [statusCounts, urgentCases, averageReviewTimeResult] =
+      await Promise.all([
+        this.prisma.requestAid.groupBy({
+          by: ['status'],
+          _count: { _all: true },
+        }),
+        this.prisma.requestAid.count({
+          where: {
+            isUrgent: true,
+            status: Status.ACCEPTED,
+          },
+        }),
+        this.prisma.$queryRaw<
+          Array<{ avgReviewTimeDays: Prisma.Decimal | number | null }>
+        >`
+          SELECT AVG(
+            TIMESTAMPDIFF(MICROSECOND, createdAt, reviewedAt) / 86400000000.0
+          ) AS avgReviewTimeDays
+          FROM RequestAid
+          WHERE status = ${Status.ACCEPTED}
+            AND isUrgent = true
+            AND reviewedAt IS NOT NULL
+        `,
+      ]);
+
+    const countByStatus = new Map(
+      statusCounts.map(({ status, _count }) => [status, _count._all]),
+    );
+    const averageReviewTimeDays = Number(
+      averageReviewTimeResult[0]?.avgReviewTimeDays ?? 0,
+    );
+
+    return {
+      pending_count: countByStatus.get(Status.PENDING) ?? 0,
+      accepted_count: countByStatus.get(Status.ACCEPTED) ?? 0,
+      rejected_count: countByStatus.get(Status.REJECTED) ?? 0,
+      cancelled_count: countByStatus.get(Status.CANCELLED) ?? 0,
+      urgent_cases: urgentCases,
+      avg_review_time_days:
+        Math.round((averageReviewTimeDays + Number.EPSILON) * 10) / 10,
     };
   }
 }

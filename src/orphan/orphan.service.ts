@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,8 +35,16 @@ export class OrphanService {
 
           class: this.parseJson(dto.class, 'class', lang),
           Diseases: this.parseJson(dto.Diseases, 'Diseases', lang),
-          currentAddress: this.parseJson(dto.currentAddress, 'currentAddress', lang),
-          previousAddress: this.parseJson(dto.previousAddress, 'previousAddress', lang),
+          currentAddress: this.parseJson(
+            dto.currentAddress,
+            'currentAddress',
+            lang,
+          ),
+          previousAddress: this.parseJson(
+            dto.previousAddress,
+            'previousAddress',
+            lang,
+          ),
           talent: this.parseJson(dto.talent, 'talent', lang),
 
           FamilyStatement: dto.FamilyStatement,
@@ -41,7 +53,9 @@ export class OrphanService {
           guaranteedPhone: dto.guaranteedPhone,
           bodySize: Number(dto.bodySize),
           shoesSize: Number(dto.shoesSize),
-          ...(dto.isSupported !== undefined && { isSupported: dto.isSupported }),
+          ...(dto.isSupported !== undefined && {
+            isSupported: dto.isSupported,
+          }),
         },
       }),
       lang,
@@ -53,7 +67,12 @@ export class OrphanService {
     };
   }
 
-  async findAll(page: number = 1, limit: number = 10, isSupported?: boolean, lang = 'ar') {
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    isSupported?: boolean,
+    lang = 'ar',
+  ) {
     const skip = (page - 1) * limit;
     const where = isSupported === undefined ? {} : { isSupported };
 
@@ -72,7 +91,7 @@ export class OrphanService {
     const totalPages = Math.ceil(totalCount / limit);
 
     return {
-      data: orphans.map((orphan) => this.localizeOrphan(orphan, lang)),
+      data: orphans,
       meta: {
         totalCount,
         page,
@@ -90,12 +109,14 @@ export class OrphanService {
     });
 
     if (!orphan) {
-      throw new BadRequestException(this.i18n.t('orphan.ORPHAN_NOT_FOUND', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('orphan.ORPHAN_NOT_FOUND', { lang }),
+      );
     }
 
     return {
       message: this.i18n.t('orphan.FETCH_ONE_SUCCESS', { lang }),
-      data: this.localizeOrphan(orphan, lang),
+      data: orphan,
     };
   }
 
@@ -121,10 +142,18 @@ export class OrphanService {
         Diseases: this.parseJson(dto.Diseases, 'Diseases', lang),
       }),
       ...(dto.currentAddress !== undefined && {
-        currentAddress: this.parseJson(dto.currentAddress, 'currentAddress', lang),
+        currentAddress: this.parseJson(
+          dto.currentAddress,
+          'currentAddress',
+          lang,
+        ),
       }),
       ...(dto.previousAddress !== undefined && {
-        previousAddress: this.parseJson(dto.previousAddress, 'previousAddress', lang),
+        previousAddress: this.parseJson(
+          dto.previousAddress,
+          'previousAddress',
+          lang,
+        ),
       }),
       ...(dto.talent !== undefined && {
         talent: this.parseJson(dto.talent, 'talent', lang),
@@ -195,7 +224,10 @@ export class OrphanService {
     }
   }
 
-  private async handleUniqueConstraint<T>(operation: Promise<T>, lang: string): Promise<T> {
+  private async handleUniqueConstraint<T>(
+    operation: Promise<T>,
+    lang: string,
+  ): Promise<T> {
     try {
       return await operation;
     } catch (error) {
@@ -203,7 +235,9 @@ export class OrphanService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException(this.i18n.t('orphan.ORPHAN_ALREADY_EXISTS', { lang }));
+        throw new ConflictException(
+          this.i18n.t('orphan.ORPHAN_ALREADY_EXISTS', { lang }),
+        );
       }
 
       throw error;

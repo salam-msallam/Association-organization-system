@@ -7,9 +7,11 @@ import { HousingRequestController } from './controllers/housing-request.controll
 import { EducationRequestController } from './controllers/education-request.controller';
 import { SmallProjectRequestController } from './controllers/small-project-request.controller';
 import { RequestsController } from './controllers/request.controller';
+import { AdminHelpRequestsController } from './controllers/admin-help-requests.controller';
+import { CaslModule } from '../casl/casl.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, CaslModule],
   controllers: [
     HealthRequestController,
     FoodRequestController,
@@ -17,6 +19,7 @@ import { RequestsController } from './controllers/request.controller';
     EducationRequestController,
     SmallProjectRequestController,
     RequestsController,
+    AdminHelpRequestsController,
   ],
   providers: [RequestAidService],
   exports: [RequestAidService],

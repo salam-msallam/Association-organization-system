@@ -4,8 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { Gender, Prisma, SocialStatus } from '@prisma/client';
+import { Gender, Prisma, SocialStatus, Status } from '@prisma/client';
+import { I18nService } from 'nestjs-i18n';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  AdminHelpRequestDetailDto,
+  AdminHelpRequestDetailResponseDto,
+} from './dto/admin-help-request-detail-response.dto';
+import { AdminHelpRequestListResponseDto } from './dto/admin-help-request-list-response.dto';
 
 export interface BilingualText {
   ar: string;
@@ -26,7 +32,6 @@ export interface RequestAidBaseFields {
   cost: number;
 }
 
-
 export type AidDetailsFields = Record<string, any>;
 
 const AID_DETAILS_BILINGUAL_FIELDS = [
@@ -41,7 +46,169 @@ const AID_DETAILS_BILINGUAL_FIELDS = [
 
 @Injectable()
 export class RequestAidService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly i18n: I18nService,
+  ) {}
+
+  async getAdminHelpRequests(
+    status: string | undefined,
+    page = 1,
+    limit = 10,
+    lang = 'ar',
+  ): Promise<AdminHelpRequestListResponseDto> {
+    const normalizedStatus = this.normalizeStatus(status, lang);
+    const where: Prisma.RequestAidWhereInput = normalizedStatus
+      ? { status: normalizedStatus }
+      : {};
+    const skip = (page - 1) * limit;
+
+    const [requests, totalCount] = await Promise.all([
+      this.prisma.requestAid.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          status: true,
+          isUrgent: true,
+          cost: true,
+          currentPayment: true,
+          aidDetails: { select: { typeAid: true } },
+          category: { select: { name: true } },
+        },
+      }),
+      this.prisma.requestAid.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      data: requests.map((request) => {
+        return {
+          id: request.id,
+          firstName: request.firstName,
+          lastName: request.lastName,
+          status: request.status,
+          typeAid:
+            request.aidDetails?.typeAid ??
+            this.translateCategoryName(request.category.name, lang),
+          isUrgent: request.isUrgent ?? false,
+          cost: request.cost.toString(),
+          currentPayment: request.currentPayment.toString(),
+          compliancePercentage: this.calculateCompliancePercentage(
+            request.cost,
+            request.currentPayment,
+          ),
+        };
+      }),
+      meta: {
+        totalCount,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  async getAdminHelpRequestById(
+    id: string | number,
+    lang = 'ar',
+  ): Promise<AdminHelpRequestDetailResponseDto> {
+    const requestId = this.parseRequestId(id, lang);
+    const request = await this.prisma.requestAid.findUnique({
+      where: { id: requestId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        beneficiaryFatherName: true,
+        socialStatus: true,
+        address: true,
+        age: true,
+        isUnemployed: true,
+        gender: true,
+        number: true,
+        title: true,
+        details: true,
+        description: true,
+        cost: true,
+        currentPayment: true,
+        status: true,
+        rejectionReason: true,
+        isUrgent: true,
+        createdAt: true,
+        reviewedAt: true,
+        updatedAt: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        subCategory: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        aidDetails: {
+          select: {
+            academicAchievement: true,
+            institutionName: true,
+            year: true,
+            numberIndividuals: true,
+            projectName: true,
+            projectCategory: true,
+            numberOfPeopleSupported: true,
+            currentHousingSituation: true,
+            typeAid: true,
+            currentRent: true,
+            currentPlaceOfResidence: true,
+            reasonForLock: true,
+            housingSpecifications: true,
+            mediaUrls: true,
+          },
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException(
+        this.i18n.t('help-requests.REQUEST_NOT_FOUND', { lang }),
+      );
+    }
+
+    const data = {
+      ...request,
+      cost: request.cost.toString(),
+      currentPayment: request.currentPayment.toString(),
+      compliancePercentage: this.calculateCompliancePercentage(
+        request.cost,
+        request.currentPayment,
+      ),
+      isUrgent: request.isUrgent ?? false,
+      aidDetails: this.removeNullishAidDetails(
+        request.aidDetails
+          ? {
+              ...request.aidDetails,
+              currentRent: request.aidDetails.currentRent?.toString(),
+            }
+          : {},
+      ),
+    } as unknown as AdminHelpRequestDetailDto;
+
+    return {
+      success: true,
+      message: this.i18n.t('help-requests.FETCH_ONE_SUCCESS', { lang }),
+      data,
+    };
+  }
 
   async createRequestAid(
     userId: number,
@@ -74,7 +241,6 @@ export class RequestAidService {
       subCategoryRequiredFieldsMap,
     );
 
-  
     const sanitizedAidDetailsFields = this.stripFieldsNotAllowedForSubCategory(
       subCategoryId,
       aidDetailsFields,
@@ -137,8 +303,6 @@ export class RequestAidService {
         subCategoryId: true,
         status: true,
         rejectionReason: true,
-        withdrawalRequested: true,
-        withdrawalRequestedAt: true,
         cost: true,
         currentPayment: true,
         isUrgent: true,
@@ -203,138 +367,6 @@ export class RequestAidService {
     };
   }
 
-  
-  async requestWithdrawal(
-    userId: number,
-    requestId: number,
-    reason?: BilingualText,
-  ): Promise<{ message: string }> {
-    const beneficiary = await this.prisma.beneficiary.findUnique({
-      where: { userId },
-    });
-
-    if (!beneficiary) {
-      throw new ForbiddenException(
-        'هذا الحساب غير مرتبط بملف مستفيد، لا يمكن إجراء العمليات.',
-      );
-    }
-
-    const request = await this.prisma.requestAid.findUnique({
-      where: { id: requestId },
-    });
-
-    if (!request) {
-      throw new NotFoundException('طلب المساعدة غير موجود.');
-    }
-
-    if (request.beneficiaryId !== beneficiary.id) {
-      throw new ForbiddenException(
-        'ليس لديك الصلاحية للتعامل مع هذا الطلب.',
-      );
-    }
-
-    if (request.status !== 'ACCEPTED') {
-      throw new BadRequestException(
-        'يمكن تقديم طلب انسحاب فقط لطلب مساعدة تمت الموافقة عليه (ACCEPTED).',
-      );
-    }
-
-    if (request.withdrawalRequested) {
-      throw new BadRequestException(
-        'تم تقديم طلب انسحاب لهذا الطلب مسبقًا، بانتظار مراجعة الموظف.',
-      );
-    }
-
-    await this.prisma.requestAid.update({
-      where: { id: requestId },
-      data: {
-        withdrawalRequested: true,
-        withdrawalRequestedAt: new Date(),
-        withdrawalReason: reason ? this.toInputJson(reason) : undefined,
-      },
-    });
-
-    return {
-      message: 'تم تقديم طلب الانسحاب بنجاح، بانتظار مراجعة الموظف المسؤول.',
-    };
-  }
-
-  
-  async getWithdrawalRequests() {
-    const requests = await this.prisma.requestAid.findMany({
-      where: { withdrawalRequested: true },
-      select: {
-        id: true,
-        categoryId: true,
-        subCategoryId: true,
-        status: true,
-        withdrawalRequestedAt: true,
-        withdrawalReason: true,
-        firstName: true,
-        lastName: true,
-        cost: true,
-        currentPayment: true,
-        category: {
-          select: { id: true, name: true },
-        },
-        subCategory: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { withdrawalRequestedAt: 'desc' },
-    });
-
-    return requests.map((request) => ({
-      ...request,
-      cost: request.cost.toString(),
-      currentPayment: request.currentPayment.toString(),
-    }));
-  }
-
-  
-  async decideWithdrawalRequest(
-    requestId: number,
-    approve: boolean,
-  ): Promise<{ message: string }> {
-    const request = await this.prisma.requestAid.findUnique({
-      where: { id: requestId },
-    });
-
-    if (!request) {
-      throw new NotFoundException('طلب المساعدة غير موجود.');
-    }
-
-    if (!request.withdrawalRequested) {
-      throw new BadRequestException(
-        'لا يوجد طلب انسحاب معلّق حاليًا لهذا الطلب.',
-      );
-    }
-
-    if (approve) {
-      await this.prisma.requestAid.update({
-        where: { id: requestId },
-        data: {
-          status: 'CANCELLED',
-          withdrawalRequested: false,
-        },
-      });
-
-      return {
-        message: 'تمت الموافقة على طلب الانسحاب، وتم إلغاء طلب المساعدة.',
-      };
-    }
-
-    await this.prisma.requestAid.update({
-      where: { id: requestId },
-      data: { withdrawalRequested: false },
-    });
-
-    return {
-      message: 'تم رفض طلب الانسحاب، وطلب المساعدة الأصلي يبقى كما هو.',
-    };
-  }
-
- 
   async updateRequestAid(
     userId: number,
     requestId: number,
@@ -417,8 +449,9 @@ export class RequestAidService {
     const mediaUrlsToSave =
       newMediaUrls && newMediaUrls.length > 0
         ? newMediaUrls
-        : (existingRequest.aidDetails
-            ?.mediaUrls as unknown as string[] | undefined);
+        : (existingRequest.aidDetails?.mediaUrls as unknown as
+            | string[]
+            | undefined);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.requestAid.update({
@@ -491,6 +524,83 @@ export class RequestAidService {
     }
   }
 
+  private normalizeStatus(
+    status: string | undefined,
+    lang: string,
+  ): Status | undefined {
+    if (!status) return undefined;
+
+    const normalizedStatus = status.toUpperCase() as Status;
+    if (!Object.values(Status).includes(normalizedStatus)) {
+      throw new BadRequestException(
+        this.i18n.t('help-requests.INVALID_STATUS', { lang }),
+      );
+    }
+
+    return normalizedStatus;
+  }
+
+  private parseRequestId(id: string | number, lang: string): number {
+    const isValidString = typeof id !== 'string' || /^\d+$/.test(id.trim());
+    const requestId = typeof id === 'number' ? id : Number(id);
+
+    if (!isValidString || !Number.isInteger(requestId) || requestId <= 0) {
+      throw new BadRequestException(
+        this.i18n.t('help-requests.INVALID_ID', { lang }),
+      );
+    }
+
+    return requestId;
+  }
+
+  private calculateCompliancePercentage(
+    costValue: Prisma.Decimal,
+    currentPaymentValue: Prisma.Decimal,
+  ): number {
+    const cost = Number(costValue);
+    const currentPayment = Number(currentPaymentValue);
+    const rawPercentage = cost > 0 ? (currentPayment / cost) * 100 : 0;
+
+    return Math.min(
+      100,
+      Math.max(0, Math.round((rawPercentage + Number.EPSILON) * 100) / 100),
+    );
+  }
+
+  private removeNullishAidDetails<T extends Record<string, unknown>>(
+    aidDetails: T,
+  ): Partial<T> {
+    return Object.fromEntries(
+      Object.entries(aidDetails).filter(
+        ([, value]) => value !== null && value !== undefined,
+      ),
+    ) as Partial<T>;
+  }
+
+  private translateCategoryName(
+    value: Prisma.JsonValue,
+    lang: string,
+  ): string | null {
+    const supportedLanguage = lang === 'en' ? 'en' : 'ar';
+
+    if (typeof value === 'string') {
+      try {
+        return this.translateCategoryName(JSON.parse(value), lang);
+      } catch {
+        return value;
+      }
+    }
+
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      return null;
+    }
+
+    const record = value as Record<string, Prisma.JsonValue>;
+    const translated =
+      record[supportedLanguage] ?? record.ar ?? record.en ?? null;
+
+    return typeof translated === 'string' ? translated : null;
+  }
 
   private validateSubCategoryRequiredFields(
     subCategoryId: number | null,
@@ -537,7 +647,6 @@ export class RequestAidService {
     return sanitized;
   }
 
-  
   private mergeDefinedFields<T extends Record<string, any>>(
     existing: T,
     partial: Partial<T>,

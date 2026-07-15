@@ -1,0 +1,6 @@
+{
+  "INVALID_STATUS": "Invalid assistance request status.",
+  "FETCH_ONE_SUCCESS": "Assistance request fetched successfully.",
+  "REQUEST_NOT_FOUND": "Assistance request not found.",
+  "INVALID_ID": "Invalid assistance request ID."
+}

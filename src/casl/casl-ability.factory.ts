@@ -1,22 +1,37 @@
-import { AbilityBuilder, MongoAbility, createMongoAbility, ExtractSubjectType } from '@casl/ability';
+import {
+  AbilityBuilder,
+  MongoAbility,
+  createMongoAbility,
+  ExtractSubjectType,
+} from '@casl/ability';
 import { Injectable } from '@nestjs/common';
 
 export type Action = 'manage' | 'create' | 'read' | 'update' | 'delete';
-export type Subjects = 'Orphan' | 'Employee' | 'Donor' | 'Beneficiary' | 'Role' | 'all';
+export type Subjects =
+  | 'Orphan'
+  | 'Employee'
+  | 'Donor'
+  | 'Beneficiary'
+  | 'Role'
+  | 'RequestAid'
+  | 'all';
 
-export type AppAbility = MongoAbility<[Action, Subjects]>; 
+export type AppAbility = MongoAbility<[Action, Subjects]>;
 
 @Injectable()
 export class CaslAbilityFactory {
   createForUser(user: any): AppAbility {
-    const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
+    const { can, cannot, build } = new AbilityBuilder<AppAbility>(
+      createMongoAbility,
+    );
 
     if (user.userType === 'ADMIN') {
-      can('manage', 'Employee'); 
-      can('manage', 'Role');     
-      can('read', 'Donor');  
-      can ('read','Orphan');
-      can('read','Beneficiary');    
+      can('manage', 'Employee');
+      can('manage', 'Role');
+      can('read', 'Donor');
+      can('read', 'Orphan');
+      can('read', 'Beneficiary');
+      can('read', 'RequestAid');
     }
 
     const userPermissions: string[] = user.permissions || [];
@@ -42,6 +57,7 @@ export class CaslAbilityFactory {
       donors: 'Donor',
       beneficiaries: 'Beneficiary',
       roles: 'Role',
+      aid_requests: 'RequestAid',
     };
     return maps[subject] || null;
   }

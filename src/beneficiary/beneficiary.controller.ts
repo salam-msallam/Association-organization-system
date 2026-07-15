@@ -17,7 +17,8 @@ import { BeneficiaryService } from './beneficiary.service';
 @ApiTags('Admin Beneficiaries')
 @ApiHeader({
   name: 'accept-language',
-  description: 'Language preferred for response data and messages',
+  description:
+    'Language preferred for response messages and errors; bilingual JSON data always includes ar and en',
   required: false,
   schema: { default: 'ar', enum: ['ar', 'en'] },
 })
@@ -50,12 +51,17 @@ export class AdminBeneficiariesController {
   @Get(':id')
   @ApiBearerAuth('jwt')
   @CheckAbilities({ action: 'read', subject: 'Beneficiary' })
-  @ApiOperation({ summary: 'Get full beneficiary account details for employee' })
+  @ApiOperation({
+    summary: 'Get full beneficiary account details for employee',
+  })
   findOne(@Param('id') id: string, @I18nLang() lang = 'ar') {
     return this.beneficiaryService.findOne(+id, lang);
   }
 
-  private parsePositiveInteger(value: string | undefined, defaultValue: number): number {
+  private parsePositiveInteger(
+    value: string | undefined,
+    defaultValue: number,
+  ): number {
     const parsed = value ? parseInt(value, 10) : defaultValue;
     return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
   }
