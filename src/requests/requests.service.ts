@@ -12,6 +12,8 @@ import {
   AdminHelpRequestDetailResponseDto,
 } from './dto/admin-help-request-detail-response.dto';
 import { AdminHelpRequestListResponseDto } from './dto/admin-help-request-list-response.dto';
+import { ReviewHelpRequestDto } from './dto/review-help-request.dto';
+import { ReviewHelpRequestResponseDto } from './dto/review-help-request-response.dto';
 
 export interface BilingualText {
   ar: string;
@@ -210,6 +212,81 @@ export class RequestAidService {
     };
   }
 
+  async reviewHelpRequestStatus(
+    id: string | number,
+    employeeUserId: number,
+    dto: ReviewHelpRequestDto,
+    lang = 'ar',
+  ): Promise<ReviewHelpRequestResponseDto> {
+    const requestId = this.parseRequestId(id, lang);
+    const status = this.normalizeReviewStatus(dto.status, lang);
+
+    if (status === Status.REJECTED && !dto.rejectionReason) {
+      throw new BadRequestException(
+        this.i18n.t('help-requests.REJECTION_REASON_REQUIRED', { lang }),
+      );
+    }
+
+    const request = await this.prisma.requestAid.findUnique({
+      where: { id: requestId },
+      select: { id: true, status: true },
+    });
+
+    if (!request) {
+      throw new NotFoundException(
+        this.i18n.t('help-requests.REQUEST_NOT_FOUND', { lang }),
+      );
+    }
+
+    if (request.status === Status.CANCELLED) {
+      throw new BadRequestException(
+        this.i18n.t('help-requests.CANCELLED_REQUEST_CANNOT_BE_REVIEWED', {
+          lang,
+        }),
+      );
+    }
+
+    const employee = await this.prisma.employee.findUnique({
+      where: { userId: employeeUserId },
+      select: { id: true },
+    });
+    const reviewedAt = new Date();
+
+    const updatedRequest = await this.prisma.requestAid.update({
+      where: { id: requestId },
+      data: {
+        status,
+        title: this.toInputJson(dto.title),
+        description: this.toInputJson(dto.description),
+        isUrgent: dto.isUrgent,
+        rejectionReason:
+          status === Status.REJECTED
+            ? this.toInputJson(dto.rejectionReason as BilingualText)
+            : Prisma.JsonNull,
+        reviewedAt,
+        employeeId: employee?.id ?? null,
+      },
+      select: {
+        id: true,
+        status: true,
+        title: true,
+        description: true,
+        isUrgent: true,
+        rejectionReason: true,
+        reviewedAt: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: this.i18n.t('help-requests.STATUS_UPDATE_SUCCESS', { lang }),
+      data: {
+        ...updatedRequest,
+        isUrgent: updatedRequest.isUrgent ?? false,
+      },
+    } as unknown as ReviewHelpRequestResponseDto;
+  }
+
   async createRequestAid(
     userId: number,
     categoryId: number,
@@ -398,7 +475,7 @@ export class RequestAidService {
       throw new ForbiddenException('ليس لديك الصلاحية لتعديل هذا الطلب.');
     }
 
-    if (existingRequest.status !== 'PENDING') {
+    if (existingRequest.status === Status.CANCELLED) {
       throw new BadRequestException(
         `لا يمكن تعديل الطلب الحالي لأنه في حالة: ${existingRequest.status}`,
       );
@@ -468,6 +545,13 @@ export class RequestAidService {
           cost: mergedBaseFields.cost,
           address: this.toInputJson(mergedBaseFields.address),
           details: this.toInputJson(mergedBaseFields.details),
+          status: Status.PENDING,
+          title: Prisma.JsonNull,
+          description: Prisma.JsonNull,
+          rejectionReason: Prisma.JsonNull,
+          isUrgent: null,
+          reviewedAt: null,
+          employeeId: null,
         },
       });
 
@@ -534,6 +618,22 @@ export class RequestAidService {
     if (!Object.values(Status).includes(normalizedStatus)) {
       throw new BadRequestException(
         this.i18n.t('help-requests.INVALID_STATUS', { lang }),
+      );
+    }
+
+    return normalizedStatus;
+  }
+
+  private normalizeReviewStatus(status: string, lang: string): Status {
+    const normalizedStatus = status?.toUpperCase() as Status;
+
+    if (
+      !([Status.ACCEPTED, Status.REJECTED] as Status[]).includes(
+        normalizedStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        this.i18n.t('help-requests.INVALID_REVIEW_STATUS', { lang }),
       );
     }
 

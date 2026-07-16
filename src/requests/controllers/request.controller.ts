@@ -32,7 +32,9 @@ export class RequestsController {
 
   @Delete('cancel/:id')
   @ApiBearerAuth('jwt')
-  @ApiOperation({ summary: 'إلغاء طلب الإعانة من قبل المستفيد (بس لو PENDING)' })
+  @ApiOperation({
+    summary: 'إلغاء طلب الإعانة من قبل المستفيد (بس لو PENDING)',
+  })
   cancelRequest(
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,

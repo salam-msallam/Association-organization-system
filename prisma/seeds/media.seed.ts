@@ -5,10 +5,8 @@ export const TEST_FAMILY_STATEMENT_PATH =
   'uploads/beneficiaries/test-family-statement.pdf';
 export const TEST_PERSONAL_PHOTO_PATH =
   'uploads/beneficiaries/test-personal-photo.png';
-export const TEST_REQUEST_MEDIA_URL =
-  'http://localhost:3000/uploads/request-media/test-request-media.png';
-
-const TEST_REQUEST_MEDIA_PATH = 'uploads/request-media/test-request-media.png';
+export const TEST_REQUEST_MEDIA_PATH =
+  'uploads/request-media/test-request-media.png';
 const TEST_IMAGE_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 

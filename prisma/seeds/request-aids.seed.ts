@@ -5,7 +5,7 @@ import {
   Status,
   TypeAid,
 } from '@prisma/client';
-import { TEST_REQUEST_MEDIA_URL } from './media.seed';
+import { TEST_REQUEST_MEDIA_PATH } from './media.seed';
 import {
   AcceptedBeneficiary,
   SeededCategories,
@@ -112,7 +112,7 @@ function buildSeededAidRequests(
       cost: 180,
       aidDetails: {
         typeAid: TypeAid.MEDICINE_INSURANCE,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -124,7 +124,7 @@ function buildSeededAidRequests(
       cost: 2500,
       aidDetails: {
         typeAid: TypeAid.SURGERY,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -137,7 +137,7 @@ function buildSeededAidRequests(
       aidDetails: {
         typeAid: TypeAid.FOOD_BASKET,
         numberIndividuals: 6,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -149,7 +149,7 @@ function buildSeededAidRequests(
       aidDetails: {
         numberIndividuals: 4,
         typeAid: TypeAid.BABY_MILK,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -162,7 +162,7 @@ function buildSeededAidRequests(
       cost: 600,
       aidDetails: {
         currentRent: 200,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -174,7 +174,7 @@ function buildSeededAidRequests(
       cost: 850,
       aidDetails: {
         currentHousingSituation: { ar: 'منزل متضرر', en: 'Damaged home' },
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -188,7 +188,7 @@ function buildSeededAidRequests(
         academicAchievement: AcademicAchievement.BACHELOR,
         institutionName: { ar: 'جامعة دمشق', en: 'Damascus University' },
         year: '2026',
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -202,7 +202,7 @@ function buildSeededAidRequests(
         academicAchievement: AcademicAchievement.HIGH_SCHOOL,
         institutionName: { ar: 'مدرسة الأمل', en: 'Al-Amal School' },
         year: '2026',
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -216,7 +216,7 @@ function buildSeededAidRequests(
         projectName: { ar: 'مشغل الأمل', en: 'Hope Workshop' },
         projectCategory: { ar: 'خياطة', en: 'Sewing' },
         numberOfPeopleSupported: 5,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
     {
@@ -229,7 +229,7 @@ function buildSeededAidRequests(
         projectName: { ar: 'لقمة طيبة', en: 'Good Bite' },
         projectCategory: { ar: 'مأكولات', en: 'Food' },
         numberOfPeopleSupported: 4,
-        mediaUrls: [TEST_REQUEST_MEDIA_URL],
+        mediaUrls: [TEST_REQUEST_MEDIA_PATH],
       },
     },
   ];

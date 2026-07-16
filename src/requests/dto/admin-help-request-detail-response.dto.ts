@@ -65,7 +65,7 @@ export class AdminHelpRequestAidDetailsDto {
 
   @ApiPropertyOptional({
     type: [String],
-    example: ['http://localhost:3000/uploads/request-media/example.png'],
+    example: ['uploads/request-media/example.png'],
   })
   mediaUrls?: string[];
 }

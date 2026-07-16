@@ -20,7 +20,15 @@ describe('RequestAidService admin APIs', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         findUnique: jest.fn(),
+        update: jest.fn(),
       },
+      employee: {
+        findUnique: jest.fn(),
+      },
+      beneficiary: {
+        findUnique: jest.fn(),
+      },
+      $transaction: jest.fn(),
     };
     i18n = {
       t: jest.fn((key, options) => `${key}:${options?.lang ?? 'ar'}`),
@@ -274,5 +282,280 @@ describe('RequestAidService admin APIs', () => {
     expect(i18n.t).toHaveBeenCalledWith('help-requests.REQUEST_NOT_FOUND', {
       lang: 'en',
     });
+  });
+
+  it('accepts an assistance request with review metadata', async () => {
+    const reviewedAt = new Date('2026-07-16T10:00:00.000Z');
+    const title = { ar: 'عملية جراحية', en: 'Surgery' };
+    const description = {
+      ar: 'وصف حالة الطلب بعد المراجعة',
+      en: 'Reviewed request description',
+    };
+
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      status: Status.PENDING,
+    });
+    prisma.employee.findUnique.mockResolvedValue({ id: 7 });
+    prisma.requestAid.update.mockResolvedValue({
+      id: 13,
+      status: Status.ACCEPTED,
+      title,
+      description,
+      isUrgent: true,
+      rejectionReason: null,
+      reviewedAt,
+    });
+
+    const result = await service.reviewHelpRequestStatus(
+      '13',
+      3,
+      {
+        status: Status.ACCEPTED,
+        title,
+        description,
+        isUrgent: true,
+      },
+      'en',
+    );
+
+    expect(prisma.employee.findUnique).toHaveBeenCalledWith({
+      where: { userId: 3 },
+      select: { id: true },
+    });
+    expect(prisma.requestAid.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 13 },
+        data: expect.objectContaining({
+          status: Status.ACCEPTED,
+          title,
+          description,
+          isUrgent: true,
+          rejectionReason: Prisma.JsonNull,
+          reviewedAt: expect.any(Date),
+          employeeId: 7,
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'help-requests.STATUS_UPDATE_SUCCESS:en',
+      data: {
+        id: 13,
+        status: Status.ACCEPTED,
+        title,
+        description,
+        isUrgent: true,
+        rejectionReason: null,
+        reviewedAt,
+      },
+    });
+  });
+
+  it('requires a rejection reason when rejecting a request', async () => {
+    await expect(
+      service.reviewHelpRequestStatus(
+        '13',
+        3,
+        {
+          status: Status.REJECTED,
+          title: { ar: 'عنوان', en: 'Title' },
+          description: { ar: 'وصف', en: 'Description' },
+          isUrgent: false,
+        },
+        'ar',
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(i18n.t).toHaveBeenCalledWith(
+      'help-requests.REJECTION_REASON_REQUIRED',
+      { lang: 'ar' },
+    );
+    expect(prisma.requestAid.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects an assistance request with a bilingual rejection reason', async () => {
+    const title = { ar: 'عنوان', en: 'Title' };
+    const description = { ar: 'وصف', en: 'Description' };
+    const rejectionReason = { ar: 'البيانات غير كافية', en: 'Insufficient data' };
+    const reviewedAt = new Date('2026-07-16T10:00:00.000Z');
+
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      status: Status.PENDING,
+    });
+    prisma.employee.findUnique.mockResolvedValue(null);
+    prisma.requestAid.update.mockResolvedValue({
+      id: 13,
+      status: Status.REJECTED,
+      title,
+      description,
+      isUrgent: false,
+      rejectionReason,
+      reviewedAt,
+    });
+
+    const result = await service.reviewHelpRequestStatus(
+      '13',
+      1,
+      {
+        status: Status.REJECTED,
+        title,
+        description,
+        isUrgent: false,
+        rejectionReason,
+      },
+      'en',
+    );
+
+    expect(prisma.requestAid.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: Status.REJECTED,
+          rejectionReason,
+          employeeId: null,
+        }),
+      }),
+    );
+    expect(result.data.rejectionReason).toEqual(rejectionReason);
+  });
+
+  it('throws a translated error for invalid review status', async () => {
+    await expect(
+      service.reviewHelpRequestStatus(
+        '13',
+        3,
+        {
+          status: Status.PENDING as any,
+          title: { ar: 'عنوان', en: 'Title' },
+          description: { ar: 'وصف', en: 'Description' },
+          isUrgent: false,
+        },
+        'ar',
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(i18n.t).toHaveBeenCalledWith('help-requests.INVALID_REVIEW_STATUS', {
+      lang: 'ar',
+    });
+    expect(prisma.requestAid.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('throws a translated not-found error when reviewing a missing request', async () => {
+    prisma.requestAid.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.reviewHelpRequestStatus(
+        '404',
+        3,
+        {
+          status: Status.ACCEPTED,
+          title: { ar: 'عنوان', en: 'Title' },
+          description: { ar: 'وصف', en: 'Description' },
+          isUrgent: false,
+        },
+        'en',
+      ),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(i18n.t).toHaveBeenCalledWith('help-requests.REQUEST_NOT_FOUND', {
+      lang: 'en',
+    });
+  });
+
+  it('does not allow reviewing cancelled requests', async () => {
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      status: Status.CANCELLED,
+    });
+
+    await expect(
+      service.reviewHelpRequestStatus(
+        '13',
+        3,
+        {
+          status: Status.ACCEPTED,
+          title: { ar: 'عنوان', en: 'Title' },
+          description: { ar: 'وصف', en: 'Description' },
+          isUrgent: false,
+        },
+        'ar',
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(i18n.t).toHaveBeenCalledWith(
+      'help-requests.CANCELLED_REQUEST_CANNOT_BE_REVIEWED',
+      { lang: 'ar' },
+    );
+    expect(prisma.requestAid.update).not.toHaveBeenCalled();
+  });
+
+  it('resets review metadata when a beneficiary edits a non-cancelled request', async () => {
+    const txRequestAidUpdate = jest.fn();
+    const txAidDetailsUpdate = jest.fn();
+    prisma.$transaction.mockImplementation((callback) =>
+      callback({
+        requestAid: { update: txRequestAidUpdate },
+        aidDetails: { update: txAidDetailsUpdate },
+      }),
+    );
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      beneficiaryId: 5,
+      subCategoryId: null,
+      status: Status.ACCEPTED,
+      firstName: 'Mona',
+      lastName: 'Ali',
+      beneficiaryFatherName: 'Hassan',
+      socialStatus: SocialStatus.MARRIED,
+      address: { ar: 'دمشق', en: 'Damascus' },
+      age: 35,
+      isUnemployed: false,
+      gender: Gender.FEMALE,
+      number: '991000001',
+      details: { ar: 'تفاصيل', en: 'Details' },
+      cost: new Prisma.Decimal(2500),
+      aidDetails: { mediaUrls: ['uploads/request-media/example.png'] },
+    });
+
+    await service.updateRequestAid(
+      2,
+      13,
+      { firstName: 'Mona Updated' },
+      {},
+    );
+
+    expect(txRequestAidUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 13 },
+        data: expect.objectContaining({
+          firstName: 'Mona Updated',
+          status: Status.PENDING,
+          title: Prisma.JsonNull,
+          description: Prisma.JsonNull,
+          rejectionReason: Prisma.JsonNull,
+          isUrgent: null,
+          reviewedAt: null,
+          employeeId: null,
+        }),
+      }),
+    );
+  });
+
+  it('does not allow beneficiary edits for cancelled requests', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      beneficiaryId: 5,
+      status: Status.CANCELLED,
+      aidDetails: null,
+    });
+
+    await expect(
+      service.updateRequestAid(2, 13, { firstName: 'New' }, {}),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

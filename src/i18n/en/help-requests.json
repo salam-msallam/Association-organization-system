@@ -2,5 +2,9 @@
   "INVALID_STATUS": "Invalid assistance request status.",
   "FETCH_ONE_SUCCESS": "Assistance request fetched successfully.",
   "REQUEST_NOT_FOUND": "Assistance request not found.",
-  "INVALID_ID": "Invalid assistance request ID."
+  "INVALID_ID": "Invalid assistance request ID.",
+  "STATUS_UPDATE_SUCCESS": "Assistance request status updated successfully.",
+  "INVALID_REVIEW_STATUS": "Review status must be ACCEPTED or REJECTED.",
+  "REJECTION_REASON_REQUIRED": "Rejection reason is required when rejecting an assistance request.",
+  "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "Cancelled assistance requests cannot be reviewed."
 }

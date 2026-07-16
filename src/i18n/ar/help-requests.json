@@ -2,5 +2,9 @@
   "INVALID_STATUS": "حالة طلب الإعانة غير صحيحة.",
   "FETCH_ONE_SUCCESS": "تم جلب طلب الإعانة بنجاح.",
   "REQUEST_NOT_FOUND": "طلب الإعانة غير موجود.",
-  "INVALID_ID": "معرّف طلب الإعانة غير صالح."
+  "INVALID_ID": "معرّف طلب الإعانة غير صالح.",
+  "STATUS_UPDATE_SUCCESS": "تم تحديث حالة طلب الإعانة بنجاح.",
+  "INVALID_REVIEW_STATUS": "حالة المراجعة يجب أن تكون ACCEPTED أو REJECTED.",
+  "REJECTION_REASON_REQUIRED": "سبب الرفض مطلوب عند رفض طلب الإعانة.",
+  "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "لا يمكن مراجعة طلبات الإعانة الملغاة."
 }

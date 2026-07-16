@@ -6,7 +6,13 @@ import {
 } from '@casl/ability';
 import { Injectable } from '@nestjs/common';
 
-export type Action = 'manage' | 'create' | 'read' | 'update' | 'delete';
+export type Action =
+  | 'manage'
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'delete'
+  | 'status';
 export type Subjects =
   | 'Orphan'
   | 'Employee'

@@ -6,29 +6,28 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
-model User {
-  id           Int           @id @default(autoincrement())
-  firstName    String
-  lastName     String
-  email        String        @unique
-  password     String
-  number       String        @db.VarChar(20)
-  countryName  String        @default("syria") @db.VarChar(10)
-  countryCode  String        @default("+963")
-  gender       Gender    
-  userType     UserType       
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
 
-  roles        UserRole[]
-  otps         Otp[]
-  donor        Donor?
-  employee     Employee?
-  beneficiary  Beneficiary?
+model User {
+  id          Int      @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  email       String   @unique
+  password    String
+  number      String   @db.VarChar(20)
+  countryName String   @default("syria") @db.VarChar(10)
+  countryCode String   @default("+963")
+  gender      Gender
+  userType    UserType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles       UserRole[]
+  otps        Otp[]
+  donor       Donor?
+  employee    Employee?
+  beneficiary Beneficiary?
 
   @@unique([countryCode, number])
-
-  
 }
 
 enum UserType {
@@ -37,31 +36,32 @@ enum UserType {
   EMPLOYEE
   ADMIN
 }
-enum Gender{
+
+enum Gender {
   MALE
   FEMALE
 }
 
 model Role {
-  id          Int              @id @default(autoincrement())
-  name        String           @unique 
-  label       Json
-  createdAt   DateTime         @default(now())        
-  
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  label     Json
+  createdAt DateTime @default(now())
+
   users       UserRole[]
   permissions RolePermission[]
 }
 
 model Permission {
-  id          Int              @id @default(autoincrement())
-  name        String           @unique 
+  id   Int    @id @default(autoincrement())
+  name String @unique
 
-  roles       RolePermission[]
+  roles RolePermission[]
 }
 
 model UserRole {
-  userId Int  
-  roleId Int  
+  userId Int
+  roleId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
   role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
@@ -69,8 +69,8 @@ model UserRole {
 }
 
 model RolePermission {
-  roleId       Int       
-  permissionId Int        
+  roleId       Int
+  permissionId Int
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
@@ -79,121 +79,118 @@ model RolePermission {
 
 model Otp {
   id        Int      @id @default(autoincrement())
-  userId    Int?  
+  userId    Int?
   number    String
-  code      String   @db.VarChar(4) 
+  code      String   @db.VarChar(4)
   expiresAt DateTime
-  isUsed    Boolean  @default(false) 
-  createdAt DateTime @default(now()) 
-  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 model Employee {
-  id              Int      @id @default(autoincrement())
-  userId          Int      @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  personalPhoto   String
-  dateOfBirth     DateTime    @db.Date
-  createdAt       DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalPhoto String
+  dateOfBirth   DateTime @db.Date
+  createdAt     DateTime @default(now())
 
-  sponsorships    Sponsorship[]
-  annualReports   AnnualReport[]
-
-  
+  sponsorships  Sponsorship[]
+  annualReports AnnualReport[]
 }
 
 model Donor {
-  id                 Int             @id @default(autoincrement())
-  userId             Int             @unique
-  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stripeCustomerId   String?     
-  zipCode            String?      
-  isSponsor          Boolean         @default(false)
-  transactions       Transaction[]
-  sponsorships       Sponsorship[]
-  wallet             Wallet?
+  id               Int           @id @default(autoincrement())
+  userId           Int           @unique
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId String?
+  zipCode          String?
+  isSponsor        Boolean       @default(false)
+  transactions     Transaction[]
+  sponsorships     Sponsorship[]
+  wallet           Wallet?
 }
 
 model Beneficiary {
-  id                Int             @id @default(autoincrement())
-  userId            Int             @unique
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  personalPhoto     String   
-  familyStatement   String         
-  address           Json            
-  status            Status          @default(PENDING)
-  rejectionReason   Json? 
-  socialStatus      SocialStatus
-  numberOfChildren  Int?
-  isUnemployed      Boolean 
-  monthlyIncome     Decimal @db.Decimal(10, 2)
+  id               Int          @id @default(autoincrement())
+  userId           Int          @unique
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalPhoto    String
+  familyStatement  String
+  address          Json
+  status           Status       @default(PENDING)
+  rejectionReason  Json?
+  socialStatus     SocialStatus
+  numberOfChildren Int?
+  isUnemployed     Boolean
+  monthlyIncome    Decimal      @db.Decimal(10, 2)
 
-
-  requestAid     RequestAid[]
+  requestAid RequestAid[]
 }
 
-enum Status{    
-  PENDING 
+enum Status {
+  PENDING
   ACCEPTED
   REJECTED
   CANCELLED
 }
 
 model Orphan {
-  id                      Int           @id @default(autoincrement())
-  firstName               String       
-  lastName                String
-  fatherName              String
-  motherName              String
-  birthOfDate             DateTime       @db.Date
-  gender                  Gender
-  class                   Json 
-  Diseases                Json
-  FamilyStatement         String 
-  brotherAndSisterNumber  Int 
-  guardianName            String
-  guaranteedPhone         String 
-  bodySize                Int
-  shoesSize               Int
-  currentAddress          Json
-  previousAddress         Json
-  talent                  Json
-  isSupported             Boolean       @default(false)
-  createdAt               DateTime      @default(now()) 
-  updatedAt               DateTime      @updatedAt
-  
-  sponsorships     Sponsorship[]
-  annualReports    AnnualReport[]
+  id                     Int      @id @default(autoincrement())
+  firstName              String
+  lastName               String
+  fatherName             String
+  motherName             String
+  birthOfDate            DateTime @db.Date
+  gender                 Gender
+  class                  Json
+  Diseases               Json
+  FamilyStatement        String
+  brotherAndSisterNumber Int
+  guardianName           String
+  guaranteedPhone        String
+  bodySize               Int
+  shoesSize              Int
+  currentAddress         Json
+  previousAddress        Json
+  talent                 Json
+  isSupported            Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  @@unique([firstName(length:50), lastName(length:50), guardianName(length:50)])
+  sponsorships  Sponsorship[]
+  annualReports AnnualReport[]
+
+  @@unique([firstName(length: 50), lastName(length: 50), guardianName(length: 50)])
 }
 
 model AnnualReport {
-  id               Int      @id @default(autoincrement())
-  orphanId         Int 
-  orphan           Orphan      @relation(fields: [orphanId], references: [id], onDelete: Cascade)
-  employeeId       Int
-  employee         Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  year             Int
-  content          Json     
-  mediaUrls        String 
-  createdAt        DateTime @default(now()) 
+  id         Int      @id @default(autoincrement())
+  orphanId   Int
+  orphan     Orphan   @relation(fields: [orphanId], references: [id], onDelete: Cascade)
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year       Int
+  content    Json
+  mediaUrls  String
+  createdAt  DateTime @default(now())
 }
 
 model Sponsorship {
-  id             Int               @id @default(autoincrement())
-  donorId        Int              
-  donor          Donor             @relation(fields: [donorId], references: [userId], onDelete: Restrict)
-  orphanId       Int               
-  orphan         Orphan            @relation(fields: [orphanId], references: [id], onDelete: Restrict)
-  employeeId     Int
-  employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  amount         Decimal           @db.Decimal(10, 2)
-  status         Status            @default(PENDING)
-  rejectionReason   Json?
-  startDate      DateTime?         @db.Date
-  endDate        DateTime?         @db.Date
-  createdAt      DateTime          @default(now()) 
-  
+  id              Int       @id @default(autoincrement())
+  donorId         Int
+  donor           Donor     @relation(fields: [donorId], references: [userId], onDelete: Restrict)
+  orphanId        Int
+  orphan          Orphan    @relation(fields: [orphanId], references: [id], onDelete: Restrict)
+  employeeId      Int
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount          Decimal   @db.Decimal(10, 2)
+  status          Status    @default(PENDING)
+  rejectionReason Json?
+  startDate       DateTime? @db.Date
+  endDate         DateTime? @db.Date
+  createdAt       DateTime  @default(now())
 }
 
 enum SocialStatus {
@@ -204,19 +201,19 @@ enum SocialStatus {
 }
 
 enum TypeAid {
-  FOOD_BASKET  
+  FOOD_BASKET
   BABY_MILK
-  
+
   MEDICINE_INSURANCE
   SURGERY
   MEDICAL_DEVICES
 }
 
-enum AcademicAchievement {      
-  HIGH_SCHOOL  
-  DIPLOMA 
-  BACHELOR         
-  MASTER           
+enum AcademicAchievement {
+  HIGH_SCHOOL
+  DIPLOMA
+  BACHELOR
+  MASTER
 }
 
 enum TransactionStatus {
@@ -226,145 +223,136 @@ enum TransactionStatus {
 }
 
 enum TransactionType {
-  DIRECT_DONATION  
-  WALLET_DONATION 
+  DIRECT_DONATION
+  WALLET_DONATION
 }
 
 model RequestAid {
-  id                       Int          @id @default(autoincrement()) 
-  beneficiaryId            Int 
-  beneficiary           Beneficiary   @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)     
-  employeeId               Int?      
-  categoryId               Int      
-  subCategoryId           Int?     
+  id            Int         @id @default(autoincrement())
+  beneficiaryId Int
+  beneficiary   Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  employeeId    Int?
+  categoryId    Int
+  subCategoryId Int?
 
-  firstName                String     
-  lastName                 String    
-  beneficiaryFatherName   String   
-  socialStatus             SocialStatus     
-  address                   Json     
+  firstName             String
+  lastName              String
+  beneficiaryFatherName String
+  socialStatus          SocialStatus
+  address               Json
 
-  age                       Int      
-  isUnemployed              Boolean      @default(false) 
-  gender                    Gender  
-  number                    String  
+  age          Int
+  isUnemployed Boolean @default(false)
+  gender       Gender
+  number       String
 
-  title                     Json?     
-  details                   Json     
-  description               Json?     
+  title       Json?
+  details     Json
+  description Json?
 
-  cost                      Decimal      @db.Decimal(10, 2) 
-  currentPayment           Decimal      @db.Decimal(10, 2) @default(0.00) 
-  status                    Status      @default(PENDING)
-  rejectionReason           Json?
-  isUrgent                 Boolean? 
+  cost            Decimal  @db.Decimal(10, 2)
+  currentPayment  Decimal  @default(0.00) @db.Decimal(10, 2)
+  status          Status   @default(PENDING)
+  rejectionReason Json?
+  isUrgent        Boolean?
 
-  createdAt                 DateTime     @default(now()) 
-  reviewedAt                DateTime?
-  updatedAt                 DateTime     @updatedAt   
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  updatedAt  DateTime  @updatedAt
 
-  category                  Category     @relation(fields: [categoryId], references: [id])
-  subCategory              SubCategory? @relation(fields: [subCategoryId], references: [id])
-  aidDetails               AidDetails?   
-
- 
+  category    Category     @relation(fields: [categoryId], references: [id])
+  subCategory SubCategory? @relation(fields: [subCategoryId], references: [id])
+  aidDetails  AidDetails?
 }
 
-
 model AidDetails {
-  id                         Int                  @id @default(autoincrement())  
-  requestId                 Int                  @unique   
-  requestAid                RequestAid           @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id         Int        @id @default(autoincrement())
+  requestId  Int        @unique
+  requestAid RequestAid @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  academicAchievement       AcademicAchievement?    
-  institutionName           Json?    
-  year                       String?    
+  academicAchievement AcademicAchievement?
+  institutionName     Json?
+  year                String?
 
-  numberIndividuals         Int?       
+  numberIndividuals Int?
 
-  projectName               Json?    
-  projectCategory           Json?    
-  numberOfPeopleSupported   Int?      
+  projectName             Json?
+  projectCategory         Json?
+  numberOfPeopleSupported Int?
 
-  currentHousingSituation   Json?    
-  typeAid                   TypeAid?    
-  currentRent               Decimal?             @db.Decimal(10, 2)
-  currentPlaceOfResidence   Json?   
-  reasonForLock             Json?    
-  housingSpecifications     Json?    
+  currentHousingSituation Json?
+  typeAid                 TypeAid?
+  currentRent             Decimal? @db.Decimal(10, 2)
+  currentPlaceOfResidence Json?
+  reasonForLock           Json?
+  housingSpecifications   Json?
 
-  mediaUrls                 Json?      
-
-  
+  mediaUrls Json?
 }
 
 model Category {
-  id              Int           @id @default(autoincrement())
-  name            Json          
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  subCategories  SubCategory[] 
-  requests        RequestAid[]  
-
+  subCategories SubCategory[]
+  requests      RequestAid[]
 }
 
 model SubCategory {
-  id              Int           @id @default(autoincrement())
-  categoryId     Int           
-  name            Json          
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id         Int      @id @default(autoincrement())
+  categoryId Int
+  name       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  category        Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  requests        RequestAid[]  
-
+  category Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  requests RequestAid[]
 }
 
 model Wallet {
-  id            Int     @id @default(autoincrement())
-  donorId       Int     @unique 
-  donor         Donor   @relation(fields: [donorId], references: [userId], onDelete: Cascade)
-  runningBalance Decimal             @db.Decimal(10, 2) @default(0.00)
+  id             Int     @id @default(autoincrement())
+  donorId        Int     @unique
+  donor          Donor   @relation(fields: [donorId], references: [userId], onDelete: Cascade)
+  runningBalance Decimal @default(0.00) @db.Decimal(10, 2)
 
-  transactions    WalletTransaction[] 
-
+  transactions WalletTransaction[]
 }
 
 model Transaction {
-  id                     Int      @id @default(autoincrement())
-  donorId                Int   
-  donor                  Donor   @relation(fields: [donorId], references: [userId], onDelete: Cascade)           
-  stripePaymentIntentId  String            @unique 
-  amount                 Decimal           @db.Decimal(10, 2) 
-  paymentStatus          TransactionStatus @default(PENDING)  
-  referenceType          String?        
-  referenceId            Int?              
-  type                   TransactionType   
-  createdAt              DateTime          @default(now()) 
+  id                    Int               @id @default(autoincrement())
+  donorId               Int
+  donor                 Donor             @relation(fields: [donorId], references: [userId], onDelete: Cascade)
+  stripePaymentIntentId String            @unique
+  amount                Decimal           @db.Decimal(10, 2)
+  paymentStatus         TransactionStatus @default(PENDING)
+  referenceType         String?
+  referenceId           Int?
+  type                  TransactionType
+  createdAt             DateTime          @default(now())
 }
 
 model WalletTransaction {
-  id              Int             @id @default(autoincrement())
-  walletId       Int            
-  amount          Decimal         @db.Decimal(10, 2) 
-  type            TransactionType 
-  referenceType  String?         
-  referenceId    Int?            
-  balanceAfter   Decimal         @db.Decimal(10, 2) 
-  createdAt       DateTime        @default(now()) 
+  id            Int             @id @default(autoincrement())
+  walletId      Int
+  amount        Decimal         @db.Decimal(10, 2)
+  type          TransactionType
+  referenceType String?
+  referenceId   Int?
+  balanceAfter  Decimal         @db.Decimal(10, 2)
+  createdAt     DateTime        @default(now())
 
-  wallet          Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 }
 
 model Notification {
-  id           Int      @id @default(autoincrement())
-  user_id      Int    
-  title        Json    
-  message      Json    
-  target_type  String?  
-  target_id    Int?    
-  isRead      Boolean  @default(false) 
-  createdAt    DateTime @default(now()) 
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  title       Json
+  message     Json
+  target_type String?
+  target_id   Int?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }

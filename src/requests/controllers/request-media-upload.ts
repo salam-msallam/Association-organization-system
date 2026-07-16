@@ -30,7 +30,5 @@ export function RequestMediaUploadInterceptor() {
 export function toMediaUrls(files?: Express.Multer.File[]): string[] | undefined {
   if (!files?.length) return undefined;
 
-  return files.map(
-    (file) => `http://localhost:3000/uploads/request-media/${file.filename}`,
-  );
+  return files.map((file) => file.path);
 }

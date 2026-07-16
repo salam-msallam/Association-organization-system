@@ -1,7 +1,17 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiBody,
   ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -13,6 +23,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Status } from '@prisma/client';
+import { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CheckAbilities } from '../../decorators/abilities.decorator';
@@ -20,7 +31,15 @@ import { AbilitiesGuard } from '../../guards/abilities.guard';
 import { StaffOnlyGuard } from '../../guards/staff-only.guard';
 import { AdminHelpRequestDetailResponseDto } from '../dto/admin-help-request-detail-response.dto';
 import { AdminHelpRequestListResponseDto } from '../dto/admin-help-request-list-response.dto';
+import { ReviewHelpRequestDto } from '../dto/review-help-request.dto';
+import { ReviewHelpRequestResponseDto } from '../dto/review-help-request-response.dto';
 import { RequestAidService } from '../requests.service';
+
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: number;
+  };
+}
 
 @ApiTags('Admin Help Requests')
 @ApiHeader({
@@ -81,6 +100,36 @@ export class AdminHelpRequestsController {
     @I18nLang() lang = 'ar',
   ): Promise<AdminHelpRequestDetailResponseDto> {
     return this.requestAidService.getAdminHelpRequestById(id, lang);
+  }
+
+  @Patch(':id/status')
+  @CheckAbilities({ action: 'status', subject: 'RequestAid' })
+  @ApiOperation({
+    summary: 'Accept or reject an assistance request for authorized staff',
+  })
+  @ApiParam({ name: 'id', type: Number, example: 13 })
+  @ApiBody({ type: ReviewHelpRequestDto })
+  @ApiOkResponse({ type: ReviewHelpRequestResponseDto })
+  @ApiBadRequestResponse({
+    description: 'Invalid request ID, status, or review payload',
+  })
+  @ApiNotFoundResponse({ description: 'The assistance request was not found' })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required' })
+  @ApiForbiddenResponse({
+    description: 'Staff access and status:aid_requests permission are required',
+  })
+  reviewStatus(
+    @Param('id') id: string,
+    @Body() dto: ReviewHelpRequestDto,
+    @Req() req: AuthenticatedRequest,
+    @I18nLang() lang = 'ar',
+  ): Promise<ReviewHelpRequestResponseDto> {
+    return this.requestAidService.reviewHelpRequestStatus(
+      id,
+      req.user.id,
+      dto,
+      lang,
+    );
   }
 
   private parsePositiveInteger(
