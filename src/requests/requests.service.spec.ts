@@ -20,6 +20,7 @@ describe('RequestAidService admin APIs', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
       },
       employee: {
@@ -35,6 +36,172 @@ describe('RequestAidService admin APIs', () => {
     };
     service = new RequestAidService(prisma, i18n);
   });
+
+  it('lists accepted public aid requests by category without descriptions', async () => {
+    prisma.requestAid.findMany.mockResolvedValue([
+      {
+        id: 1,
+        title: { ar: 'عملية عاجلة', en: 'Urgent surgery' },
+        cost: new Prisma.Decimal(2500),
+        currentPayment: new Prisma.Decimal(1250),
+        isUrgent: true,
+        aidDetails: {
+          mediaUrls: [
+            'uploads/request-media/report.pdf',
+            'uploads/request-media/surgery.png',
+          ],
+        },
+      },
+      {
+        id: 2,
+        title: JSON.stringify({ ar: 'رسوم جامعية', en: 'Tuition' }),
+        cost: new Prisma.Decimal(100),
+        currentPayment: new Prisma.Decimal(150),
+        isUrgent: null,
+        aidDetails: {
+          mediaUrls: ['uploads/request-media/document.pdf'],
+        },
+      },
+    ]);
+
+    const result = await service.getPublicAidRequests(3, 'en');
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith({
+      where: { status: Status.ACCEPTED, categoryId: 3 },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        cost: true,
+        currentPayment: true,
+        isUrgent: true,
+        aidDetails: { select: { mediaUrls: true } },
+      },
+    });
+    expect(result).toEqual([
+      {
+        id: 1,
+        image: 'uploads/request-media/surgery.png',
+        title: 'Urgent surgery',
+        totalCost: '2500',
+        paidAmount: '1250',
+        remainingAmount: '1250',
+        completionPercentage: 50,
+        isUrgent: true,
+      },
+      {
+        id: 2,
+        image: null,
+        title: 'Tuition',
+        totalCost: '100',
+        paidAmount: '150',
+        remainingAmount: '-50',
+        completionPercentage: 100,
+        isUrgent: false,
+      },
+    ]);
+    expect(result[0]).not.toHaveProperty('description');
+  });
+
+  it('lists all accepted public aid requests when category is not provided', async () => {
+    prisma.requestAid.findMany.mockResolvedValue([
+      {
+        id: 3,
+        title: { ar: 'سلة غذائية', en: 'Food basket' },
+        cost: new Prisma.Decimal(100),
+        currentPayment: new Prisma.Decimal(-20),
+        isUrgent: false,
+        aidDetails: { mediaUrls: [] },
+      },
+    ]);
+
+    const result = await service.getPublicAidRequests(undefined, 'ar');
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: Status.ACCEPTED },
+      }),
+    );
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        title: 'سلة غذائية',
+        remainingAmount: '120',
+        completionPercentage: 0,
+      }),
+    );
+  });
+
+  it('returns one accepted public aid request with localized description', async () => {
+    prisma.requestAid.findFirst.mockResolvedValue({
+      id: 4,
+      title: { ar: 'إيجار عاجل', en: 'Urgent rent' },
+      description: {
+        ar: 'وصف الطلب بعد المراجعة',
+        en: 'Reviewed request description',
+      },
+      cost: new Prisma.Decimal(0),
+      currentPayment: new Prisma.Decimal(50),
+      isUrgent: true,
+      aidDetails: {
+        mediaUrls: [
+          'uploads/request-media/details.PDF',
+          'uploads/request-media/rent.webp?version=1',
+        ],
+      },
+    });
+
+    const result = await service.getPublicAidRequestById('4', 'en-US');
+
+    expect(prisma.requestAid.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 4,
+        status: Status.ACCEPTED,
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        cost: true,
+        currentPayment: true,
+        isUrgent: true,
+        aidDetails: { select: { mediaUrls: true } },
+      },
+    });
+    expect(result).toEqual({
+      image: 'uploads/request-media/rent.webp?version=1',
+      title: 'Urgent rent',
+      description: 'Reviewed request description',
+      totalCost: '0',
+      paidAmount: '50',
+      remainingAmount: '-50',
+      completionPercentage: 0,
+      isUrgent: true,
+    });
+  });
+
+  it('throws a translated not-found error for missing or unapproved public detail requests', async () => {
+    prisma.requestAid.findFirst.mockResolvedValue(null);
+
+    await expect(service.getPublicAidRequestById('404', 'en')).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(i18n.t).toHaveBeenCalledWith('help-requests.REQUEST_NOT_FOUND', {
+      lang: 'en',
+    });
+  });
+
+  it.each(['abc', '0', '-1', '1.5'])(
+    'throws a translated bad request error for invalid public request ID %s',
+    async (id) => {
+      await expect(service.getPublicAidRequestById(id, 'ar')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(i18n.t).toHaveBeenCalledWith('help-requests.INVALID_ID', {
+        lang: 'ar',
+      });
+      expect(prisma.requestAid.findFirst).not.toHaveBeenCalled();
+    },
+  );
 
   it('filters by normalized status and maps the requested fields', async () => {
     prisma.requestAid.findMany.mockResolvedValue([
@@ -377,7 +544,10 @@ describe('RequestAidService admin APIs', () => {
   it('rejects an assistance request with a bilingual rejection reason', async () => {
     const title = { ar: 'عنوان', en: 'Title' };
     const description = { ar: 'وصف', en: 'Description' };
-    const rejectionReason = { ar: 'البيانات غير كافية', en: 'Insufficient data' };
+    const rejectionReason = {
+      ar: 'البيانات غير كافية',
+      en: 'Insufficient data',
+    };
     const reviewedAt = new Date('2026-07-16T10:00:00.000Z');
 
     prisma.requestAid.findUnique.mockResolvedValue({
@@ -519,12 +689,7 @@ describe('RequestAidService admin APIs', () => {
       aidDetails: { mediaUrls: ['uploads/request-media/example.png'] },
     });
 
-    await service.updateRequestAid(
-      2,
-      13,
-      { firstName: 'Mona Updated' },
-      {},
-    );
+    await service.updateRequestAid(2, 13, { firstName: 'Mona Updated' }, {});
 
     expect(txRequestAidUpdate).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -12,6 +12,10 @@ import {
   AdminHelpRequestDetailResponseDto,
 } from './dto/admin-help-request-detail-response.dto';
 import { AdminHelpRequestListResponseDto } from './dto/admin-help-request-list-response.dto';
+import {
+  PublicAidRequestDetailDto,
+  PublicAidRequestListItemDto,
+} from './dto/public-aid-request-response.dto';
 import { ReviewHelpRequestDto } from './dto/review-help-request.dto';
 import { ReviewHelpRequestResponseDto } from './dto/review-help-request-response.dto';
 
@@ -36,6 +40,16 @@ export interface RequestAidBaseFields {
 
 export type AidDetailsFields = Record<string, any>;
 
+type PublicAidRequestRecord = {
+  id: number;
+  title: Prisma.JsonValue | null;
+  description?: Prisma.JsonValue | null;
+  cost: Prisma.Decimal;
+  currentPayment: Prisma.Decimal;
+  isUrgent: boolean | null;
+  aidDetails: { mediaUrls: Prisma.JsonValue | null } | null;
+};
+
 const AID_DETAILS_BILINGUAL_FIELDS = [
   'institutionName',
   'projectName',
@@ -52,6 +66,64 @@ export class RequestAidService {
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
   ) {}
+
+  async getPublicAidRequests(
+    categoryId?: number,
+    lang = 'ar',
+  ): Promise<PublicAidRequestListItemDto[]> {
+    const where: Prisma.RequestAidWhereInput = { status: Status.ACCEPTED };
+
+    if (categoryId !== undefined) {
+      where.categoryId = categoryId;
+    }
+
+    const requests = await this.prisma.requestAid.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        cost: true,
+        currentPayment: true,
+        isUrgent: true,
+        aidDetails: { select: { mediaUrls: true } },
+      },
+    });
+
+    return requests.map((request) =>
+      this.mapPublicAidRequestListItem(request, lang),
+    );
+  }
+
+  async getPublicAidRequestById(
+    id: string | number,
+    lang = 'ar',
+  ): Promise<PublicAidRequestDetailDto> {
+    const requestId = this.parseRequestId(id, lang);
+    const request = await this.prisma.requestAid.findFirst({
+      where: {
+        id: requestId,
+        status: Status.ACCEPTED,
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        cost: true,
+        currentPayment: true,
+        isUrgent: true,
+        aidDetails: { select: { mediaUrls: true } },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException(
+        this.i18n.t('help-requests.REQUEST_NOT_FOUND', { lang }),
+      );
+    }
+
+    return this.mapPublicAidRequestDetail(request, lang);
+  }
 
   async getAdminHelpRequests(
     status: string | undefined,
@@ -567,6 +639,131 @@ export class RequestAidService {
         message: 'تم تعديل طلب المساعدة بنجاح',
       };
     });
+  }
+
+  private mapPublicAidRequestListItem(
+    request: PublicAidRequestRecord,
+    lang: string,
+  ): PublicAidRequestListItemDto {
+    return {
+      id: request.id,
+      image: this.getFirstImageUrl(request.aidDetails?.mediaUrls),
+      title: this.localizeJsonText(request.title, lang),
+      ...this.mapPublicAidRequestPayment(request),
+      isUrgent: request.isUrgent ?? false,
+    };
+  }
+
+  private mapPublicAidRequestDetail(
+    request: PublicAidRequestRecord,
+    lang: string,
+  ): PublicAidRequestDetailDto {
+    return {
+      image: this.getFirstImageUrl(request.aidDetails?.mediaUrls),
+      title: this.localizeJsonText(request.title, lang),
+      description: this.localizeJsonText(request.description, lang),
+      ...this.mapPublicAidRequestPayment(request),
+      isUrgent: request.isUrgent ?? false,
+    };
+  }
+
+  private mapPublicAidRequestPayment(request: PublicAidRequestRecord): {
+    totalCost: string;
+    paidAmount: string;
+    remainingAmount: string;
+    completionPercentage: number;
+  } {
+    const cost = new Prisma.Decimal(request.cost);
+    const currentPayment = new Prisma.Decimal(request.currentPayment);
+
+    return {
+      totalCost: cost.toString(),
+      paidAmount: currentPayment.toString(),
+      remainingAmount: cost.minus(currentPayment).toString(),
+      completionPercentage: this.calculateCompletionPercentage(
+        request.cost,
+        request.currentPayment,
+      ),
+    };
+  }
+
+  private calculateCompletionPercentage(
+    costValue: Prisma.Decimal,
+    currentPaymentValue: Prisma.Decimal,
+  ): number {
+    const cost = Number(costValue);
+    const currentPayment = Number(currentPaymentValue);
+
+    if (
+      !Number.isFinite(cost) ||
+      !Number.isFinite(currentPayment) ||
+      cost <= 0
+    ) {
+      return 0;
+    }
+
+    const rawPercentage = (currentPayment / cost) * 100;
+    const roundedPercentage =
+      Math.round((rawPercentage + Number.EPSILON) * 100) / 100;
+
+    return Math.min(100, Math.max(0, roundedPercentage));
+  }
+
+  private getFirstImageUrl(
+    mediaUrls: Prisma.JsonValue | null | undefined,
+  ): string | null {
+    const urls = this.extractMediaUrls(mediaUrls);
+
+    return urls.find((url) => this.isImageUrl(url)) ?? null;
+  }
+
+  private extractMediaUrls(
+    mediaUrls: Prisma.JsonValue | null | undefined,
+  ): string[] {
+    if (!mediaUrls) return [];
+
+    if (Array.isArray(mediaUrls)) {
+      return mediaUrls.filter((url): url is string => typeof url === 'string');
+    }
+
+    if (typeof mediaUrls !== 'string') {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(mediaUrls) as Prisma.JsonValue;
+      return this.extractMediaUrls(parsed);
+    } catch {
+      return [mediaUrls];
+    }
+  }
+
+  private isImageUrl(url: string): boolean {
+    return /\.(jpe?g|png|webp)(?:$|[?#])/i.test(url);
+  }
+
+  private localizeJsonText(
+    value: Prisma.JsonValue | null | undefined,
+    lang: string,
+  ): string | null {
+    if (typeof value === 'string') {
+      try {
+        return this.localizeJsonText(JSON.parse(value), lang);
+      } catch {
+        return value;
+      }
+    }
+
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      return null;
+    }
+
+    const supportedLanguage = lang.toLowerCase().startsWith('en') ? 'en' : 'ar';
+    const record = value as Record<string, Prisma.JsonValue>;
+    const translated =
+      record[supportedLanguage] ?? record.ar ?? record.en ?? null;
+
+    return typeof translated === 'string' ? translated : null;
   }
 
   private async validateCategorySelection(
