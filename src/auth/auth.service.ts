@@ -16,9 +16,12 @@ import { OtpService } from './otp.service';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { WhatsappService } from './whatsapp.service';
 import { UsersService } from '../users/users.service';
-import parsePhoneNumberFromString from 'libphonenumber-js';
 import { Status } from '@prisma/client';
 import {LoginClientDto} from './dto/login_client.dto';
+import {
+  normalizeFullPhoneNumber,
+  normalizePhoneComponents,
+} from './phone-number.util';
 
  
 
@@ -92,8 +95,26 @@ export class AuthService {
 
 
   private getRegistrationCacheKey(countryCode: string, number: string): string {
-    const cleanCountry = countryCode.startsWith('+') ? countryCode : `+${countryCode}`;
-    return `registration:${cleanCountry}${number}`;
+    return `registration:${countryCode}${number}`;
+  }
+
+  private normalizeRegistrationDto<T extends RegisterDonorDto | RegisterBeneficiaryDto>(
+    dto: T,
+    lang: string,
+  ): T {
+    const normalizedPhone = normalizePhoneComponents(dto.countryCode, dto.number);
+
+    if (!normalizedPhone) {
+      throw new BadRequestException(
+        this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }),
+      );
+    }
+
+    return {
+      ...dto,
+      countryCode: normalizedPhone.countryCode,
+      number: normalizedPhone.number,
+    };
   }
 
   private async storePendingRegistration(
@@ -157,14 +178,21 @@ if (existingUserByEmail) {
   }
 
  async registerDonor(dto: RegisterDonorDto, lang: string): Promise<{ message: string }> {
-  await this.storePendingRegistration('DONOR', dto, lang);
+  const normalizedDto = this.normalizeRegistrationDto(dto, lang);
+  await this.storePendingRegistration('DONOR', normalizedDto, lang);
 
   let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
   
   try {
-    otpResult = await this.otpService.createRegistrationOtp(dto.countryCode, dto.number);
+    otpResult = await this.otpService.createRegistrationOtp(
+      normalizedDto.countryCode,
+      normalizedDto.number,
+    );
   } catch (error) {
-    await this.clearPendingRegistration(dto.countryCode, dto.number);
+    await this.clearPendingRegistration(
+      normalizedDto.countryCode,
+      normalizedDto.number,
+    );
     throw error;
   }
 
@@ -182,13 +210,20 @@ if (existingUserByEmail) {
     dto: RegisterBeneficiaryDto,
     lang: string,
   ): Promise<{ message: string }> {
-    await this.storePendingRegistration('BENEFICIARY', dto, lang);
+    const normalizedDto = this.normalizeRegistrationDto(dto, lang);
+    await this.storePendingRegistration('BENEFICIARY', normalizedDto, lang);
 
     let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
   try {
-      otpResult = await this.otpService.createRegistrationOtp(dto.countryCode, dto.number);
+      otpResult = await this.otpService.createRegistrationOtp(
+        normalizedDto.countryCode,
+        normalizedDto.number,
+      );
   } catch (error) {
-    await this.clearPendingRegistration(dto.countryCode, dto.number);
+    await this.clearPendingRegistration(
+      normalizedDto.countryCode,
+      normalizedDto.number,
+    );
     throw error;
   }
   try {
@@ -205,21 +240,48 @@ if (existingUserByEmail) {
     countryCode: string,
     number: string,
   ): Promise<PendingRegistrationCache | null> {
-    const cacheKey = this.getRegistrationCacheKey(countryCode, number);
+    const normalizedPhone = normalizePhoneComponents(countryCode, number);
+
+    if (!normalizedPhone) {
+      return null;
+    }
+
+    const cacheKey = this.getRegistrationCacheKey(
+      normalizedPhone.countryCode,
+      normalizedPhone.number,
+    );
     const data = await this.cacheManager.get<PendingRegistrationCache>(cacheKey);
     return data || null;
   }
 
   async deletePendingRegistration(countryCode: string, number: string): Promise<void> {
-    const cacheKey = this.getRegistrationCacheKey(countryCode, number);
+    const normalizedPhone = normalizePhoneComponents(countryCode, number);
+
+    if (!normalizedPhone) {
+      return;
+    }
+
+    const cacheKey = this.getRegistrationCacheKey(
+      normalizedPhone.countryCode,
+      normalizedPhone.number,
+    );
     await this.cacheManager.del(cacheKey);
   }
 
   async verifyRegistrationOtp(dto: VerifyOtpDto, lang: string) {
-    const fullPhoneNumber = `${dto.countryCode}${dto.number}`;
+    const normalizedPhone = normalizePhoneComponents(dto.countryCode, dto.number);
+
+    if (!normalizedPhone) {
+      throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
+    }
+
+    const fullPhoneNumber = normalizedPhone.e164;
     await this.otpService.verifyRegistrationOtp(fullPhoneNumber, dto.code, lang);
 
-    const cacheKey = this.getRegistrationCacheKey(dto.countryCode, dto.number);
+    const cacheKey = this.getRegistrationCacheKey(
+      normalizedPhone.countryCode,
+      normalizedPhone.number,
+    );
     const pendingRegistration = await this.cacheManager.get<PendingRegistrationCache>(cacheKey);
 
     if (!pendingRegistration) {
@@ -303,22 +365,17 @@ if (existingUserByEmail) {
   async login_client(loginClientDto: LoginClientDto , lang:string) {
 
     const { phoneNumber, password } = loginClientDto;
-    const parsedNumber = parsePhoneNumberFromString(phoneNumber);
-    
-   
-    if (!parsedNumber || !parsedNumber.isValid()) {
+    const normalizedPhone = normalizeFullPhoneNumber(phoneNumber);
+
+    if (!normalizedPhone) {
       throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
     }
-
-    
-    const countryCode = `+${parsedNumber.countryCallingCode}`; 
-    const nationalNumber = parsedNumber.nationalNumber;       
 
     // const user = await this.usersService.findByPhoneComponents(countryCode, nationalNumber);
     const user = await this.prisma.user.findFirst({
       where: {
-        countryCode: countryCode, 
-        number: nationalNumber,
+        countryCode: normalizedPhone.countryCode, 
+        number: normalizedPhone.number,
       },
       include: {
         beneficiary: true, 

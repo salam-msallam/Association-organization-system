@@ -7,7 +7,11 @@ export async function seedAdminUser(prisma: PrismaClient, roles: SeededRoles) {
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@gmail.com' },
-    update: { password: hashedPassword },
+    update: {
+      password: hashedPassword,
+      number: '123456789',
+      countryCode: '+963',
+    },
     create: {
       firstName: 'admin',
       lastName: 'admin',
@@ -15,7 +19,7 @@ export async function seedAdminUser(prisma: PrismaClient, roles: SeededRoles) {
       password: hashedPassword,
       number: '123456789',
       countryName: 'Syria',
-      countryCode: '963',
+      countryCode: '+963',
       gender: Gender.MALE,
       userType: UserType.ADMIN,
       roles: {

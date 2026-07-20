@@ -12,7 +12,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class FoodRequestDto extends BaseRequestAidDto {
   @ApiProperty({ enum: TypeAid, example: TypeAid.FOOD_BASKET })
   @IsEnum(TypeAid)
-  typeAid: TypeAid;
+  typeAid!: TypeAid;
 
   @ApiProperty({ example: 5 })
   @Type(() => Number)

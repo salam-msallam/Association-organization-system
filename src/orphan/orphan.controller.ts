@@ -32,6 +32,7 @@ import { UpdateOrphanDto } from './dto/update-orphan.dto';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { AbilitiesGuard } from '../guards/abilities.guard';
 import { CheckAbilities } from '../decorators/abilities.decorator';
+import { createUploadStorage } from '../interceptors/upload-storage.util';
 
 @Controller('orphan')
 @ApiBearerAuth('jwt')
@@ -54,7 +55,7 @@ export class OrphanController {
   @UseInterceptors(
     FileFieldsInterceptor(
       [{ name: 'FamilyStatement', maxCount: 1 }],
-      { dest: './uploads/orphans' },
+      { storage: createUploadStorage('./uploads/orphans') },
     ),
   )
   @ApiConsumes('multipart/form-data')
@@ -127,7 +128,7 @@ export class OrphanController {
   @UseInterceptors(
     FileFieldsInterceptor(
       [{ name: 'FamilyStatement', maxCount: 1 }],
-      { dest: './uploads/orphans' },
+      { storage: createUploadStorage('./uploads/orphans') },
     ),
   )
   @ApiConsumes('multipart/form-data')

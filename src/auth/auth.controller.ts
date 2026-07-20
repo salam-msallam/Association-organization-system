@@ -8,6 +8,7 @@ import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
 import { RegisterDonorDto } from './dto/register-donor.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import {LoginClientDto} from './dto/login_client.dto';
+import { createUploadStorage } from '../interceptors/upload-storage.util';
 // @ApiTags('Authentication') 
 import {
   BadRequestException,
@@ -61,7 +62,7 @@ export class AuthController {
         { name: 'personalPhoto', maxCount: 1 },
         { name: 'familyStatement', maxCount: 1 },
       ],
-      { dest: './uploads/beneficiaries' },
+      { storage: createUploadStorage('./uploads/beneficiaries') },
     ),
   )
   @ApiConsumes('multipart/form-data')
