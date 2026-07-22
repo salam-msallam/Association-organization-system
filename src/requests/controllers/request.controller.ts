@@ -7,13 +7,27 @@ import {
   ParseIntPipe,
   Patch,
   Req,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiOperation,
+  ApiTags,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { UpdateRequestAidDto } from '../dto/update-request-aid.dto';
 import { RequestAidService } from '../requests.service';
-import { RequestWithdrawalDto } from '../dto/request-withdrawal.dto';
+import {
+  RequestMediaUploadInterceptor,
+  toMediaUrls,
+} from './request-media-upload';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -22,6 +36,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 @ApiTags('Requests')
+@ApiExtraModels(UpdateRequestAidDto)
 @Controller('requests')
 @UseGuards(JwtAuthGuard)
 export class RequestsController {
@@ -35,7 +50,9 @@ export class RequestsController {
 
   @Delete('cancel/:id')
   @ApiBearerAuth('jwt')
-  @ApiOperation({ summary: 'إلغاء طلب الإعانة من قبل المستفيد (بس لو PENDING)' })
+  @ApiOperation({
+    summary: 'إلغاء طلب الإعانة من قبل المستفيد (بس لو PENDING)',
+  })
   cancelRequest(
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
@@ -43,20 +60,72 @@ export class RequestsController {
     return this.requestAidService.cancelRequestAid(req.user.id, id);
   }
 
-  @Patch('withdraw/:id')
+  @Patch(':id')
   @ApiBearerAuth('jwt')
   @ApiOperation({
-    summary: 'تقديم طلب انسحاب من طلب تمت مراجعته (ACCEPTED)',
+    summary: 'تعديل طلب الإعانة من قبل المستفيد (فقط إذا كان PENDING)',
   })
-  requestWithdrawal(
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      allOf: [
+        { $ref: getSchemaPath(UpdateRequestAidDto) },
+        {
+          type: 'object',
+          properties: {
+            media: {
+              type: 'array',
+              items: { type: 'string', format: 'binary' },
+            },
+          },
+        },
+      ],
+    },
+  })
+  @UseInterceptors(RequestMediaUploadInterceptor())
+  updateRequest(
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: RequestWithdrawalDto,
+    @Body() dto: UpdateRequestAidDto,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    return this.requestAidService.requestWithdrawal(
+    const {
+      academicAchievement,
+      institutionName,
+      year,
+      typeAid,
+      numberIndividuals,
+      projectName,
+      projectCategory,
+      numberOfPeopleSupported,
+      currentHousingSituation,
+      currentRent,
+      currentPlaceOfResidence,
+      reasonForLock,
+      housingSpecifications,
+      ...baseFields
+    } = dto;
+
+    return this.requestAidService.updateRequestAid(
       req.user.id,
       id,
-      dto.reason,
+      baseFields,
+      {
+        academicAchievement,
+        institutionName,
+        year,
+        typeAid,
+        numberIndividuals,
+        projectName,
+        projectCategory,
+        numberOfPeopleSupported,
+        currentHousingSituation,
+        currentRent,
+        currentPlaceOfResidence,
+        reasonForLock,
+        housingSpecifications,
+      },
+      toMediaUrls(files),
     );
   }
 }
