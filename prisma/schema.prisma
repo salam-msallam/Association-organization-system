@@ -287,7 +287,8 @@ model AidDetails {
   reasonForLock           Json?
   housingSpecifications   Json?
 
-  mediaUrls Json?
+  mediaUrls     Json?
+  donorImageUrl String?
 }
 
 model Category {

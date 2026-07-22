@@ -28,7 +28,21 @@ describe('RequestAidService admin APIs', () => {
       beneficiary: {
         findUnique: jest.fn(),
       },
-      $transaction: jest.fn(),
+      aidDetails: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+      },
+      $transaction: jest.fn((callback) =>
+        callback({
+          requestAid: {
+            update: prisma.requestAid.update,
+          },
+          aidDetails: {
+            findUnique: prisma.aidDetails.findUnique,
+            upsert: prisma.aidDetails.upsert,
+          },
+        }),
+      ),
     };
     i18n = {
       t: jest.fn((key, options) => `${key}:${options?.lang ?? 'ar'}`),
@@ -170,6 +184,7 @@ describe('RequestAidService admin APIs', () => {
         reasonForLock: null,
         housingSpecifications: null,
         mediaUrls: ['uploads/request-media/example.png'],
+        donorImageUrl: 'uploads/request-media/donor-facing.png',
       },
     });
 
@@ -214,6 +229,7 @@ describe('RequestAidService admin APIs', () => {
           typeAid: TypeAid.SURGERY,
           currentRent: '200',
           mediaUrls: ['uploads/request-media/example.png'],
+          donorImageUrl: 'uploads/request-media/donor-facing.png',
         },
       }),
     });
@@ -306,6 +322,9 @@ describe('RequestAidService admin APIs', () => {
       rejectionReason: null,
       reviewedAt,
     });
+    prisma.aidDetails.upsert.mockResolvedValue({
+      donorImageUrl: 'uploads/request-media/donor-facing.png',
+    });
 
     const result = await service.reviewHelpRequestStatus(
       '13',
@@ -315,7 +334,9 @@ describe('RequestAidService admin APIs', () => {
         title,
         description,
         isUrgent: true,
+        donorImageUrl: 'uploads/request-media/ignored-by-upload.png',
       },
+      'uploads/request-media/donor-facing.png',
       'en',
     );
 
@@ -337,6 +358,17 @@ describe('RequestAidService admin APIs', () => {
         }),
       }),
     );
+    expect(prisma.aidDetails.upsert).toHaveBeenCalledWith({
+      where: { requestId: 13 },
+      create: {
+        requestId: 13,
+        donorImageUrl: 'uploads/request-media/donor-facing.png',
+      },
+      update: {
+        donorImageUrl: 'uploads/request-media/donor-facing.png',
+      },
+      select: { donorImageUrl: true },
+    });
     expect(result).toEqual({
       success: true,
       message: 'help-requests.STATUS_UPDATE_SUCCESS:en',
@@ -346,6 +378,7 @@ describe('RequestAidService admin APIs', () => {
         title,
         description,
         isUrgent: true,
+        donorImageUrl: 'uploads/request-media/donor-facing.png',
         rejectionReason: null,
         reviewedAt,
       },
@@ -363,6 +396,7 @@ describe('RequestAidService admin APIs', () => {
           description: { ar: 'وصف', en: 'Description' },
           isUrgent: false,
         },
+        undefined,
         'ar',
       ),
     ).rejects.toThrow(BadRequestException);
@@ -405,6 +439,7 @@ describe('RequestAidService admin APIs', () => {
         isUrgent: false,
         rejectionReason,
       },
+      undefined,
       'en',
     );
 
@@ -420,6 +455,109 @@ describe('RequestAidService admin APIs', () => {
     expect(result.data.rejectionReason).toEqual(rejectionReason);
   });
 
+  it('ignores acceptance-only fields and media when rejecting a request', async () => {
+    const rejectionReason = { ar: 'Not eligible', en: 'Not eligible' };
+
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      status: Status.PENDING,
+    });
+    prisma.employee.findUnique.mockResolvedValue({ id: 7 });
+    prisma.requestAid.update.mockResolvedValue({
+      id: 13,
+      status: Status.REJECTED,
+      title: null,
+      description: null,
+      isUrgent: null,
+      rejectionReason,
+      reviewedAt: new Date('2026-07-16T10:00:00.000Z'),
+    });
+    prisma.aidDetails.upsert.mockResolvedValue({ donorImageUrl: null });
+
+    const result = await service.reviewHelpRequestStatus(
+      '13',
+      3,
+      {
+        status: Status.REJECTED,
+        title: { ar: 'Title', en: 'Title' },
+        description: { ar: 'Description', en: 'Description' },
+        isUrgent: true,
+        donorImageUrl: 'uploads/request-media/ignored.png',
+        rejectionReason,
+      },
+      'uploads/request-media/upload-ignored.png',
+      'en',
+    );
+
+    expect(prisma.requestAid.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: Prisma.JsonNull,
+          description: Prisma.JsonNull,
+          isUrgent: null,
+          rejectionReason,
+        }),
+      }),
+    );
+    expect(prisma.aidDetails.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { donorImageUrl: null },
+      }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        title: null,
+        description: null,
+        isUrgent: false,
+        donorImageUrl: null,
+        rejectionReason,
+      }),
+    );
+  });
+
+  it('preserves existing donor-facing media when accepting without donor media', async () => {
+    const reviewedAt = new Date('2026-07-16T10:00:00.000Z');
+    const title = { ar: 'Title', en: 'Title' };
+    const description = { ar: 'Description', en: 'Description' };
+    const donorImageUrl = 'uploads/request-media/existing-donor.png';
+
+    prisma.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      status: Status.PENDING,
+    });
+    prisma.employee.findUnique.mockResolvedValue({ id: 7 });
+    prisma.requestAid.update.mockResolvedValue({
+      id: 13,
+      status: Status.ACCEPTED,
+      title,
+      description,
+      isUrgent: false,
+      rejectionReason: null,
+      reviewedAt,
+    });
+    prisma.aidDetails.findUnique.mockResolvedValue({ donorImageUrl });
+
+    const result = await service.reviewHelpRequestStatus(
+      '13',
+      3,
+      {
+        status: Status.ACCEPTED,
+        title,
+        description,
+        isUrgent: false,
+      },
+      undefined,
+      'en',
+    );
+
+    expect(prisma.aidDetails.upsert).not.toHaveBeenCalled();
+    expect(prisma.aidDetails.findUnique).toHaveBeenCalledWith({
+      where: { requestId: 13 },
+      select: { donorImageUrl: true },
+    });
+    expect(result.data.donorImageUrl).toBe(donorImageUrl);
+  });
+
   it('throws a translated error for invalid review status', async () => {
     await expect(
       service.reviewHelpRequestStatus(
@@ -431,6 +569,7 @@ describe('RequestAidService admin APIs', () => {
           description: { ar: 'وصف', en: 'Description' },
           isUrgent: false,
         },
+        undefined,
         'ar',
       ),
     ).rejects.toThrow(BadRequestException);
@@ -454,6 +593,7 @@ describe('RequestAidService admin APIs', () => {
           description: { ar: 'وصف', en: 'Description' },
           isUrgent: false,
         },
+        undefined,
         'en',
       ),
     ).rejects.toThrow(NotFoundException);
@@ -479,6 +619,7 @@ describe('RequestAidService admin APIs', () => {
           description: { ar: 'وصف', en: 'Description' },
           isUrgent: false,
         },
+        undefined,
         'ar',
       ),
     ).rejects.toThrow(BadRequestException);
@@ -538,6 +679,14 @@ describe('RequestAidService admin APIs', () => {
           isUrgent: null,
           reviewedAt: null,
           employeeId: null,
+        }),
+      }),
+    );
+    expect(txAidDetailsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          mediaUrls: ['uploads/request-media/example.png'],
+          donorImageUrl: null,
         }),
       }),
     );

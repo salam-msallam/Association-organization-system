@@ -9,14 +9,21 @@ export class ReviewHelpRequestDataDto {
   @ApiProperty({ enum: [Status.ACCEPTED, Status.REJECTED] })
   status!: Status;
 
-  @ApiProperty({ type: BilingualTextResponseDto })
-  title!: BilingualTextResponseDto;
+  @ApiProperty({ type: BilingualTextResponseDto, nullable: true })
+  title!: BilingualTextResponseDto | null;
 
-  @ApiProperty({ type: BilingualTextResponseDto })
-  description!: BilingualTextResponseDto;
+  @ApiProperty({ type: BilingualTextResponseDto, nullable: true })
+  description!: BilingualTextResponseDto | null;
 
   @ApiProperty({ example: true })
   isUrgent!: boolean;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'uploads/request-media/donor-facing.png',
+  })
+  donorImageUrl!: string | null;
 
   @ApiProperty({ type: BilingualTextResponseDto, nullable: true })
   rejectionReason!: BilingualTextResponseDto | null;

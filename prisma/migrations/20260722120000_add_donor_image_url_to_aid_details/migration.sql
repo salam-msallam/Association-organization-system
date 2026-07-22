@@ -1,0 +1,1 @@
+ALTER TABLE `AidDetails` ADD COLUMN `donorImageUrl` VARCHAR(191) NULL;

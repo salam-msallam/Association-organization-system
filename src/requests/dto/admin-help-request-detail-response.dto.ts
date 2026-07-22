@@ -68,6 +68,12 @@ export class AdminHelpRequestAidDetailsDto {
     example: ['uploads/request-media/example.png'],
   })
   mediaUrls?: string[];
+
+  @ApiPropertyOptional({
+    type: String,
+    example: 'uploads/request-media/donor-facing.png',
+  })
+  donorImageUrl?: string;
 }
 
 export class AdminHelpRequestDetailDto {
