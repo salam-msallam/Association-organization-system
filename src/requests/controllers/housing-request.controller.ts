@@ -13,6 +13,7 @@ import { Request } from 'express';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { HousingRequestDto } from '../dto/housing-request.dto';
 import { RequestAidService } from '../requests.service';
+import { HOUSING_SUBCATEGORY_REQUIRED_FIELDS } from '../subcategory-required-fields';
 import {
   RequestMediaUploadInterceptor,
   toMediaUrls,
@@ -29,11 +30,11 @@ interface AuthenticatedRequest extends Request {
 }
 
 
-const HOUSING_SUBCATEGORY_REQUIRED_FIELDS: Record<number, string[]> = {
-  1: ['currentPlaceOfResidence', 'housingSpecifications', 'reasonForLock'],
-  2: ['currentRent'],
-  3: ['currentHousingSituation'],
-};
+// const HOUSING_SUBCATEGORY_REQUIRED_FIELDS: Record<number, string[]> = {
+//   1: ['currentPlaceOfResidence', 'housingSpecifications', 'reasonForLock'],
+//   2: ['currentRent'],
+//   3: ['currentHousingSituation'],
+// };
 
 @Controller('requests/housing')
 @UseGuards(JwtAuthGuard)

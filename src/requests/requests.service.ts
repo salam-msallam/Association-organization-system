@@ -18,6 +18,7 @@ import {
 } from './dto/public-aid-request-response.dto';
 import { ReviewHelpRequestDto } from './dto/review-help-request.dto';
 import { ReviewHelpRequestResponseDto } from './dto/review-help-request-response.dto';
+import { HOUSING_SUBCATEGORY_REQUIRED_FIELDS } from './subcategory-required-fields';
 
 export interface BilingualText {
   ar: string;
@@ -59,6 +60,24 @@ const AID_DETAILS_BILINGUAL_FIELDS = [
   'reasonForLock',
   'housingSpecifications',
 ] as const;
+
+const AID_DETAILS_FIELDS_BY_CATEGORY: Record<string, readonly string[]> = {
+  Education: ['academicAchievement', 'institutionName', 'year'],
+  Food: ['typeAid', 'numberIndividuals'],
+  Health: ['typeAid'],
+  Housing: [
+    'currentHousingSituation',
+    'currentRent',
+    'currentPlaceOfResidence',
+    'reasonForLock',
+    'housingSpecifications',
+  ],
+  'Small Projects': [
+    'projectName',
+    'projectCategory',
+    'numberOfPeopleSupported',
+  ],
+};
 
 @Injectable()
 export class RequestAidService {
@@ -582,7 +601,6 @@ export class RequestAidService {
     requestId: number,
     baseFieldsPartial: Partial<RequestAidBaseFields>,
     aidDetailsFieldsPartial: AidDetailsFields,
-    subCategoryRequiredFieldsMap?: Record<number, string[]>,
     newMediaUrls?: string[],
   ): Promise<{ message: string }> {
     const beneficiary = await this.prisma.beneficiary.findUnique({
@@ -597,7 +615,12 @@ export class RequestAidService {
 
     const existingRequest = await this.prisma.requestAid.findUnique({
       where: { id: requestId },
-      include: { aidDetails: true },
+      include: {
+        aidDetails: true,
+        category: {
+          select: { name: true },
+        },
+      },
     });
 
     if (!existingRequest) {
@@ -613,6 +636,15 @@ export class RequestAidService {
         `لا يمكن تعديل الطلب الحالي لأنه في حالة: ${existingRequest.status}`,
       );
     }
+
+    const categoryName = this.extractCategoryName(
+      existingRequest.category.name,
+    );
+
+    const categoryFilteredFields = this.sanitizeAidDetailsFields(
+      categoryName,
+      aidDetailsFieldsPartial,
+    );
 
     const mergedBaseFields: RequestAidBaseFields = {
       firstName: baseFieldsPartial.firstName ?? existingRequest.firstName,
@@ -641,19 +673,20 @@ export class RequestAidService {
 
     const mergedAidDetailsFields = this.mergeDefinedFields(
       existingAidDetailsFields,
-      aidDetailsFieldsPartial,
+      categoryFilteredFields,
     );
 
+   
     this.validateSubCategoryRequiredFields(
       existingRequest.subCategoryId,
       mergedAidDetailsFields,
-      subCategoryRequiredFieldsMap,
+      HOUSING_SUBCATEGORY_REQUIRED_FIELDS,
     );
 
-    const sanitizedAidDetailsFields = this.stripFieldsNotAllowedForSubCategory(
+    const aidDetailsFieldsToUpdate = this.stripFieldsNotAllowedForSubCategory(
       existingRequest.subCategoryId,
-      mergedAidDetailsFields,
-      subCategoryRequiredFieldsMap,
+      categoryFilteredFields,
+      HOUSING_SUBCATEGORY_REQUIRED_FIELDS,
     );
 
     const mediaUrlsToSave =
@@ -664,8 +697,12 @@ export class RequestAidService {
             | undefined);
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.requestAid.update({
-        where: { id: requestId },
+      const updateResult = await tx.requestAid.updateMany({
+        where: {
+          id: requestId,
+          beneficiaryId: beneficiary.id,
+          status: 'PENDING',
+        },
         data: {
           firstName: mergedBaseFields.firstName,
           lastName: mergedBaseFields.lastName,
@@ -688,10 +725,16 @@ export class RequestAidService {
         },
       });
 
+      if (updateResult.count !== 1) {
+        throw new BadRequestException(
+          'لا يمكن تعديل الطلب لأن حالته لم تعد PENDING.',
+        );
+      }
+
       await tx.aidDetails.update({
         where: { requestId },
         data: {
-          ...this.normalizeBilingualFields(sanitizedAidDetailsFields),
+          ...this.normalizeBilingualFields(aidDetailsFieldsToUpdate),
           mediaUrls: mediaUrlsToSave as unknown as Prisma.InputJsonValue,
           donorImageUrl: null,
         },
@@ -1019,6 +1062,35 @@ export class RequestAidService {
     }
 
     return result;
+  }
+
+  private sanitizeAidDetailsFields(
+    categoryName: string,
+    fields: AidDetailsFields,
+  ): AidDetailsFields {
+    const allowedFields = AID_DETAILS_FIELDS_BY_CATEGORY[categoryName];
+
+    if (!allowedFields) {
+      throw new BadRequestException(
+        `لا يمكن تعديل تفاصيل طلب من فئة غير مدعومة: ${categoryName}`,
+      );
+    }
+
+    const providedFields = Object.entries(fields).filter(
+      ([, value]) => value !== undefined,
+    );
+
+    const disallowedFields = providedFields
+      .map(([key]) => key)
+      .filter((key) => !allowedFields.includes(key));
+
+    if (disallowedFields.length > 0) {
+      throw new BadRequestException(
+        `الحقول التالية لا تنتمي لفئة "${categoryName}": ${disallowedFields.join(', ')}`,
+      );
+    }
+
+    return Object.fromEntries(providedFields);
   }
 
   private extractCategoryName(name: Prisma.JsonValue): string {
