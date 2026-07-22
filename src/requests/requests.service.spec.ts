@@ -60,10 +60,7 @@ describe('RequestAidService admin APIs', () => {
         currentPayment: new Prisma.Decimal(1250),
         isUrgent: true,
         aidDetails: {
-          mediaUrls: [
-            'uploads/request-media/report.pdf',
-            'uploads/request-media/surgery.png',
-          ],
+          donorImageUrl: 'uploads/request-media/donor-surgery.png',
         },
       },
       {
@@ -73,7 +70,7 @@ describe('RequestAidService admin APIs', () => {
         currentPayment: new Prisma.Decimal(150),
         isUrgent: null,
         aidDetails: {
-          mediaUrls: ['uploads/request-media/document.pdf'],
+          donorImageUrl: null,
         },
       },
     ]);
@@ -89,13 +86,13 @@ describe('RequestAidService admin APIs', () => {
         cost: true,
         currentPayment: true,
         isUrgent: true,
-        aidDetails: { select: { mediaUrls: true } },
+        aidDetails: { select: { donorImageUrl: true } },
       },
     });
     expect(result).toEqual([
       {
         id: 1,
-        image: 'uploads/request-media/surgery.png',
+        image: 'uploads/request-media/donor-surgery.png',
         title: 'Urgent surgery',
         totalCost: '2500',
         paidAmount: '1250',
@@ -125,7 +122,7 @@ describe('RequestAidService admin APIs', () => {
         cost: new Prisma.Decimal(100),
         currentPayment: new Prisma.Decimal(-20),
         isUrgent: false,
-        aidDetails: { mediaUrls: [] },
+        aidDetails: { donorImageUrl: null },
       },
     ]);
 
@@ -136,6 +133,7 @@ describe('RequestAidService admin APIs', () => {
         where: { status: Status.ACCEPTED },
       }),
     );
+    expect(result[0].image).toBeNull();
     expect(result[0]).toEqual(
       expect.objectContaining({
         title: 'سلة غذائية',
@@ -157,10 +155,7 @@ describe('RequestAidService admin APIs', () => {
       currentPayment: new Prisma.Decimal(50),
       isUrgent: true,
       aidDetails: {
-        mediaUrls: [
-          'uploads/request-media/details.PDF',
-          'uploads/request-media/rent.webp?version=1',
-        ],
+        donorImageUrl: 'uploads/request-media/donor-rent.webp',
       },
     });
 
@@ -178,11 +173,11 @@ describe('RequestAidService admin APIs', () => {
         cost: true,
         currentPayment: true,
         isUrgent: true,
-        aidDetails: { select: { mediaUrls: true } },
+        aidDetails: { select: { donorImageUrl: true } },
       },
     });
     expect(result).toEqual({
-      image: 'uploads/request-media/rent.webp?version=1',
+      image: 'uploads/request-media/donor-rent.webp',
       title: 'Urgent rent',
       description: 'Reviewed request description',
       totalCost: '0',

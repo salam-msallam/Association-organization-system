@@ -47,7 +47,7 @@ type PublicAidRequestRecord = {
   cost: Prisma.Decimal;
   currentPayment: Prisma.Decimal;
   isUrgent: boolean | null;
-  aidDetails: { mediaUrls: Prisma.JsonValue | null } | null;
+  aidDetails: { donorImageUrl: string | null } | null;
 };
 
 const AID_DETAILS_BILINGUAL_FIELDS = [
@@ -86,7 +86,7 @@ export class RequestAidService {
         cost: true,
         currentPayment: true,
         isUrgent: true,
-        aidDetails: { select: { mediaUrls: true } },
+        aidDetails: { select: { donorImageUrl: true } },
       },
     });
 
@@ -112,7 +112,7 @@ export class RequestAidService {
         cost: true,
         currentPayment: true,
         isUrgent: true,
-        aidDetails: { select: { mediaUrls: true } },
+        aidDetails: { select: { donorImageUrl: true } },
       },
     });
 
@@ -709,7 +709,7 @@ export class RequestAidService {
   ): PublicAidRequestListItemDto {
     return {
       id: request.id,
-      image: this.getFirstImageUrl(request.aidDetails?.mediaUrls),
+      image: request.aidDetails?.donorImageUrl ?? null,
       title: this.localizeJsonText(request.title, lang),
       ...this.mapPublicAidRequestPayment(request),
       isUrgent: request.isUrgent ?? false,
@@ -721,7 +721,7 @@ export class RequestAidService {
     lang: string,
   ): PublicAidRequestDetailDto {
     return {
-      image: this.getFirstImageUrl(request.aidDetails?.mediaUrls),
+      image: request.aidDetails?.donorImageUrl ?? null,
       title: this.localizeJsonText(request.title, lang),
       description: this.localizeJsonText(request.description, lang),
       ...this.mapPublicAidRequestPayment(request),
