@@ -5,6 +5,7 @@
   "INVALID_ID": "Invalid assistance request ID.",
   "STATUS_UPDATE_SUCCESS": "Assistance request status updated successfully.",
   "INVALID_REVIEW_STATUS": "Review status must be ACCEPTED or REJECTED.",
+  "ACCEPTANCE_FIELDS_REQUIRED": "Title, description, and urgency status are required when accepting an assistance request.",
   "REJECTION_REASON_REQUIRED": "Rejection reason is required when rejecting an assistance request.",
   "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "Cancelled assistance requests cannot be reviewed."
 }

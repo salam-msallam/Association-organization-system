@@ -247,6 +247,7 @@ export class RequestAidService {
             reasonForLock: true,
             housingSpecifications: true,
             mediaUrls: true,
+            donorImageUrl: true,
           },
         },
       },
@@ -288,14 +289,28 @@ export class RequestAidService {
     id: string | number,
     employeeUserId: number,
     dto: ReviewHelpRequestDto,
+    uploadedDonorImageUrl?: string,
     lang = 'ar',
   ): Promise<ReviewHelpRequestResponseDto> {
     const requestId = this.parseRequestId(id, lang);
     const status = this.normalizeReviewStatus(dto.status, lang);
 
+    if (
+      status === Status.ACCEPTED &&
+      (!dto.title || !dto.description || dto.isUrgent === undefined)
+    ) {
+      throw new BadRequestException(
+        this.i18n.t('help-requests.ACCEPTANCE_FIELDS_REQUIRED', {
+          lang,
+        }),
+      );
+    }
+
     if (status === Status.REJECTED && !dto.rejectionReason) {
       throw new BadRequestException(
-        this.i18n.t('help-requests.REJECTION_REASON_REQUIRED', { lang }),
+        this.i18n.t('help-requests.REJECTION_REASON_REQUIRED', {
+          lang,
+        }),
       );
     }
 
@@ -323,35 +338,81 @@ export class RequestAidService {
       select: { id: true },
     });
     const reviewedAt = new Date();
+    const donorImageUrl = uploadedDonorImageUrl ?? dto.donorImageUrl;
 
-    const updatedRequest = await this.prisma.requestAid.update({
-      where: { id: requestId },
-      data: {
-        status,
-        title: this.toInputJson(dto.title),
-        description: this.toInputJson(dto.description),
-        isUrgent: dto.isUrgent,
-        rejectionReason:
-          status === Status.REJECTED
-            ? this.toInputJson(dto.rejectionReason as BilingualText)
-            : Prisma.JsonNull,
-        reviewedAt,
-        employeeId: employee?.id ?? null,
-      },
-      select: {
-        id: true,
-        status: true,
-        title: true,
-        description: true,
-        isUrgent: true,
-        rejectionReason: true,
-        reviewedAt: true,
-      },
+    const requestData: Prisma.RequestAidUpdateInput =
+      status === Status.ACCEPTED
+        ? {
+            status,
+            title: this.toInputJson(dto.title as BilingualText),
+            description: this.toInputJson(dto.description as BilingualText),
+            isUrgent: dto.isUrgent,
+            rejectionReason: Prisma.JsonNull,
+            reviewedAt,
+            employeeId: employee?.id ?? null,
+          }
+        : {
+            status,
+            title: Prisma.JsonNull,
+            description: Prisma.JsonNull,
+            isUrgent: null,
+            rejectionReason: this.toInputJson(
+              dto.rejectionReason as BilingualText,
+            ),
+            reviewedAt,
+            employeeId: employee?.id ?? null,
+          };
+
+    const updatedRequest = await this.prisma.$transaction(async (tx) => {
+      const reviewedRequest = await tx.requestAid.update({
+        where: { id: requestId },
+        data: requestData,
+        select: {
+          id: true,
+          status: true,
+          title: true,
+          description: true,
+          isUrgent: true,
+          rejectionReason: true,
+          reviewedAt: true,
+        },
+      });
+
+      const shouldReplaceDonorImage =
+        status === Status.ACCEPTED && donorImageUrl !== undefined;
+      const shouldClearDonorImage = status === Status.REJECTED;
+
+      const aidDetails =
+        shouldReplaceDonorImage || shouldClearDonorImage
+          ? await tx.aidDetails.upsert({
+              where: { requestId },
+              create: {
+                requestId,
+                donorImageUrl: shouldReplaceDonorImage
+                  ? donorImageUrl
+                  : null,
+              },
+              update: {
+                donorImageUrl: shouldReplaceDonorImage ? donorImageUrl : null,
+              },
+              select: { donorImageUrl: true },
+            })
+          : await tx.aidDetails.findUnique({
+              where: { requestId },
+              select: { donorImageUrl: true },
+            });
+
+      return {
+        ...reviewedRequest,
+        donorImageUrl: aidDetails?.donorImageUrl ?? null,
+      };
     });
 
     return {
       success: true,
-      message: this.i18n.t('help-requests.STATUS_UPDATE_SUCCESS', { lang }),
+      message: this.i18n.t('help-requests.STATUS_UPDATE_SUCCESS', {
+        lang,
+      }),
       data: {
         ...updatedRequest,
         isUrgent: updatedRequest.isUrgent ?? false,
@@ -632,6 +693,7 @@ export class RequestAidService {
         data: {
           ...this.normalizeBilingualFields(sanitizedAidDetailsFields),
           mediaUrls: mediaUrlsToSave as unknown as Prisma.InputJsonValue,
+          donorImageUrl: null,
         },
       });
 

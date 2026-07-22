@@ -1,7 +1,14 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Status } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsDefined, IsIn, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsDefined,
+  IsIn,
+  IsOptional,
+  IsString,
+  ValidateIf,
+} from 'class-validator';
 import { BilingualTextDto, ParseBilingualText } from './bilingual-text.dto';
 
 export class ReviewHelpRequestDto {
@@ -12,20 +19,42 @@ export class ReviewHelpRequestDto {
   @IsIn([Status.ACCEPTED, Status.REJECTED])
   status!: Status;
 
-  @ApiProperty({ type: BilingualTextDto })
+  @ApiProperty({
+    type: BilingualTextDto,
+    description: 'Required only when status is ACCEPTED',
+  })
+  @ValidateIf((dto: ReviewHelpRequestDto) => dto.status === Status.ACCEPTED)
   @IsDefined()
   @ParseBilingualText()
-  title!: BilingualTextDto;
+  title?: BilingualTextDto;
 
-  @ApiProperty({ type: BilingualTextDto })
+  @ApiProperty({
+    type: BilingualTextDto,
+    description: 'Required only when status is ACCEPTED',
+  })
+  @ValidateIf((dto: ReviewHelpRequestDto) => dto.status === Status.ACCEPTED)
   @IsDefined()
   @ParseBilingualText()
-  description!: BilingualTextDto;
+  description?: BilingualTextDto;
 
-  @ApiProperty({ example: true })
-  @Transform(({ value }) => value === true || value === 'true')
+  @ApiProperty({
+    example: true,
+    description: 'Required only when status is ACCEPTED',
+  })
+  @ValidateIf((dto: ReviewHelpRequestDto) => dto.status === Status.ACCEPTED)
+  @IsDefined()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    return value === true || value === 'true';
+  })
   @IsBoolean()
-  isUrgent!: boolean;
+  isUrgent?: boolean;
+
+  @ApiHideProperty()
+  @ValidateIf((dto: ReviewHelpRequestDto) => dto.status === Status.ACCEPTED)
+  @IsOptional()
+  @IsString()
+  donorImageUrl?: string;
 
   @ApiPropertyOptional({
     type: BilingualTextDto,

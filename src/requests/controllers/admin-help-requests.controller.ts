@@ -6,12 +6,15 @@ import {
   Patch,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -34,6 +37,10 @@ import { AdminHelpRequestListResponseDto } from '../dto/admin-help-request-list-
 import { ReviewHelpRequestDto } from '../dto/review-help-request.dto';
 import { ReviewHelpRequestResponseDto } from '../dto/review-help-request-response.dto';
 import { RequestAidService } from '../requests.service';
+import {
+  DonorImageUploadInterceptor,
+  toMediaUrl,
+} from './request-media-upload';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -108,7 +115,45 @@ export class AdminHelpRequestsController {
     summary: 'Accept or reject an assistance request for authorized staff',
   })
   @ApiParam({ name: 'id', type: Number, example: 13 })
-  @ApiBody({ type: ReviewHelpRequestDto })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [Status.ACCEPTED, Status.REJECTED],
+          example: Status.ACCEPTED,
+        },
+        title: {
+          type: 'object',
+          description: 'Required only when status is ACCEPTED',
+          example: { ar: 'عنوان الطلب', en: 'Request title' },
+        },
+        description: {
+          type: 'object',
+          description: 'Required only when status is ACCEPTED',
+          example: { ar: 'وصف الطلب', en: 'Request description' },
+        },
+        isUrgent: {
+          type: 'boolean',
+          description: 'Required only when status is ACCEPTED',
+          example: true,
+        },
+        rejectionReason: {
+          type: 'object',
+          description: 'Required only when status is REJECTED',
+          example: { ar: 'سبب الرفض', en: 'Rejection reason' },
+        },
+        media: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional donor-facing image upload for acceptance',
+        },
+      },
+      required: ['status'],
+    },
+  })
   @ApiOkResponse({ type: ReviewHelpRequestResponseDto })
   @ApiBadRequestResponse({
     description: 'Invalid request ID, status, or review payload',
@@ -118,9 +163,11 @@ export class AdminHelpRequestsController {
   @ApiForbiddenResponse({
     description: 'Staff access and status:aid_requests permission are required',
   })
+  @UseInterceptors(DonorImageUploadInterceptor())
   reviewStatus(
     @Param('id') id: string,
     @Body() dto: ReviewHelpRequestDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: AuthenticatedRequest,
     @I18nLang() lang = 'ar',
   ): Promise<ReviewHelpRequestResponseDto> {
@@ -128,6 +175,7 @@ export class AdminHelpRequestsController {
       id,
       req.user.id,
       dto,
+      toMediaUrl(file),
       lang,
     );
   }
