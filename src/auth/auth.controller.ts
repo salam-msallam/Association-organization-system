@@ -8,6 +8,8 @@ import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
 import { RegisterDonorDto } from './dto/register-donor.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import {LoginClientDto} from './dto/login_client.dto';
+import { ForgotPasswordRequestOtpDto } from './dto/forgot-password-request-otp.dto';
+import { ForgotPasswordResetDto } from './dto/forgot-password-reset.dto';
 import { createUploadStorage } from '../interceptors/upload-storage.util';
 // @ApiTags('Authentication') 
 import {
@@ -110,6 +112,40 @@ export class AuthController {
     @I18nLang() lang: string,
   ) {
     return this.authService.verifyRegistrationOtp(verifyOtpDto, lang);
+  }
+
+  @Post('forgot-password/request-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset OTP for donor or accepted beneficiary' })
+  @ApiBody({ type: ForgotPasswordRequestOtpDto })
+  @ApiResponse({ status: 200, description: 'OTP was sent to the user phone number.' })
+  @ApiResponse({ status: 400, description: 'Invalid request body.' })
+  @ApiResponse({ status: 403, description: 'Beneficiary account is not approved.' })
+  @ApiResponse({ status: 404, description: 'User was not found.' })
+  async requestPasswordResetOtp(
+    @Body() forgotPasswordRequestOtpDto: ForgotPasswordRequestOtpDto,
+    @I18nLang() lang: string,
+  ) {
+    return this.authService.requestPasswordResetOtp(
+      forgotPasswordRequestOtpDto,
+      lang,
+    );
+  }
+
+  @Post('forgot-password/reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset donor or beneficiary password using OTP code' })
+  @ApiBody({ type: ForgotPasswordResetDto })
+  @ApiResponse({ status: 200, description: 'Password was reset successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired OTP.' })
+  async resetForgottenPassword(
+    @Body() forgotPasswordResetDto: ForgotPasswordResetDto,
+    @I18nLang() lang: string,
+  ) {
+    return this.authService.resetForgottenPassword(
+      forgotPasswordResetDto,
+      lang,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

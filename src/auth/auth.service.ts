@@ -18,6 +18,8 @@ import { WhatsappService } from './whatsapp.service';
 import { UsersService } from '../users/users.service';
 import { Status } from '@prisma/client';
 import {LoginClientDto} from './dto/login_client.dto';
+import { ForgotPasswordRequestOtpDto } from './dto/forgot-password-request-otp.dto';
+import { ForgotPasswordResetDto } from './dto/forgot-password-reset.dto';
 import {
   normalizeFullPhoneNumber,
   normalizePhoneComponents,
@@ -30,6 +32,7 @@ import {
   ForbiddenException,
   Inject,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 
 @Injectable()
@@ -177,6 +180,53 @@ if (existingUserByEmail) {
     }
   }
 
+  private async findEligiblePasswordResetUser(phoneNumber: string, lang: string) {
+    const normalizedPhone = normalizeFullPhoneNumber(phoneNumber);
+
+    if (!normalizedPhone) {
+      throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        countryCode: normalizedPhone.countryCode,
+        number: normalizedPhone.number,
+      },
+      include: {
+        beneficiary: true,
+        donor: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+    }
+
+    if (user.userType === 'DONOR') {
+      if (!user.donor) {
+        throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+      }
+
+      return { user, fullPhoneNumber: normalizedPhone.e164 };
+    }
+
+    if (user.userType === 'BENEFICIARY') {
+      if (!user.beneficiary) {
+        throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+      }
+
+      if (user.beneficiary.status !== Status.ACCEPTED) {
+        throw new ForbiddenException(
+          this.i18n.t('auth.ACCOUNT_NOT_APPROVED_YET', { lang }),
+        );
+      }
+
+      return { user, fullPhoneNumber: normalizedPhone.e164 };
+    }
+
+    throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+  }
+
  async registerDonor(dto: RegisterDonorDto, lang: string): Promise<{ message: string }> {
   const normalizedDto = this.normalizeRegistrationDto(dto, lang);
   await this.storePendingRegistration('DONOR', normalizedDto, lang);
@@ -234,6 +284,74 @@ if (existingUserByEmail) {
   }
 
   return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
+  }
+
+  async requestPasswordResetOtp(
+    dto: ForgotPasswordRequestOtpDto,
+    lang: string,
+  ): Promise<{ message: string }> {
+    const { user, fullPhoneNumber } = await this.findEligiblePasswordResetUser(
+      dto.phoneNumber,
+      lang,
+    );
+
+    const otpResult = await this.otpService.createPasswordResetOtp(
+      user.id,
+      fullPhoneNumber,
+      lang,
+    );
+
+    try {
+      await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
+    } catch (whatsappError) {
+      console.error('WhatsApp sending failed, but password reset OTP is kept in DB for testing:');
+      return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
+    }
+
+    return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
+  }
+
+  async resetForgottenPassword(
+    dto: ForgotPasswordResetDto,
+    lang: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const otpRecord = await this.otpService.verifyPasswordResetOtp(dto.code, lang);
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const isOtpConsumed = await this.otpService.markPasswordResetOtpAsUsed(
+          otpRecord.id,
+          otpRecord.userId,
+          tx,
+        );
+
+        if (!isOtpConsumed) {
+          throw new BadRequestException(
+            this.i18n.t('auth.OTP_INVALID_OR_CONSUMED', { lang }),
+          );
+        }
+
+        await tx.user.update({
+          where: { id: otpRecord.userId },
+          data: { password: hashedPassword },
+        });
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      console.error('Password reset transaction failed:', error);
+      throw new InternalServerErrorException(
+        this.i18n.t('auth.PASSWORD_RESET_FAILED', { lang }),
+      );
+    }
+
+    return {
+      success: true,
+      message: this.i18n.t('auth.PASSWORD_RESET_SUCCESS', { lang }),
+    };
   }
 
   async getPendingRegistration(
