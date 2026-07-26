@@ -1,0 +1,21 @@
+{
+  "AUTHENTICATION_REQUIRED": "Authentication is required.",
+  "ONLY_DONORS_CAN_CREATE_PAYMENTS": "Only donors can create donation payments.",
+  "AUTHENTICATED_USER_NOT_DONOR": "Authenticated user is not a donor.",
+  "ACCEPTED_AID_REQUEST_NOT_FOUND": "Accepted aid request was not found.",
+  "AID_REQUEST_FULLY_FUNDED": "Aid request is already fully funded.",
+  "DONATION_AMOUNT_EXCEEDS_REMAINING": "Donation amount exceeds remaining amount {remainingAmount}.",
+  "DONATION_AMOUNT_VALID_NUMBER": "Donation amount must be a valid number.",
+  "DONATION_AMOUNT_MAX_TWO_DECIMALS": "Donation amount must have no more than two decimal places.",
+  "DONATION_AMOUNT_POSITIVE": "Donation amount must be positive.",
+  "DONATION_AMOUNT_INVALID_FOR_STRIPE": "Donation amount is invalid for Stripe.",
+  "DONATION_AMOUNT_TOO_LARGE": "Donation amount is too large.",
+  "STRIPE_SECRET_KEY_NOT_CONFIGURED": "STRIPE_SECRET_KEY is not configured.",
+  "STRIPE_WEBHOOK_SECRET_NOT_CONFIGURED": "STRIPE_WEBHOOK_SECRET is not configured.",
+  "STRIPE_CURRENCY_NOT_CONFIGURED": "STRIPE_CURRENCY is not configured.",
+  "STRIPE_CLIENT_SECRET_MISSING": "Stripe did not return a PaymentIntent client secret.",
+  "WEBHOOK_SIGNATURE_OR_BODY_MISSING": "Stripe webhook signature or raw body is missing.",
+  "INVALID_WEBHOOK_SIGNATURE": "Invalid Stripe webhook signature.",
+  "PAYMENT_AMOUNT_MUST_BE_NUMBER": "Donation amount must be a number with no more than two decimal places.",
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "Donation amount must be positive."
+}

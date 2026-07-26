@@ -1,0 +1,21 @@
+{
+  "AUTHENTICATION_REQUIRED": "تسجيل الدخول مطلوب.",
+  "ONLY_DONORS_CAN_CREATE_PAYMENTS": "يمكن للمتبرعين فقط إنشاء مدفوعات التبرع.",
+  "AUTHENTICATED_USER_NOT_DONOR": "المستخدم الحالي ليس متبرعاً.",
+  "ACCEPTED_AID_REQUEST_NOT_FOUND": "طلب المساعدة المقبول غير موجود.",
+  "AID_REQUEST_FULLY_FUNDED": "طلب المساعدة ممول بالكامل بالفعل.",
+  "DONATION_AMOUNT_EXCEEDS_REMAINING": "مبلغ التبرع يتجاوز المبلغ المتبقي {remainingAmount}.",
+  "DONATION_AMOUNT_VALID_NUMBER": "يجب أن يكون مبلغ التبرع رقماً صالحاً.",
+  "DONATION_AMOUNT_MAX_TWO_DECIMALS": "يجب ألا يحتوي مبلغ التبرع على أكثر من منزلتين عشريتين.",
+  "DONATION_AMOUNT_POSITIVE": "يجب أن يكون مبلغ التبرع موجباً.",
+  "DONATION_AMOUNT_INVALID_FOR_STRIPE": "مبلغ التبرع غير صالح لإرساله إلى Stripe.",
+  "DONATION_AMOUNT_TOO_LARGE": "مبلغ التبرع كبير جداً.",
+  "STRIPE_SECRET_KEY_NOT_CONFIGURED": "لم يتم ضبط STRIPE_SECRET_KEY.",
+  "STRIPE_WEBHOOK_SECRET_NOT_CONFIGURED": "لم يتم ضبط STRIPE_WEBHOOK_SECRET.",
+  "STRIPE_CURRENCY_NOT_CONFIGURED": "لم يتم ضبط STRIPE_CURRENCY.",
+  "STRIPE_CLIENT_SECRET_MISSING": "لم يرجع Stripe رمز client secret الخاص بعملية الدفع.",
+  "WEBHOOK_SIGNATURE_OR_BODY_MISSING": "توقيع Stripe webhook أو raw body غير موجود.",
+  "INVALID_WEBHOOK_SIGNATURE": "توقيع Stripe webhook غير صالح.",
+  "PAYMENT_AMOUNT_MUST_BE_NUMBER": "يجب أن يكون مبلغ التبرع رقماً وألا يحتوي على أكثر من منزلتين عشريتين.",
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "يجب أن يكون مبلغ التبرع موجباً."
+}
