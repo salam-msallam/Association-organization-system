@@ -2,5 +2,10 @@
   "FETCH_SUCCESS": "Beneficiaries fetched successfully.",
   "FETCH_ONE_SUCCESS": "Beneficiary details fetched successfully.",
   "NOT_FOUND": "Beneficiary account was not found.",
-  "INVALID_STATUS": "Invalid beneficiary status."
+  "INVALID_STATUS": "Invalid beneficiary status.",
+  "INVALID_ID": "Invalid beneficiary account ID.",
+  "INVALID_REVIEW_STATUS": "Review status must be ACCEPTED or REJECTED.",
+  "REJECTION_REASON_REQUIRED": "Arabic and English rejection reasons are required when rejecting a beneficiary account.",
+  "ALREADY_REVIEWED": "This beneficiary account has already been reviewed.",
+  "STATUS_UPDATE_SUCCESS": "Beneficiary account status updated successfully."
 }

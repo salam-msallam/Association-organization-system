@@ -1,10 +1,27 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateIf,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SocialStatus } from '@prisma/client'; 
 import { BaseRegisterDto } from './base-register.dto';
 import { Transform, Type } from 'class-transformer';
 
 export class RegisterBeneficiaryDto extends BaseRegisterDto {
+  @ApiProperty({
+    type: 'string',
+    format: 'date',
+    example: '1990-05-20',
+  })
+  @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
+  dateOfBirth!: string;
+
   @ApiProperty({ type: 'string', format: 'binary' })
   @IsString()
   @IsOptional()

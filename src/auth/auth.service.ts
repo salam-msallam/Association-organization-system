@@ -451,6 +451,7 @@ if (existingUserByEmail) {
               userId: newUser.id,
               personalPhoto: beneficiaryData.personalPhoto,
               familyStatement: beneficiaryData.familyStatement,
+              dateOfBirth: new Date(beneficiaryData.dateOfBirth),
               address: beneficiaryAddress,
               socialStatus: beneficiaryData.socialStatus,
               isUnemployed: beneficiaryData.isUnemployed,
@@ -504,17 +505,26 @@ if (existingUserByEmail) {
     if (!user) {
       throw new UnauthorizedException(this.i18n.t('auth.INVALID_PHONE_OR_PASSWORD', { lang }));
     }
-    if (user.userType === 'BENEFICIARY') {
-  if (!user.beneficiary || user.beneficiary.status !== Status.ACCEPTED) {
-    throw new ForbiddenException(
-      this.i18n.t('auth.ACCOUNT_NOT_APPROVED_YET', { lang })
-    );
-  }
-}
-
     const isPasswordMatching = await bcrypt.compare(password, user.password);
     if (!isPasswordMatching) {
       throw new UnauthorizedException(this.i18n.t('auth.INVALID_PASSWORD',{lang}));
+    }
+
+    if (user.userType === 'BENEFICIARY') {
+      if (user.beneficiary?.status === Status.REJECTED) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          message: this.i18n.t('auth.ACCOUNT_REJECTED', { lang }),
+          error: 'Forbidden',
+          rejectionReason: user.beneficiary.rejectionReason,
+        });
+      }
+
+      if (!user.beneficiary || user.beneficiary.status !== Status.ACCEPTED) {
+        throw new ForbiddenException(
+          this.i18n.t('auth.ACCOUNT_NOT_APPROVED_YET', { lang }),
+        );
+      }
     }
 
     

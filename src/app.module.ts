@@ -18,6 +18,7 @@ import { RequestsModule } from './requests/requests.module';
 import { BeneficiaryModule } from './beneficiary/beneficiary.module';
 import { CategoryModule } from './category/category.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: 
@@ -46,6 +47,7 @@ import { PaymentsModule } from './payments/payments.module';
     BeneficiaryModule,
     CategoryModule,
     PaymentsModule,
+    ProfileModule,
     
 
   ],

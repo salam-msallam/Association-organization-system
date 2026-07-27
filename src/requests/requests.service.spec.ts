@@ -797,11 +797,11 @@ describe('RequestAidService admin APIs', () => {
   });
 
   it('resets review metadata when a beneficiary edits a non-cancelled request', async () => {
-    const txRequestAidUpdate = jest.fn();
+    const txRequestAidUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     const txAidDetailsUpdate = jest.fn();
     prisma.$transaction.mockImplementation((callback) =>
       callback({
-        requestAid: { update: txRequestAidUpdate },
+        requestAid: { updateMany: txRequestAidUpdateMany },
         aidDetails: { update: txAidDetailsUpdate },
       }),
     );
@@ -823,13 +823,18 @@ describe('RequestAidService admin APIs', () => {
       details: { ar: 'تفاصيل', en: 'Details' },
       cost: new Prisma.Decimal(2500),
       aidDetails: { mediaUrls: ['uploads/request-media/example.png'] },
+      category: { name: { ar: 'صحي', en: 'Health' } },
     });
 
     await service.updateRequestAid(2, 13, { firstName: 'Mona Updated' }, {});
 
-    expect(txRequestAidUpdate).toHaveBeenCalledWith(
+    expect(txRequestAidUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 13 },
+        where: {
+          id: 13,
+          beneficiaryId: 5,
+          status: { not: Status.CANCELLED },
+        },
         data: expect.objectContaining({
           firstName: 'Mona Updated',
           status: Status.PENDING,

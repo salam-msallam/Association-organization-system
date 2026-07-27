@@ -2,5 +2,10 @@
   "FETCH_SUCCESS": "تم جلب قائمة المستفيدين بنجاح.",
   "FETCH_ONE_SUCCESS": "تم جلب تفاصيل المستفيد بنجاح.",
   "NOT_FOUND": "لم يتم العثور على حساب المستفيد.",
-  "INVALID_STATUS": "حالة المستفيد غير صحيحة."
+  "INVALID_STATUS": "حالة المستفيد غير صحيحة.",
+  "INVALID_ID": "معرّف حساب المستفيد غير صالح.",
+  "INVALID_REVIEW_STATUS": "حالة المراجعة يجب أن تكون ACCEPTED أو REJECTED.",
+  "REJECTION_REASON_REQUIRED": "سبب الرفض بالعربية والإنكليزية مطلوب عند رفض حساب المستفيد.",
+  "ALREADY_REVIEWED": "تمت مراجعة حساب المستفيد مسبقاً.",
+  "STATUS_UPDATE_SUCCESS": "تم تحديث حالة حساب المستفيد بنجاح."
 }
