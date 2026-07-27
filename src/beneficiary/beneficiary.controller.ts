@@ -1,18 +1,40 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  Req,
+  UseInterceptors,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiForbiddenResponse,
   ApiHeader,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { NoFilesInterceptor } from '@nestjs/platform-express';
 import { Status } from '@prisma/client';
+import type { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { CheckAbilities } from '../decorators/abilities.decorator';
 import { AbilitiesGuard } from '../guards/abilities.guard';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { BeneficiaryService } from './beneficiary.service';
+import { ReviewBeneficiaryDto } from './dto/review-beneficiary.dto';
+import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.dto';
 
 @ApiTags('Admin Beneficiaries')
 @ApiHeader({
@@ -54,8 +76,71 @@ export class AdminBeneficiariesController {
   @ApiOperation({
     summary: 'Get full beneficiary account details for employee',
   })
-  findOne(@Param('id') id: string, @I18nLang() lang = 'ar') {
-    return this.beneficiaryService.findOne(+id, lang);
+  findOne(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @I18nLang() lang = 'ar',
+  ) {
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+
+    return this.beneficiaryService.findOne(+id, lang, requestOrigin);
+  }
+
+  @Patch(':id/status')
+  @ApiBearerAuth('jwt')
+  @CheckAbilities({ action: 'status', subject: 'Beneficiary' })
+  @ApiOperation({
+    summary: 'Accept or reject a pending beneficiary account',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    example: 12,
+    description: 'Beneficiary user account ID',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [Status.ACCEPTED, Status.REJECTED],
+          example: Status.ACCEPTED,
+          description: 'Beneficiary account review decision',
+        },
+        rejectionReason: {
+          type: 'object',
+          description: 'Required only when status is REJECTED',
+          example: {
+            ar: 'الوثائق غير مكتملة',
+            en: 'The documents are incomplete',
+          },
+        },
+      },
+      required: ['status'],
+    },
+  })
+  @UseInterceptors(NoFilesInterceptor())
+  @ApiOkResponse({ type: ReviewBeneficiaryResponseDto })
+  @ApiBadRequestResponse({
+    description:
+      'Invalid account ID, review status, payload, or an already reviewed account',
+  })
+  @ApiNotFoundResponse({
+    description: 'The beneficiary account was not found',
+  })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required' })
+  @ApiForbiddenResponse({
+    description:
+      'Staff access and status:beneficiaries permission are required',
+  })
+  reviewStatus(
+    @Param('id') id: string,
+    @Body() dto: ReviewBeneficiaryDto,
+    @I18nLang() lang = 'ar',
+  ): Promise<ReviewBeneficiaryResponseDto> {
+    return this.beneficiaryService.reviewStatus(+id, dto, lang);
   }
 
   private parsePositiveInteger(

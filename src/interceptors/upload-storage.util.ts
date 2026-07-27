@@ -36,3 +36,25 @@ export function createUploadStorage(destination: string) {
     },
   });
 }
+
+/**
+ * Converts a filesystem path to the URL-style path exposed by useStaticAssets.
+ * Multer returns backslashes on Windows, which browsers interpret as part of
+ * the URL instead of path separators.
+ */
+export function toPublicUploadPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+export function toPublicUploadUrl(
+  filePath: string,
+  requestOrigin: string,
+): string {
+  const normalizedPath = toPublicUploadPath(filePath);
+
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+
+  return `${requestOrigin.replace(/\/+$/, '')}/${normalizedPath.replace(/^\/+/, '')}`;
+}

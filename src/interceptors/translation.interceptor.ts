@@ -21,9 +21,17 @@ export class TranslationInterceptor implements NestInterceptor {
     if (!data || typeof data !== 'object') return data;
     if (data instanceof Date) return data;
 
-   
+    // أي object عنده toJSON خاص به (زي Decimal من Prisma) لازم يتحول
+    // عبر toJSON مباشرة، مش نفكّ خصائصه الداخلية (s, e, d) عبر for...in
     if (typeof data.toJSON === 'function') {
       return data.toJSON();
+    }
+
+    // أي حقل ثنائي اللغة عام شكله {ar: '...', en: '...'} (مهما كان اسمه:
+    // address, name, title, details, institutionName...) بيتحول مباشرة
+    // لقيمة اللغة المطلوبة، بدل ما يترجع الـ object كامل
+    if (this.isBilingualObject(data)) {
+      return data[lang] ?? data['ar'];
     }
 
     if (Array.isArray(data)) {
@@ -50,5 +58,21 @@ export class TranslationInterceptor implements NestInterceptor {
     }
 
     return result;
+  }
+
+  private isBilingualObject(value: any): boolean {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+
+    const keys = Object.keys(value);
+
+    return (
+      keys.length === 2 &&
+      keys.includes('ar') &&
+      keys.includes('en') &&
+      typeof value.ar === 'string' &&
+      typeof value.en === 'string'
+    );
   }
 }

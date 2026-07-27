@@ -407,9 +407,7 @@ export class RequestAidService {
               where: { requestId },
               create: {
                 requestId,
-                donorImageUrl: shouldReplaceDonorImage
-                  ? donorImageUrl
-                  : null,
+                donorImageUrl: shouldReplaceDonorImage ? donorImageUrl : null,
               },
               update: {
                 donorImageUrl: shouldReplaceDonorImage ? donorImageUrl : null,
@@ -676,7 +674,6 @@ export class RequestAidService {
       categoryFilteredFields,
     );
 
-   
     this.validateSubCategoryRequiredFields(
       existingRequest.subCategoryId,
       mergedAidDetailsFields,
@@ -701,7 +698,7 @@ export class RequestAidService {
         where: {
           id: requestId,
           beneficiaryId: beneficiary.id,
-          status: 'PENDING',
+          status: { not: Status.CANCELLED },
         },
         data: {
           firstName: mergedBaseFields.firstName,
@@ -727,7 +724,7 @@ export class RequestAidService {
 
       if (updateResult.count !== 1) {
         throw new BadRequestException(
-          'لا يمكن تعديل الطلب لأن حالته لم تعد PENDING.',
+          'لا يمكن تعديل الطلب لأنه أُلغي أو لم يعد متاحًا للتعديل.',
         );
       }
 

@@ -1,4 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Gender, SocialStatus, Status, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
@@ -29,6 +33,7 @@ describe('AuthService', () => {
     countryName: 'syria',
     countryCode: '+963',
     gender: Gender.MALE,
+    dateOfBirth: '1990-05-20',
     personalPhoto: 'uploads/beneficiaries/photo.jpg',
     familyStatement: 'uploads/beneficiaries/family.jpg',
     address: '{"city":"Mezzeh","street":"Main"}',
@@ -241,6 +246,7 @@ describe('AuthService', () => {
     expect(beneficiaryCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: 123,
+        dateOfBirth: new Date('1990-05-20'),
         address: {
           city: 'Mezzeh',
           street: 'Main',
@@ -326,6 +332,106 @@ describe('AuthService', () => {
         },
       }),
     );
+  });
+
+  it('returns the waiting message for a pending beneficiary with a valid password', async () => {
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: 8,
+      firstName: 'Sara',
+      lastName: 'Hassan',
+      countryCode: '+963',
+      number: '934206455',
+      password: hashedPassword,
+      userType: UserType.BENEFICIARY,
+      donor: null,
+      beneficiary: {
+        status: Status.PENDING,
+        rejectionReason: null,
+      },
+    });
+
+    await expect(
+      service.login_client(
+        { phoneNumber: '+9630934206455', password: 'password123' },
+        'en',
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(i18n.t).toHaveBeenCalledWith('auth.ACCOUNT_NOT_APPROVED_YET', {
+      lang: 'en',
+    });
+  });
+
+  it('returns a rejected beneficiary reason after validating the password', async () => {
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    const rejectionReason = {
+      ar: 'الوثائق غير مكتملة',
+      en: 'The documents are incomplete',
+    };
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: 8,
+      firstName: 'Sara',
+      lastName: 'Hassan',
+      countryCode: '+963',
+      number: '934206455',
+      password: hashedPassword,
+      userType: UserType.BENEFICIARY,
+      donor: null,
+      beneficiary: {
+        status: Status.REJECTED,
+        rejectionReason,
+      },
+    });
+
+    await expect(
+      service.login_client(
+        { phoneNumber: '+9630934206455', password: 'password123' },
+        'en',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        statusCode: 403,
+        message: 'auth.ACCOUNT_REJECTED',
+        error: 'Forbidden',
+        rejectionReason,
+      },
+    });
+  });
+
+  it('does not reveal rejection status or reason when the password is wrong', async () => {
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: 8,
+      firstName: 'Sara',
+      lastName: 'Hassan',
+      countryCode: '+963',
+      number: '934206455',
+      password: hashedPassword,
+      userType: UserType.BENEFICIARY,
+      donor: null,
+      beneficiary: {
+        status: Status.REJECTED,
+        rejectionReason: {
+          ar: 'سبب خاص',
+          en: 'Private reason',
+        },
+      },
+    });
+
+    await expect(
+      service.login_client(
+        { phoneNumber: '+9630934206455', password: 'wrong-password' },
+        'en',
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(i18n.t).toHaveBeenCalledWith('auth.INVALID_PASSWORD', {
+      lang: 'en',
+    });
+    expect(i18n.t).not.toHaveBeenCalledWith('auth.ACCOUNT_REJECTED', {
+      lang: 'en',
+    });
   });
 
   it('throws BadRequestException when beneficiary address is invalid JSON', async () => {

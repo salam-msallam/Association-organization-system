@@ -6,6 +6,12 @@ import {
 import { Prisma, Status, UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  toPublicUploadPath,
+  toPublicUploadUrl,
+} from '../interceptors/upload-storage.util';
+import { ReviewBeneficiaryDto } from './dto/review-beneficiary.dto';
+import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.dto';
 
 @Injectable()
 export class BeneficiaryService {
@@ -68,7 +74,7 @@ export class BeneficiaryService {
     };
   }
 
-  async findOne(id: number, lang = 'ar') {
+  async findOne(id: number, lang = 'ar', requestOrigin?: string) {
     const user = await this.prisma.user.findFirst({
       where: {
         id,
@@ -125,8 +131,99 @@ export class BeneficiaryService {
         updatedAt: user.updatedAt,
         beneficiary: {
           ...user.beneficiary,
+          personalPhoto: requestOrigin
+            ? toPublicUploadUrl(user.beneficiary.personalPhoto, requestOrigin)
+            : toPublicUploadPath(user.beneficiary.personalPhoto),
+          familyStatement: toPublicUploadPath(user.beneficiary.familyStatement),
           monthlyIncome: Number(user.beneficiary.monthlyIncome),
         },
+      },
+    };
+  }
+
+  async reviewStatus(
+    userId: number,
+    dto: ReviewBeneficiaryDto,
+    lang = 'ar',
+  ): Promise<ReviewBeneficiaryResponseDto> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException(
+        this.i18n.t('beneficiary.INVALID_ID', { lang }),
+      );
+    }
+
+    if (
+      dto.status !== Status.ACCEPTED &&
+      dto.status !== Status.REJECTED
+    ) {
+      throw new BadRequestException(
+        this.i18n.t('beneficiary.INVALID_REVIEW_STATUS', { lang }),
+      );
+    }
+
+    if (dto.status === Status.REJECTED && !dto.rejectionReason) {
+      throw new BadRequestException(
+        this.i18n.t('beneficiary.REJECTION_REASON_REQUIRED', { lang }),
+      );
+    }
+
+    const account = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        userType: UserType.BENEFICIARY,
+        beneficiary: { isNot: null },
+      },
+      select: {
+        beneficiary: {
+          select: { status: true },
+        },
+      },
+    });
+
+    if (!account?.beneficiary) {
+      throw new NotFoundException(
+        this.i18n.t('beneficiary.NOT_FOUND', { lang }),
+      );
+    }
+
+    if (account.beneficiary.status !== Status.PENDING) {
+      throw new BadRequestException(
+        this.i18n.t('beneficiary.ALREADY_REVIEWED', { lang }),
+      );
+    }
+
+    const rejectionReason =
+      dto.status === Status.REJECTED
+        ? (dto.rejectionReason as unknown as Prisma.InputJsonValue)
+        : Prisma.JsonNull;
+
+    const result = await this.prisma.beneficiary.updateMany({
+      where: {
+        userId,
+        status: Status.PENDING,
+      },
+      data: {
+        status: dto.status,
+        rejectionReason,
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new BadRequestException(
+        this.i18n.t('beneficiary.ALREADY_REVIEWED', { lang }),
+      );
+    }
+
+    return {
+      success: true,
+      message: this.i18n.t('beneficiary.STATUS_UPDATE_SUCCESS', { lang }),
+      data: {
+        id: userId,
+        status: dto.status,
+        rejectionReason:
+          dto.status === Status.REJECTED
+            ? dto.rejectionReason!
+            : null,
       },
     };
   }

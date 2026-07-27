@@ -118,6 +118,7 @@ model Beneficiary {
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   personalPhoto    String
   familyStatement  String
+  dateOfBirth       DateTime?        @db.Date
   address          Json
   status           Status       @default(PENDING)
   rejectionReason  Json?

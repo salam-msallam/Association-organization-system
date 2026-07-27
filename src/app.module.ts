@@ -17,6 +17,7 @@ import { OrphanModule } from './orphan/orphan.module';
 import { RequestsModule } from './requests/requests.module';
 import { BeneficiaryModule } from './beneficiary/beneficiary.module';
 import { CategoryModule } from './category/category.module';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: 
@@ -44,6 +45,7 @@ import { CategoryModule } from './category/category.module';
     RequestsModule,
     BeneficiaryModule,
     CategoryModule,
+    ProfileModule,
     
 
   ],
