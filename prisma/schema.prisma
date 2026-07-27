@@ -325,7 +325,7 @@ model Transaction {
   id                    Int               @id @default(autoincrement())
   donorId               Int
   donor                 Donor             @relation(fields: [donorId], references: [userId], onDelete: Cascade)
-  stripePaymentIntentId String            @unique
+  stripePaymentIntentId String?           @unique
   amount                Decimal           @db.Decimal(10, 2)
   paymentStatus         TransactionStatus @default(PENDING)
   referenceType         String?
