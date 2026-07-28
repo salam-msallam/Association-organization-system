@@ -32,9 +32,11 @@ import { UpdateOrphanDto } from './dto/update-orphan.dto';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { AbilitiesGuard } from '../guards/abilities.guard';
 import { CheckAbilities } from '../decorators/abilities.decorator';
+import { PreserveBilingualResponse } from '../decorators/preserve-bilingual-response.decorator';
 import { createUploadStorage } from '../interceptors/upload-storage.util';
 
 @Controller('orphan')
+@PreserveBilingualResponse()
 @ApiBearerAuth('jwt')
 @ApiHeader({
   name: 'accept-language',

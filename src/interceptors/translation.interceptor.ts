@@ -1,23 +1,36 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { I18nContext, I18nService } from 'nestjs-i18n';
+import { PRESERVE_BILINGUAL_RESPONSE } from '../decorators/preserve-bilingual-response.decorator';
 
 @Injectable()
 export class TranslationInterceptor implements NestInterceptor {
-  constructor(private readonly i18n: I18nService) {}
+  constructor(
+    private readonly i18n: I18nService,
+    private readonly reflector: Reflector,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const lang = I18nContext.current(context)?.lang || 'ar';
+    const preserveBilingualResponse = this.reflector.getAllAndOverride<boolean>(
+      PRESERVE_BILINGUAL_RESPONSE,
+      [context.getHandler(), context.getClass()],
+    );
 
     return next.handle().pipe(
       map((data) => {
-        return this.processTranslation(data, lang);
+        return this.processTranslation(data, lang, preserveBilingualResponse);
       }),
     );
   }
 
-  private processTranslation(data: any, lang: string): any {
+  private processTranslation(
+    data: any,
+    lang: string,
+    preserveBilingualResponse = false,
+  ): any {
     if (!data || typeof data !== 'object') return data;
     if (data instanceof Date) return data;
 
@@ -30,12 +43,14 @@ export class TranslationInterceptor implements NestInterceptor {
     // أي حقل ثنائي اللغة عام شكله {ar: '...', en: '...'} (مهما كان اسمه:
     // address, name, title, details, institutionName...) بيتحول مباشرة
     // لقيمة اللغة المطلوبة، بدل ما يترجع الـ object كامل
-    if (this.isBilingualObject(data)) {
+    if (!preserveBilingualResponse && this.isBilingualObject(data)) {
       return data[lang] ?? data['ar'];
     }
 
     if (Array.isArray(data)) {
-      return data.map((item) => this.processTranslation(item, lang));
+      return data.map((item) =>
+        this.processTranslation(item, lang, preserveBilingualResponse),
+      );
     }
 
     const result = {};
@@ -53,7 +68,11 @@ export class TranslationInterceptor implements NestInterceptor {
           continue;
         }
 
-        result[key] = this.processTranslation(data[key], lang);
+        result[key] = this.processTranslation(
+          data[key],
+          lang,
+          preserveBilingualResponse,
+        );
       }
     }
 
