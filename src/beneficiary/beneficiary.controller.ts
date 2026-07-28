@@ -5,7 +5,6 @@ import {
   Param,
   Patch,
   Query,
-  Req,
   UseInterceptors,
   UseGuards,
 } from '@nestjs/common';
@@ -27,7 +26,6 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { NoFilesInterceptor } from '@nestjs/platform-express';
 import { Status } from '@prisma/client';
-import type { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { CheckAbilities } from '../decorators/abilities.decorator';
 import { PreserveBilingualResponse } from '../decorators/preserve-bilingual-response.decorator';
@@ -78,14 +76,8 @@ export class AdminBeneficiariesController {
   @ApiOperation({
     summary: 'Get full beneficiary account details for employee',
   })
-  findOne(
-    @Req() req: Request,
-    @Param('id') id: string,
-    @I18nLang() lang = 'ar',
-  ) {
-    const requestOrigin = `${req.protocol}://${req.get('host')}`;
-
-    return this.beneficiaryService.findOne(+id, lang, requestOrigin);
+  findOne(@Param('id') id: string, @I18nLang() lang = 'ar') {
+    return this.beneficiaryService.findOne(+id, lang);
   }
 
   @Patch(':id/status')

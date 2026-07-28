@@ -6,10 +6,6 @@ import {
 import { Prisma, Status, UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  toPublicUploadPath,
-  toPublicUploadUrl,
-} from '../interceptors/upload-storage.util';
 import { ReviewBeneficiaryDto } from './dto/review-beneficiary.dto';
 import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.dto';
 
@@ -74,7 +70,7 @@ export class BeneficiaryService {
     };
   }
 
-  async findOne(id: number, lang = 'ar', requestOrigin?: string) {
+  async findOne(id: number, lang = 'ar') {
     const user = await this.prisma.user.findFirst({
       where: {
         id,
@@ -131,10 +127,6 @@ export class BeneficiaryService {
         updatedAt: user.updatedAt,
         beneficiary: {
           ...user.beneficiary,
-          personalPhoto: requestOrigin
-            ? toPublicUploadUrl(user.beneficiary.personalPhoto, requestOrigin)
-            : toPublicUploadPath(user.beneficiary.personalPhoto),
-          familyStatement: toPublicUploadPath(user.beneficiary.familyStatement),
           monthlyIncome: Number(user.beneficiary.monthlyIncome),
         },
       },

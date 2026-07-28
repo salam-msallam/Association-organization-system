@@ -137,7 +137,7 @@ describe('BeneficiaryService', () => {
       },
     });
 
-    const result = await service.findOne(7, 'en', 'http://localhost:3000');
+    const result = await service.findOne(7, 'en');
 
     expect(prisma.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -154,10 +154,10 @@ describe('BeneficiaryService', () => {
     });
     expect(result.data.beneficiary.rejectionReason).toBeNull();
     expect(result.data.beneficiary.personalPhoto).toBe(
-      'http://localhost:3000/uploads/beneficiaries/photo.jpg',
+      'uploads\\beneficiaries\\photo.jpg',
     );
     expect(result.data.beneficiary.familyStatement).toBe(
-      'uploads/beneficiaries/family.jpg',
+      'uploads\\beneficiaries\\family.jpg',
     );
   });
 
