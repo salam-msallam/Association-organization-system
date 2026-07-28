@@ -103,7 +103,7 @@ export class ProfileService {
       _sum: { amount: true },
       where: {
         donorId: user.id,
-        paymentStatus: TransactionStatus.SUCCESSFUL,
+        status: TransactionStatus.SUCCESSFUL,
       },
     });
 
@@ -112,7 +112,7 @@ export class ProfileService {
       gender: user.gender,
       walletBalance: Number(donor.wallet?.runningBalance ?? 0),
       isSponsor: donor.isSponsor,
-      totalDonated: Number(donationAggregate._sum.amount ?? 0),
+      totalDonated: Number(donationAggregate._sum?.amount ?? 0),
     };
   }
 

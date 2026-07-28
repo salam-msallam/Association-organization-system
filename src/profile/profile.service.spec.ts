@@ -116,7 +116,7 @@ describe('ProfileService', () => {
       _sum: { amount: true },
       where: {
         donorId: 7,
-        paymentStatus: TransactionStatus.SUCCESSFUL,
+        status: TransactionStatus.SUCCESSFUL,
       },
     });
     expect(prisma.sponsorship.findFirst).not.toHaveBeenCalled();
