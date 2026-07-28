@@ -10,6 +10,11 @@
   "DONATION_AMOUNT_POSITIVE": "Donation amount must be positive.",
   "DONATION_AMOUNT_INVALID_FOR_STRIPE": "Donation amount is invalid for Stripe.",
   "DONATION_AMOUNT_TOO_LARGE": "Donation amount is too large.",
+  "PAYMENT_AMOUNT_VALID_NUMBER": "Payment amount must be a valid number.",
+  "PAYMENT_AMOUNT_MAX_TWO_DECIMALS": "Payment amount must have no more than two decimal places.",
+  "PAYMENT_AMOUNT_POSITIVE": "Payment amount must be positive.",
+  "PAYMENT_AMOUNT_INVALID_FOR_STRIPE": "Payment amount is invalid for Stripe.",
+  "PAYMENT_AMOUNT_TOO_LARGE": "Payment amount is too large.",
   "STRIPE_SECRET_KEY_NOT_CONFIGURED": "STRIPE_SECRET_KEY is not configured.",
   "STRIPE_WEBHOOK_SECRET_NOT_CONFIGURED": "STRIPE_WEBHOOK_SECRET is not configured.",
   "STRIPE_CURRENCY_NOT_CONFIGURED": "STRIPE_CURRENCY is not configured.",
@@ -17,5 +22,7 @@
   "WEBHOOK_SIGNATURE_OR_BODY_MISSING": "Stripe webhook signature or raw body is missing.",
   "INVALID_WEBHOOK_SIGNATURE": "Invalid Stripe webhook signature.",
   "PAYMENT_AMOUNT_MUST_BE_NUMBER": "Donation amount must be a number with no more than two decimal places.",
-  "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "Donation amount must be positive."
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "Donation amount must be positive.",
+  "PAYMENT_AMOUNT_MUST_BE_STRING": "Payment amount must be a decimal string.",
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_DECIMAL": "Payment amount must be positive with no more than two decimal places."
 }

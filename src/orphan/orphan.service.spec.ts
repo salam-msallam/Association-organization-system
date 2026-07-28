@@ -33,9 +33,11 @@ describe('OrphanService read responses', () => {
   beforeEach(() => {
     prisma = {
       orphan: {
+        create: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
         findUnique: jest.fn(),
+        update: jest.fn(),
       },
     };
     i18n = {
@@ -70,5 +72,83 @@ describe('OrphanService read responses', () => {
     expect(i18n.t).toHaveBeenCalledWith('orphan.FETCH_ONE_SUCCESS', {
       lang: 'ar',
     });
+  });
+
+  it('returns bilingual JSON fields after creating an orphan', async () => {
+    prisma.orphan.create.mockResolvedValue(orphan);
+
+    const result = await service.create(
+      {
+        firstName: orphan.firstName,
+        lastName: orphan.lastName,
+        fatherName: orphan.fatherName,
+        motherName: orphan.motherName,
+        birthOfDate: '2015-04-12',
+        gender: orphan.gender,
+        class: JSON.stringify(orphan.class),
+        Diseases: JSON.stringify(orphan.Diseases),
+        currentAddress: JSON.stringify(orphan.currentAddress),
+        previousAddress: JSON.stringify(orphan.previousAddress),
+        talent: JSON.stringify(orphan.talent),
+        FamilyStatement: orphan.FamilyStatement,
+        brotherAndSisterNumber: orphan.brotherAndSisterNumber,
+        guardianName: orphan.guardianName,
+        guaranteedPhone: orphan.guaranteedPhone,
+        bodySize: orphan.bodySize,
+        shoesSize: orphan.shoesSize,
+        isSupported: orphan.isSupported,
+      },
+      'en',
+    );
+
+    expect(prisma.orphan.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          class: orphan.class,
+          Diseases: orphan.Diseases,
+          currentAddress: orphan.currentAddress,
+          previousAddress: orphan.previousAddress,
+          talent: orphan.talent,
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      message: 'orphan.CREATE_SUCCESS:en',
+      data: orphan,
+    });
+  });
+
+  it('returns bilingual JSON fields after updating an orphan', async () => {
+    const updatedOrphan = {
+      ...orphan,
+      class: { ar: 'الصف الخامس', en: 'Fifth grade' },
+      currentAddress: { ar: 'حلب', en: 'Aleppo' },
+    };
+    prisma.orphan.findUnique.mockResolvedValue(orphan);
+    prisma.orphan.update.mockResolvedValue(updatedOrphan);
+
+    const result = await service.update(
+      1,
+      {
+        class: JSON.stringify(updatedOrphan.class),
+        currentAddress: JSON.stringify(updatedOrphan.currentAddress),
+      },
+      undefined,
+      'en',
+    );
+
+    expect(prisma.orphan.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: {
+        class: updatedOrphan.class,
+        currentAddress: updatedOrphan.currentAddress,
+      },
+    });
+    expect(result).toEqual({
+      message: 'orphan.UPDATE_SUCCESS:en',
+      data: updatedOrphan,
+    });
+    expect(result.data.class).toEqual(updatedOrphan.class);
+    expect(result.data.currentAddress).toEqual(updatedOrphan.currentAddress);
   });
 });

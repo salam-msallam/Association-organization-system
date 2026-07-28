@@ -13,20 +13,45 @@ import {
   TransactionStatus,
   TransactionType,
   UserType,
+  WalletTransactionDirection,
 } from '@prisma/client';
 import Stripe from 'stripe';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
+import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
+const WALLET_REFERENCE_TYPE = 'WALLET';
 const STRIPE_API_VERSION: Stripe.LatestApiVersion = '2026-06-24.dahlia';
 
 type PaymentUserPayload = {
   id?: number;
   type?: string;
   userType?: string;
+};
+
+type DonorWithUser = {
+  userId: number;
+  stripeCustomerId: string | null;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    countryCode: string;
+    number: string;
+  };
+};
+
+type CreateStripeBackedTransactionInput = {
+  donor: DonorWithUser;
+  amount: Prisma.Decimal;
+  type: TransactionType;
+  referenceType: string;
+  referenceId: number;
+  metadata: Record<string, string>;
+  lang: string;
 };
 
 @Injectable()
@@ -45,27 +70,8 @@ export class PaymentsService {
     user: PaymentUserPayload,
     lang = 'ar',
   ): Promise<PaymentIntentResponseDto> {
-    const donorUserId = this.getAuthenticatedDonorUserId(user, lang);
-    const amount = this.parseDonationAmount(dto.amount, lang);
-
-    const donor = await this.prisma.donor.findUnique({
-      where: { userId: donorUserId },
-      include: {
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            countryCode: true,
-            number: true,
-          },
-        },
-      },
-    });
-
-    if (!donor) {
-      throw new ForbiddenException(this.t('AUTHENTICATED_USER_NOT_DONOR', lang));
-    }
+    const amount = this.parsePaymentAmount(dto.amount, lang);
+    const donor = await this.getAuthenticatedDonor(user, lang);
 
     const aidRequest = await this.prisma.requestAid.findFirst({
       where: { id: requestId, status: Status.ACCEPTED },
@@ -92,58 +98,49 @@ export class PaymentsService {
       );
     }
 
-    const stripe = this.getStripe(lang);
-    const currency = this.getCurrency(lang);
-    const stripeCustomerId = await this.getOrCreateStripeCustomerId(
+    return this.createStripeBackedTransaction({
       donor,
-      stripe,
-    );
+      amount,
+      type: TransactionType.AID_REQUEST_DONATION,
+      referenceType: REQUEST_AID_REFERENCE_TYPE,
+      referenceId: requestId,
+      metadata: {
+        requestId: String(requestId),
+      },
+      lang,
+    });
+  }
 
-    const transaction = await this.prisma.transaction.create({
-      data: {
+  async createWalletTopUpPaymentIntent(
+    dto: CreateWalletTopUpPaymentIntentDto,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<PaymentIntentResponseDto> {
+    const amount = this.parsePaymentAmount(dto.amount, lang);
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    const wallet = await this.prisma.wallet.upsert({
+      where: { donorId: donor.userId },
+      create: {
         donorId: donor.userId,
-        amount,
-        paymentStatus: TransactionStatus.PENDING,
-        type: TransactionType.DIRECT_DONATION,
-        referenceType: REQUEST_AID_REFERENCE_TYPE,
-        referenceId: requestId,
+        runningBalance: new Prisma.Decimal(0),
       },
-      select: { id: true, amount: true },
+      update: {},
+      select: { id: true },
     });
 
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: this.toStripeMinorUnits(amount, lang),
-        currency,
-        customer: stripeCustomerId,
-        metadata: {
-          transactionId: String(transaction.id),
-          donorId: String(donor.userId),
-          requestId: String(requestId),
-        },
+    return this.createStripeBackedTransaction({
+      donor,
+      amount,
+      type: TransactionType.WALLET_TOP_UP,
+      referenceType: WALLET_REFERENCE_TYPE,
+      referenceId: wallet.id,
+      metadata: {
+        walletId: String(wallet.id),
+        type: TransactionType.WALLET_TOP_UP,
       },
-      {
-        idempotencyKey: `payment-intent:${transaction.id}`,
-      },
-    );
-
-    if (!paymentIntent.client_secret) {
-      throw new InternalServerErrorException(
-        this.t('STRIPE_CLIENT_SECRET_MISSING', lang),
-      );
-    }
-
-    await this.prisma.transaction.update({
-      where: { id: transaction.id },
-      data: { stripePaymentIntentId: paymentIntent.id },
+      lang,
     });
-
-    return {
-      transactionId: transaction.id,
-      clientSecret: paymentIntent.client_secret,
-      amount: new Prisma.Decimal(transaction.amount).toFixed(2),
-      currency,
-    };
   }
 
   async handleStripeWebhook(
@@ -200,6 +197,34 @@ export class PaymentsService {
     return { received: true };
   }
 
+  private async getAuthenticatedDonor(
+    user: PaymentUserPayload,
+    lang: string,
+  ): Promise<DonorWithUser> {
+    const donorUserId = this.getAuthenticatedDonorUserId(user, lang);
+
+    const donor = await this.prisma.donor.findUnique({
+      where: { userId: donorUserId },
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            countryCode: true,
+            number: true,
+          },
+        },
+      },
+    });
+
+    if (!donor) {
+      throw new ForbiddenException(this.t('AUTHENTICATED_USER_NOT_DONOR', lang));
+    }
+
+    return donor;
+  }
+
   private getAuthenticatedDonorUserId(
     user: PaymentUserPayload,
     lang: string,
@@ -217,26 +242,88 @@ export class PaymentsService {
     return user.id;
   }
 
-  private parseDonationAmount(amount: number, lang: string): Prisma.Decimal {
-    if (!Number.isFinite(amount)) {
-      throw new BadRequestException(this.t('DONATION_AMOUNT_VALID_NUMBER', lang));
+  private parsePaymentAmount(amount: number | string, lang: string): Prisma.Decimal {
+    if (typeof amount !== 'number' && typeof amount !== 'string') {
+      throw new BadRequestException(this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang));
     }
 
-    const amountText = String(amount);
+    if (typeof amount === 'number' && !Number.isFinite(amount)) {
+      throw new BadRequestException(this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang));
+    }
+
+    const amountText = String(amount).trim();
 
     if (!/^\d+(\.\d{1,2})?$/.test(amountText)) {
       throw new BadRequestException(
-        this.t('DONATION_AMOUNT_MAX_TWO_DECIMALS', lang),
+        this.t('PAYMENT_AMOUNT_MAX_TWO_DECIMALS', lang),
       );
     }
 
     const decimalAmount = new Prisma.Decimal(amountText);
 
     if (decimalAmount.lte(0)) {
-      throw new BadRequestException(this.t('DONATION_AMOUNT_POSITIVE', lang));
+      throw new BadRequestException(this.t('PAYMENT_AMOUNT_POSITIVE', lang));
     }
 
     return decimalAmount;
+  }
+
+  private async createStripeBackedTransaction(
+    input: CreateStripeBackedTransactionInput,
+  ): Promise<PaymentIntentResponseDto> {
+    const stripe = this.getStripe(input.lang);
+    const currency = this.getCurrency(input.lang);
+    const stripeCustomerId = await this.getOrCreateStripeCustomerId(
+      input.donor,
+      stripe,
+    );
+
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        donorId: input.donor.userId,
+        amount: input.amount,
+        status: TransactionStatus.PENDING,
+        type: input.type,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        currency,
+      },
+      select: { id: true, amount: true },
+    });
+
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: this.toStripeMinorUnits(input.amount, input.lang),
+        currency,
+        customer: stripeCustomerId,
+        metadata: {
+          transactionId: String(transaction.id),
+          donorId: String(input.donor.userId),
+          ...input.metadata,
+        },
+      },
+      {
+        idempotencyKey: `payment-intent:${transaction.id}`,
+      },
+    );
+
+    if (!paymentIntent.client_secret) {
+      throw new InternalServerErrorException(
+        this.t('STRIPE_CLIENT_SECRET_MISSING', input.lang),
+      );
+    }
+
+    await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data: { stripePaymentIntentId: paymentIntent.id },
+    });
+
+    return {
+      transactionId: transaction.id,
+      clientSecret: paymentIntent.client_secret,
+      amount: new Prisma.Decimal(transaction.amount).toFixed(2),
+      currency,
+    };
   }
 
   private getStripe(lang: string): Stripe {
@@ -267,17 +354,7 @@ export class PaymentsService {
   }
 
   private async getOrCreateStripeCustomerId(
-    donor: {
-      userId: number;
-      stripeCustomerId: string | null;
-      user: {
-        firstName: string;
-        lastName: string;
-        email: string;
-        countryCode: string;
-        number: string;
-      };
-    },
+    donor: DonorWithUser,
     stripe: Stripe,
   ): Promise<string> {
     if (donor.stripeCustomerId) return donor.stripeCustomerId;
@@ -304,13 +381,13 @@ export class PaymentsService {
     const minorUnits = amount.times(100);
 
     if (!minorUnits.isInteger() || minorUnits.lte(0)) {
-      throw new BadRequestException(this.t('DONATION_AMOUNT_INVALID_FOR_STRIPE', lang));
+      throw new BadRequestException(this.t('PAYMENT_AMOUNT_INVALID_FOR_STRIPE', lang));
     }
 
     const value = minorUnits.toNumber();
 
     if (!Number.isSafeInteger(value)) {
-      throw new BadRequestException(this.t('DONATION_AMOUNT_TOO_LARGE', lang));
+      throw new BadRequestException(this.t('PAYMENT_AMOUNT_TOO_LARGE', lang));
     }
 
     return value;
@@ -324,29 +401,69 @@ export class PaymentsService {
         where: { stripePaymentIntentId: paymentIntent.id },
         select: {
           id: true,
+          donorId: true,
           amount: true,
-          paymentStatus: true,
+          status: true,
+          type: true,
           referenceType: true,
           referenceId: true,
         },
       });
 
-      if (!transaction || transaction.paymentStatus === TransactionStatus.SUCCESSFUL) {
+      if (!transaction) {
         return;
       }
 
-      await tx.transaction.update({
-        where: { id: transaction.id },
-        data: { paymentStatus: TransactionStatus.SUCCESSFUL },
+      const updateResult = await tx.transaction.updateMany({
+        where: {
+          id: transaction.id,
+          status: { not: TransactionStatus.SUCCESSFUL },
+        },
+        data: { status: TransactionStatus.SUCCESSFUL },
       });
 
+      if (updateResult.count === 0) {
+        return;
+      }
+
       if (
+        transaction.type === TransactionType.AID_REQUEST_DONATION &&
         transaction.referenceType === REQUEST_AID_REFERENCE_TYPE &&
         transaction.referenceId
       ) {
         await tx.requestAid.update({
           where: { id: transaction.referenceId },
           data: { currentPayment: { increment: transaction.amount } },
+        });
+      }
+
+      if (
+        transaction.type === TransactionType.WALLET_TOP_UP &&
+        transaction.referenceType === WALLET_REFERENCE_TYPE &&
+        transaction.referenceId
+      ) {
+        const wallet = await tx.wallet.update({
+          where: { id: transaction.referenceId },
+          data: {
+            runningBalance: { increment: transaction.amount },
+          },
+          select: {
+            id: true,
+            runningBalance: true,
+          },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            transactionId: transaction.id,
+            amount: transaction.amount,
+            type: TransactionType.WALLET_TOP_UP,
+            direction: WalletTransactionDirection.CREDIT,
+            referenceType: WALLET_REFERENCE_TYPE,
+            referenceId: wallet.id,
+            balanceAfter: wallet.runningBalance,
+          },
         });
       }
     });
@@ -358,9 +475,9 @@ export class PaymentsService {
     await this.prisma.transaction.updateMany({
       where: {
         stripePaymentIntentId: paymentIntent.id,
-        paymentStatus: { not: TransactionStatus.SUCCESSFUL },
+        status: { not: TransactionStatus.SUCCESSFUL },
       },
-      data: { paymentStatus: TransactionStatus.FAILED },
+      data: { status: TransactionStatus.FAILED },
     });
   }
 

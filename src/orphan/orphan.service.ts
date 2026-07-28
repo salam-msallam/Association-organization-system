@@ -63,7 +63,7 @@ export class OrphanService {
 
     return {
       message: this.i18n.t('orphan.CREATE_SUCCESS', { lang }),
-      data: this.localizeOrphan(orphan, lang),
+      data: orphan,
     };
   }
 
@@ -179,7 +179,7 @@ export class OrphanService {
 
     return {
       message: this.i18n.t('orphan.UPDATE_SUCCESS', { lang }),
-      data: this.localizeOrphan(orphan, lang),
+      data: orphan,
     };
   }
 
@@ -244,35 +244,4 @@ export class OrphanService {
     }
   }
 
-  private localizeOrphan(orphan: any, lang: string) {
-    if (!orphan) return orphan;
-
-    return {
-      ...orphan,
-      class: this.localizeJsonValue(orphan.class, lang),
-      Diseases: this.localizeJsonValue(orphan.Diseases, lang),
-      currentAddress: this.localizeJsonValue(orphan.currentAddress, lang),
-      previousAddress: this.localizeJsonValue(orphan.previousAddress, lang),
-      talent: this.localizeJsonValue(orphan.talent, lang),
-    };
-  }
-
-  private localizeJsonValue(value: any, lang: string): any {
-    if (!value || typeof value !== 'object') return value;
-
-    if (!Array.isArray(value) && ('ar' in value || 'en' in value)) {
-      return value[lang] ?? value.ar ?? value.en;
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item) => this.localizeJsonValue(item, lang));
-    }
-
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        this.localizeJsonValue(item, lang),
-      ]),
-    );
-  }
 }

@@ -10,6 +10,11 @@
   "DONATION_AMOUNT_POSITIVE": "يجب أن يكون مبلغ التبرع موجباً.",
   "DONATION_AMOUNT_INVALID_FOR_STRIPE": "مبلغ التبرع غير صالح لإرساله إلى Stripe.",
   "DONATION_AMOUNT_TOO_LARGE": "مبلغ التبرع كبير جداً.",
+  "PAYMENT_AMOUNT_VALID_NUMBER": "يجب أن يكون مبلغ الدفع رقماً صالحاً.",
+  "PAYMENT_AMOUNT_MAX_TWO_DECIMALS": "يجب ألا يحتوي مبلغ الدفع على أكثر من منزلتين عشريتين.",
+  "PAYMENT_AMOUNT_POSITIVE": "يجب أن يكون مبلغ الدفع موجباً.",
+  "PAYMENT_AMOUNT_INVALID_FOR_STRIPE": "مبلغ الدفع غير صالح لإرساله إلى Stripe.",
+  "PAYMENT_AMOUNT_TOO_LARGE": "مبلغ الدفع كبير جداً.",
   "STRIPE_SECRET_KEY_NOT_CONFIGURED": "لم يتم ضبط STRIPE_SECRET_KEY.",
   "STRIPE_WEBHOOK_SECRET_NOT_CONFIGURED": "لم يتم ضبط STRIPE_WEBHOOK_SECRET.",
   "STRIPE_CURRENCY_NOT_CONFIGURED": "لم يتم ضبط STRIPE_CURRENCY.",
@@ -17,5 +22,7 @@
   "WEBHOOK_SIGNATURE_OR_BODY_MISSING": "توقيع Stripe webhook أو raw body غير موجود.",
   "INVALID_WEBHOOK_SIGNATURE": "توقيع Stripe webhook غير صالح.",
   "PAYMENT_AMOUNT_MUST_BE_NUMBER": "يجب أن يكون مبلغ التبرع رقماً وألا يحتوي على أكثر من منزلتين عشريتين.",
-  "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "يجب أن يكون مبلغ التبرع موجباً."
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "يجب أن يكون مبلغ التبرع موجباً.",
+  "PAYMENT_AMOUNT_MUST_BE_STRING": "يجب أن يكون مبلغ الدفع نصاً عشرياً.",
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_DECIMAL": "يجب أن يكون مبلغ الدفع موجباً وألا يحتوي على أكثر من منزلتين عشريتين."
 }
