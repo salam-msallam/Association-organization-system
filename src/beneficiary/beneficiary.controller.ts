@@ -30,6 +30,7 @@ import { Status } from '@prisma/client';
 import type { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { CheckAbilities } from '../decorators/abilities.decorator';
+import { PreserveBilingualResponse } from '../decorators/preserve-bilingual-response.decorator';
 import { AbilitiesGuard } from '../guards/abilities.guard';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import { BeneficiaryService } from './beneficiary.service';
@@ -45,6 +46,7 @@ import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.
   schema: { default: 'ar', enum: ['ar', 'en'] },
 })
 @Controller('api/admin/beneficiaries')
+@PreserveBilingualResponse()
 @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
 export class AdminBeneficiariesController {
   constructor(private readonly beneficiaryService: BeneficiaryService) {}

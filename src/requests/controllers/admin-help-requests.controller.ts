@@ -30,6 +30,7 @@ import { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CheckAbilities } from '../../decorators/abilities.decorator';
+import { PreserveBilingualResponse } from '../../decorators/preserve-bilingual-response.decorator';
 import { AbilitiesGuard } from '../../guards/abilities.guard';
 import { StaffOnlyGuard } from '../../guards/staff-only.guard';
 import { AdminHelpRequestDetailResponseDto } from '../dto/admin-help-request-detail-response.dto';
@@ -58,6 +59,7 @@ interface AuthenticatedRequest extends Request {
 })
 @ApiBearerAuth('jwt')
 @Controller('api/admin/help-requests')
+@PreserveBilingualResponse()
 @UseGuards(JwtAuthGuard, StaffOnlyGuard, AbilitiesGuard)
 export class AdminHelpRequestsController {
   constructor(private readonly requestAidService: RequestAidService) {}
