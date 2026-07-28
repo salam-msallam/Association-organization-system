@@ -41,6 +41,7 @@ describe('BeneficiaryService', () => {
         id: 2,
         firstName: 'Sara',
         lastName: 'Ali',
+        gender: Gender.FEMALE,
         beneficiary: {
           status: Status.PENDING,
           socialStatus: SocialStatus.WIDOWED,
@@ -59,6 +60,9 @@ describe('BeneficiaryService', () => {
         },
         skip: 0,
         take: 10,
+        select: expect.objectContaining({
+          gender: true,
+        }),
       }),
     );
     expect(result).toEqual({
@@ -69,6 +73,7 @@ describe('BeneficiaryService', () => {
           id: 2,
           firstName: 'Sara',
           lastName: 'Ali',
+          gender: Gender.FEMALE,
           status: Status.PENDING,
           socialStatus: SocialStatus.WIDOWED,
         },
@@ -127,6 +132,7 @@ describe('BeneficiaryService', () => {
         id: 3,
         personalPhoto: 'uploads\\beneficiaries\\photo.jpg',
         familyStatement: 'uploads\\beneficiaries\\family.jpg',
+        dateOfBirth: new Date('1992-03-14T00:00:00.000Z'),
         address: { ar: 'دمشق', en: 'Damascus' },
         status: Status.ACCEPTED,
         rejectionReason: null,
@@ -146,8 +152,16 @@ describe('BeneficiaryService', () => {
           userType: UserType.BENEFICIARY,
           beneficiary: { isNot: null },
         },
+        select: expect.objectContaining({
+          beneficiary: {
+            select: expect.objectContaining({
+              dateOfBirth: true,
+            }),
+          },
+        }),
       }),
     );
+    expect(result.data.beneficiary.dateOfBirth).toBe('1992-03-14');
     expect(result.data.beneficiary.address).toEqual({
       ar: 'دمشق',
       en: 'Damascus',
@@ -177,6 +191,7 @@ describe('BeneficiaryService', () => {
         id: 3,
         personalPhoto: 'photo.jpg',
         familyStatement: 'family.jpg',
+        dateOfBirth: null,
         address: { ar: 'دمشق', en: 'Damascus' },
         status: Status.ACCEPTED,
         rejectionReason: { ar: 'سبب', en: 'Reason' },
@@ -197,6 +212,7 @@ describe('BeneficiaryService', () => {
       ar: 'سبب',
       en: 'Reason',
     });
+    expect(result.data.beneficiary.dateOfBirth).toBeNull();
   });
 
   it('throws a translated not found error when the user account is missing', async () => {

@@ -36,6 +36,7 @@ export class BeneficiaryService {
           id: true,
           firstName: true,
           lastName: true,
+          gender: true,
           beneficiary: {
             select: {
               status: true,
@@ -56,6 +57,7 @@ export class BeneficiaryService {
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,
+        gender: user.gender,
         status: user.beneficiary?.status,
         socialStatus: user.beneficiary?.socialStatus,
       })),
@@ -93,6 +95,7 @@ export class BeneficiaryService {
             id: true,
             personalPhoto: true,
             familyStatement: true,
+            dateOfBirth: true,
             address: true,
             status: true,
             rejectionReason: true,
@@ -127,6 +130,9 @@ export class BeneficiaryService {
         updatedAt: user.updatedAt,
         beneficiary: {
           ...user.beneficiary,
+          dateOfBirth: this.formatNullableDateOnly(
+            user.beneficiary.dateOfBirth,
+          ),
           monthlyIncome: Number(user.beneficiary.monthlyIncome),
         },
       },
@@ -234,5 +240,9 @@ export class BeneficiaryService {
     }
 
     return normalizedStatus;
+  }
+
+  private formatNullableDateOnly(date: Date | null): string | null {
+    return date ? date.toISOString().slice(0, 10) : null;
   }
 }
