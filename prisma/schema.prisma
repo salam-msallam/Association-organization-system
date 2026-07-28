@@ -223,8 +223,15 @@ enum TransactionStatus {
 }
 
 enum TransactionType {
-  DIRECT_DONATION
-  WALLET_DONATION
+  AID_REQUEST_DONATION
+  SPONSORSHIP_DONATION
+  GENERAL_DONATION
+  WALLET_TOP_UP
+}
+
+enum WalletTransactionDirection {
+  CREDIT
+  DEBIT
 }
 
 model RequestAid {
@@ -316,7 +323,7 @@ model Wallet {
   id             Int     @id @default(autoincrement())
   donorId        Int     @unique
   donor          Donor   @relation(fields: [donorId], references: [userId], onDelete: Cascade)
-  runningBalance Decimal @default(0.00) @db.Decimal(10, 2)
+  runningBalance Decimal @default(0.00) @db.Decimal(12, 2)
 
   transactions WalletTransaction[]
 }
@@ -326,25 +333,31 @@ model Transaction {
   donorId               Int
   donor                 Donor             @relation(fields: [donorId], references: [userId], onDelete: Cascade)
   stripePaymentIntentId String?           @unique
-  amount                Decimal           @db.Decimal(10, 2)
-  paymentStatus         TransactionStatus @default(PENDING)
+  amount                Decimal           @db.Decimal(12, 2)
+  status                TransactionStatus @default(PENDING)
+  type                  TransactionType
   referenceType         String?
   referenceId           Int?
-  type                  TransactionType
+  currency              String            @default("usd")
   createdAt             DateTime          @default(now())
+
+  walletTransaction WalletTransaction?
 }
 
 model WalletTransaction {
-  id            Int             @id @default(autoincrement())
+  id            Int                        @id @default(autoincrement())
   walletId      Int
-  amount        Decimal         @db.Decimal(10, 2)
+  transactionId Int?                       @unique
+  amount        Decimal                    @db.Decimal(12, 2)
   type          TransactionType
+  direction     WalletTransactionDirection
   referenceType String?
   referenceId   Int?
-  balanceAfter  Decimal         @db.Decimal(10, 2)
-  createdAt     DateTime        @default(now())
+  balanceAfter  Decimal                    @db.Decimal(12, 2)
+  createdAt     DateTime                   @default(now())
 
-  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet      Wallet       @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
 }
 
 model Notification {

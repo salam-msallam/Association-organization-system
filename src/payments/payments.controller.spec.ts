@@ -1,6 +1,7 @@
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PaymentsController } from './payments.controller';
+import { WalletController } from './wallet.controller';
 
 describe('PaymentsController', () => {
   let paymentsService: any;
@@ -9,6 +10,7 @@ describe('PaymentsController', () => {
   beforeEach(() => {
     paymentsService = {
       createAidRequestPaymentIntent: jest.fn(),
+      createWalletTopUpPaymentIntent: jest.fn(),
       handleStripeWebhook: jest.fn(),
     };
     controller = new PaymentsController(paymentsService);
@@ -68,6 +70,51 @@ describe('PaymentsController', () => {
       rawBody,
       'sig',
       'ar',
+    );
+  });
+});
+
+describe('WalletController', () => {
+  let paymentsService: any;
+  let controller: WalletController;
+
+  beforeEach(() => {
+    paymentsService = {
+      createWalletTopUpPaymentIntent: jest.fn(),
+    };
+    controller = new WalletController(paymentsService);
+  });
+
+  it('uses the wallet route prefix', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, WalletController)).toBe('wallet');
+  });
+
+  it('protects wallet top-up payment intent creation with JwtAuthGuard', () => {
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        WalletController.prototype.createWalletTopUpPaymentIntent,
+      ),
+    ).toEqual([JwtAuthGuard]);
+  });
+
+  it('passes the donor JWT payload to the service', async () => {
+    paymentsService.createWalletTopUpPaymentIntent.mockResolvedValue({
+      transactionId: 77,
+      clientSecret: 'pi_topup_secret_abc',
+      amount: '50.00',
+      currency: 'usd',
+    });
+
+    const req = { user: { id: 7, type: 'DONOR' } } as any;
+    const dto = { amount: '50.00' };
+
+    await controller.createWalletTopUpPaymentIntent(dto, req, 'en');
+
+    expect(paymentsService.createWalletTopUpPaymentIntent).toHaveBeenCalledWith(
+      dto,
+      req.user,
+      'en',
     );
   });
 });

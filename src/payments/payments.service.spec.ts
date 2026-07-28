@@ -9,6 +9,7 @@ import {
   TransactionStatus,
   TransactionType,
   UserType,
+  WalletTransactionDirection,
 } from '@prisma/client';
 import { PaymentsService } from './payments.service';
 
@@ -44,6 +45,12 @@ describe('PaymentsService', () => {
         create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
+      },
+      wallet: {
+        upsert: jest.fn(),
+      },
+      walletTransaction: {
+        create: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -97,6 +104,22 @@ describe('PaymentsService', () => {
     stripe.paymentIntents.create.mockResolvedValue({
       id: 'pi_123',
       client_secret: 'pi_123_secret_abc',
+    });
+    prisma.transaction.update.mockResolvedValue({});
+  }
+
+  function mockValidWalletTopUpSetup() {
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    prisma.wallet.upsert.mockResolvedValue({ id: 9 });
+    stripe.customers.create.mockResolvedValue({ id: 'cus_123' });
+    prisma.donor.update.mockResolvedValue({ ...donor, stripeCustomerId: 'cus_123' });
+    prisma.transaction.create.mockResolvedValue({
+      id: 77,
+      amount: new Prisma.Decimal(50),
+    });
+    stripe.paymentIntents.create.mockResolvedValue({
+      id: 'pi_topup',
+      client_secret: 'pi_topup_secret_abc',
     });
     prisma.transaction.update.mockResolvedValue({});
   }
@@ -189,10 +212,11 @@ describe('PaymentsService', () => {
       data: {
         donorId: 7,
         amount: new Prisma.Decimal(25),
-        paymentStatus: TransactionStatus.PENDING,
-        type: TransactionType.DIRECT_DONATION,
+        status: TransactionStatus.PENDING,
+        type: TransactionType.AID_REQUEST_DONATION,
         referenceType: 'REQUEST_AID',
         referenceId: 13,
+        currency: 'usd',
       },
       select: { id: true, amount: true },
     });
@@ -243,6 +267,91 @@ describe('PaymentsService', () => {
     );
   });
 
+  it.each(['0', '-1', '1.999', 'abc'])(
+    'rejects invalid wallet top-up amount %s',
+    async (amount) => {
+      await expect(
+        service.createWalletTopUpPaymentIntent(
+          { amount },
+          { id: 7, type: UserType.DONOR },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    },
+  );
+
+  it('creates a wallet top-up transaction and Stripe PaymentIntent', async () => {
+    mockValidWalletTopUpSetup();
+
+    const result = await service.createWalletTopUpPaymentIntent(
+      { amount: '50.00' },
+      { id: 7, type: UserType.DONOR },
+    );
+
+    expect(prisma.wallet.upsert).toHaveBeenCalledWith({
+      where: { donorId: 7 },
+      create: {
+        donorId: 7,
+        runningBalance: new Prisma.Decimal(0),
+      },
+      update: {},
+      select: { id: true },
+    });
+    expect(prisma.transaction.create).toHaveBeenCalledWith({
+      data: {
+        donorId: 7,
+        amount: new Prisma.Decimal('50.00'),
+        status: TransactionStatus.PENDING,
+        type: TransactionType.WALLET_TOP_UP,
+        referenceType: 'WALLET',
+        referenceId: 9,
+        currency: 'usd',
+      },
+      select: { id: true, amount: true },
+    });
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      {
+        amount: 5000,
+        currency: 'usd',
+        customer: 'cus_123',
+        metadata: {
+          transactionId: '77',
+          donorId: '7',
+          walletId: '9',
+          type: TransactionType.WALLET_TOP_UP,
+        },
+      },
+      { idempotencyKey: 'payment-intent:77' },
+    );
+    expect(prisma.transaction.update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { stripePaymentIntentId: 'pi_topup' },
+    });
+    expect(result).toEqual({
+      transactionId: 77,
+      clientSecret: 'pi_topup_secret_abc',
+      amount: '50.00',
+      currency: 'usd',
+    });
+  });
+
+  it('reuses an existing Stripe customer ID for wallet top-ups', async () => {
+    mockValidWalletTopUpSetup();
+    prisma.donor.findUnique.mockResolvedValue({
+      ...donor,
+      stripeCustomerId: 'cus_existing',
+    });
+
+    await service.createWalletTopUpPaymentIntent(
+      { amount: '50.00' },
+      { id: 7, type: UserType.DONOR },
+    );
+
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+    expect(stripe.paymentIntents.create.mock.calls[0][0].customer).toBe(
+      'cus_existing',
+    );
+  });
+
   it('increments aid request payment only once for repeated succeeded webhooks', async () => {
     const tx = {
       transaction: {
@@ -250,22 +359,35 @@ describe('PaymentsService', () => {
           .fn()
           .mockResolvedValueOnce({
             id: 55,
+            donorId: 7,
             amount: new Prisma.Decimal(25),
-            paymentStatus: TransactionStatus.PENDING,
+            status: TransactionStatus.PENDING,
+            type: TransactionType.AID_REQUEST_DONATION,
             referenceType: 'REQUEST_AID',
             referenceId: 13,
           })
           .mockResolvedValueOnce({
             id: 55,
+            donorId: 7,
             amount: new Prisma.Decimal(25),
-            paymentStatus: TransactionStatus.SUCCESSFUL,
+            status: TransactionStatus.SUCCESSFUL,
+            type: TransactionType.AID_REQUEST_DONATION,
             referenceType: 'REQUEST_AID',
             referenceId: 13,
           }),
-        update: jest.fn(),
+        updateMany: jest
+          .fn()
+          .mockResolvedValueOnce({ count: 1 })
+          .mockResolvedValueOnce({ count: 0 }),
       },
       requestAid: {
         update: jest.fn(),
+      },
+      wallet: {
+        update: jest.fn(),
+      },
+      walletTransaction: {
+        create: jest.fn(),
       },
     };
     prisma.$transaction.mockImplementation((callback: any) => callback(tx));
@@ -277,7 +399,7 @@ describe('PaymentsService', () => {
     await service.handleStripeWebhook(Buffer.from('{}'), 'sig');
     await service.handleStripeWebhook(Buffer.from('{}'), 'sig');
 
-    expect(tx.transaction.update).toHaveBeenCalledTimes(1);
+    expect(tx.transaction.updateMany).toHaveBeenCalledTimes(2);
     expect(tx.requestAid.update).toHaveBeenCalledTimes(1);
     expect(tx.requestAid.update).toHaveBeenCalledWith({
       where: { id: 13 },
@@ -299,12 +421,122 @@ describe('PaymentsService', () => {
       expect(prisma.transaction.updateMany).toHaveBeenCalledWith({
         where: {
           stripePaymentIntentId: 'pi_failed',
-          paymentStatus: { not: TransactionStatus.SUCCESSFUL },
+          status: { not: TransactionStatus.SUCCESSFUL },
         },
-        data: { paymentStatus: TransactionStatus.FAILED },
+        data: { status: TransactionStatus.FAILED },
       });
     },
   );
+
+  it('creates a CREDIT wallet transaction when a wallet top-up succeeds', async () => {
+    const tx = {
+      transaction: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 77,
+          donorId: 7,
+          amount: new Prisma.Decimal(50),
+          status: TransactionStatus.PENDING,
+          type: TransactionType.WALLET_TOP_UP,
+          referenceType: 'WALLET',
+          referenceId: 9,
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      requestAid: {
+        update: jest.fn(),
+      },
+      wallet: {
+        update: jest.fn().mockResolvedValue({
+          id: 9,
+          runningBalance: new Prisma.Decimal(150),
+        }),
+      },
+      walletTransaction: {
+        create: jest.fn(),
+      },
+    };
+    prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    stripe.webhooks.constructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_topup' } },
+    });
+
+    await service.handleStripeWebhook(Buffer.from('{}'), 'sig');
+
+    expect(tx.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 77,
+        status: { not: TransactionStatus.SUCCESSFUL },
+      },
+      data: { status: TransactionStatus.SUCCESSFUL },
+    });
+    expect(tx.requestAid.update).not.toHaveBeenCalled();
+    expect(tx.wallet.update).toHaveBeenCalledWith({
+      where: { id: 9 },
+      data: {
+        runningBalance: { increment: new Prisma.Decimal(50) },
+      },
+      select: {
+        id: true,
+        runningBalance: true,
+      },
+    });
+    expect(tx.walletTransaction.create).toHaveBeenCalledWith({
+      data: {
+        walletId: 9,
+        transactionId: 77,
+        amount: new Prisma.Decimal(50),
+        type: TransactionType.WALLET_TOP_UP,
+        direction: WalletTransactionDirection.CREDIT,
+        referenceType: 'WALLET',
+        referenceId: 9,
+        balanceAfter: new Prisma.Decimal(150),
+      },
+    });
+  });
+
+  it('does not credit the wallet twice for repeated succeeded webhooks', async () => {
+    const tx = {
+      transaction: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 77,
+          donorId: 7,
+          amount: new Prisma.Decimal(50),
+          status: TransactionStatus.PENDING,
+          type: TransactionType.WALLET_TOP_UP,
+          referenceType: 'WALLET',
+          referenceId: 9,
+        }),
+        updateMany: jest
+          .fn()
+          .mockResolvedValueOnce({ count: 1 })
+          .mockResolvedValueOnce({ count: 0 }),
+      },
+      requestAid: {
+        update: jest.fn(),
+      },
+      wallet: {
+        update: jest.fn().mockResolvedValue({
+          id: 9,
+          runningBalance: new Prisma.Decimal(150),
+        }),
+      },
+      walletTransaction: {
+        create: jest.fn(),
+      },
+    };
+    prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    stripe.webhooks.constructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_topup' } },
+    });
+
+    await service.handleStripeWebhook(Buffer.from('{}'), 'sig');
+    await service.handleStripeWebhook(Buffer.from('{}'), 'sig');
+
+    expect(tx.wallet.update).toHaveBeenCalledTimes(1);
+    expect(tx.walletTransaction.create).toHaveBeenCalledTimes(1);
+  });
 
   it('rejects webhook payloads with invalid signatures', async () => {
     stripe.webhooks.constructEvent.mockImplementation(() => {

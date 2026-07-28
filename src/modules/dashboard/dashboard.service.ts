@@ -23,19 +23,19 @@ export class DashboardService {
     ] = await Promise.all([
       this.prisma.transaction.aggregate({
         _sum: { amount: true },
-        where: { paymentStatus: TransactionStatus.SUCCESSFUL },
+        where: { status: TransactionStatus.SUCCESSFUL },
       }),
       this.prisma.transaction.aggregate({
         _sum: { amount: true },
         where: {
-          paymentStatus: TransactionStatus.SUCCESSFUL,
+          status: TransactionStatus.SUCCESSFUL,
           createdAt: { gte: currentMonthStart, lt: nextMonthStart },
         },
       }),
       this.prisma.transaction.aggregate({
         _sum: { amount: true },
         where: {
-          paymentStatus: TransactionStatus.SUCCESSFUL,
+          status: TransactionStatus.SUCCESSFUL,
           createdAt: { gte: previousMonthStart, lt: currentMonthStart },
         },
       }),
