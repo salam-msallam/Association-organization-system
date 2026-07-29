@@ -41,6 +41,9 @@ describe('PaymentsService', () => {
       requestAid: {
         findFirst: jest.fn(),
       },
+      sponsorship: {
+        findFirst: jest.fn(),
+      },
       transaction: {
         create: jest.fn(),
         update: jest.fn(),
@@ -48,6 +51,8 @@ describe('PaymentsService', () => {
       },
       wallet: {
         upsert: jest.fn(),
+        findUnique: jest.fn(),
+        updateMany: jest.fn(),
       },
       walletTransaction: {
         create: jest.fn(),
@@ -106,6 +111,50 @@ describe('PaymentsService', () => {
       client_secret: 'pi_123_secret_abc',
     });
     prisma.transaction.update.mockResolvedValue({});
+  }
+
+  function createWalletDonationTx() {
+    return {
+      sponsorship: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      requestAid: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 13,
+          cost: new Prisma.Decimal(100),
+          currentPayment: new Prisma.Decimal(40),
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 13,
+          cost: new Prisma.Decimal(100),
+          currentPayment: new Prisma.Decimal(65),
+        }),
+      },
+      wallet: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 9,
+            runningBalance: new Prisma.Decimal(100),
+          })
+          .mockResolvedValueOnce({
+            id: 9,
+            runningBalance: new Prisma.Decimal(75),
+          }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      walletTransaction: {
+        create: jest.fn().mockResolvedValue({ id: 101 }),
+      },
+    };
+  }
+
+  function mockValidWalletDonationSetup() {
+    const tx = createWalletDonationTx();
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    return tx;
   }
 
   function mockValidWalletTopUpSetup() {
@@ -350,6 +399,215 @@ describe('PaymentsService', () => {
     expect(stripe.paymentIntents.create.mock.calls[0][0].customer).toBe(
       'cus_existing',
     );
+  });
+
+  it('donates to an accepted aid request from the donor wallet without Stripe or Transaction', async () => {
+    const tx = mockValidWalletDonationSetup();
+
+    const result = await service.donateWalletToAidRequest(
+      13,
+      { amount: '25.00' },
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
+      where: {
+        donorId: 7,
+        status: { in: [Status.PENDING, Status.ACCEPTED] },
+      },
+      select: { id: true },
+    });
+    expect(tx.requestAid.findFirst).toHaveBeenCalledWith({
+      where: { id: 13, status: Status.ACCEPTED },
+      select: { id: true, cost: true, currentPayment: true },
+    });
+    expect(tx.wallet.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 9,
+        runningBalance: { gte: new Prisma.Decimal('25.00') },
+      },
+      data: {
+        runningBalance: { decrement: new Prisma.Decimal('25.00') },
+      },
+    });
+    expect(tx.requestAid.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 13,
+        status: Status.ACCEPTED,
+        currentPayment: { lte: new Prisma.Decimal(75) },
+      },
+      data: {
+        currentPayment: { increment: new Prisma.Decimal('25.00') },
+      },
+    });
+    expect(tx.walletTransaction.create).toHaveBeenCalledWith({
+      data: {
+        walletId: 9,
+        transactionId: null,
+        amount: new Prisma.Decimal('25.00'),
+        type: TransactionType.AID_REQUEST_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: 'REQUEST_AID',
+        referenceId: 13,
+        balanceAfter: new Prisma.Decimal(75),
+      },
+      select: { id: true },
+    });
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      walletTransactionId: 101,
+      donatedAmount: '25.00',
+      balanceAfter: '75.00',
+      requestId: 13,
+      currentPayment: '65.00',
+      remainingAmount: '35.00',
+      compliancePercentage: '65.00',
+    });
+  });
+
+  it('rejects wallet donations with insufficient balance', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.wallet.findUnique = jest.fn().mockResolvedValueOnce({
+      id: 9,
+      runningBalance: new Prisma.Decimal(20),
+    });
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects wallet donations greater than the remaining aid request amount', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.requestAid.findFirst.mockResolvedValueOnce({
+      id: 13,
+      cost: new Prisma.Decimal(100),
+      currentPayment: new Prisma.Decimal(90),
+    });
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.wallet.findUnique).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects wallet donations to unaccepted aid requests', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.requestAid.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(tx.requestAid.findFirst).toHaveBeenCalledWith({
+      where: { id: 13, status: Status.ACCEPTED },
+      select: { id: true, cost: true, currentPayment: true },
+    });
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects wallet donations when the donor has a pending sponsorship', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.sponsorship.findFirst.mockResolvedValueOnce({ id: 201 });
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(tx.requestAid.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects wallet donations when the donor has an accepted sponsorship', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.sponsorship.findFirst.mockResolvedValueOnce({ id: 202 });
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
+      where: {
+        donorId: 7,
+        status: { in: [Status.PENDING, Status.ACCEPTED] },
+      },
+      select: { id: true },
+    });
+  });
+
+  it.each([Status.REJECTED, Status.CANCELLED])(
+    'does not treat %s sponsorships as wallet donation blockers',
+    async (status) => {
+      const tx = mockValidWalletDonationSetup();
+
+      await service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      );
+
+      expect(tx.sponsorship.findFirst.mock.calls[0][0].where.status.in).not.toContain(
+        status,
+      );
+      expect(tx.walletTransaction.create).toHaveBeenCalled();
+    },
+  );
+
+  it('rejects the second concurrent wallet donation when the wallet balance was already used', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.wallet.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.requestAid.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a concurrent wallet donation when the remaining aid request amount changed', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.requestAid.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.donateWalletToAidRequest(
+        13,
+        { amount: '25.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
 
   it('increments aid request payment only once for repeated succeeded webhooks', async () => {

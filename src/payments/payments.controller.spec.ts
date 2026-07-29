@@ -11,6 +11,7 @@ describe('PaymentsController', () => {
     paymentsService = {
       createAidRequestPaymentIntent: jest.fn(),
       createWalletTopUpPaymentIntent: jest.fn(),
+      donateWalletToAidRequest: jest.fn(),
       handleStripeWebhook: jest.fn(),
     };
     controller = new PaymentsController(paymentsService);
@@ -81,6 +82,7 @@ describe('WalletController', () => {
   beforeEach(() => {
     paymentsService = {
       createWalletTopUpPaymentIntent: jest.fn(),
+      donateWalletToAidRequest: jest.fn(),
     };
     controller = new WalletController(paymentsService);
   });
@@ -116,5 +118,39 @@ describe('WalletController', () => {
       req.user,
       'en',
     );
+  });
+
+  it('protects wallet aid request donations with JwtAuthGuard', () => {
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        WalletController.prototype.donateWalletToAidRequest,
+      ),
+    ).toEqual([JwtAuthGuard]);
+  });
+
+  it('passes request ID, amount, and donor JWT payload to the wallet donation service', async () => {
+    paymentsService.donateWalletToAidRequest.mockResolvedValue({
+      walletTransactionId: 101,
+      donatedAmount: '25.00',
+      balanceAfter: '75.00',
+      requestId: 13,
+      currentPayment: '65.00',
+      remainingAmount: '35.00',
+      compliancePercentage: '65.00',
+    });
+
+    const req = { user: { id: 7, type: 'DONOR' } } as any;
+    const dto = { amount: '25.00' };
+
+    await controller.donateWalletToAidRequest(13, dto, req, 'en');
+
+    expect(paymentsService.donateWalletToAidRequest).toHaveBeenCalledWith(
+      13,
+      dto,
+      req.user,
+      'en',
+    );
+    expect(dto).not.toHaveProperty('donorId');
   });
 });

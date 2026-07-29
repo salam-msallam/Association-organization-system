@@ -20,11 +20,14 @@ import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
 import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
+import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
+import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
 const WALLET_REFERENCE_TYPE = 'WALLET';
 const STRIPE_API_VERSION: Stripe.LatestApiVersion = '2026-06-24.dahlia';
+const BLOCKING_SPONSORSHIP_STATUSES = [Status.PENDING, Status.ACCEPTED];
 
 type PaymentUserPayload = {
   id?: number;
@@ -52,6 +55,12 @@ type CreateStripeBackedTransactionInput = {
   referenceId: number;
   metadata: Record<string, string>;
   lang: string;
+};
+
+type SponsorshipReader = {
+  sponsorship: {
+    findFirst(args: Prisma.SponsorshipFindFirstArgs): Promise<{ id: number } | null>;
+  };
 };
 
 @Injectable()
@@ -140,6 +149,135 @@ export class PaymentsService {
         type: TransactionType.WALLET_TOP_UP,
       },
       lang,
+    });
+  }
+
+  async donateWalletToAidRequest(
+    requestId: number,
+    dto: DonateWalletToAidRequestDto,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<WalletAidRequestDonationResponseDto> {
+    const amount = this.parsePaymentAmount(dto.amount, lang, {
+      requireExactlyTwoDecimals: true,
+    });
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertNoBlockingSponsorship(tx, donor.userId, lang);
+
+      const aidRequest = await tx.requestAid.findFirst({
+        where: { id: requestId, status: Status.ACCEPTED },
+        select: { id: true, cost: true, currentPayment: true },
+      });
+
+      if (!aidRequest) {
+        throw new NotFoundException(
+          this.t('ACCEPTED_AID_REQUEST_NOT_FOUND', lang),
+        );
+      }
+
+      const cost = new Prisma.Decimal(aidRequest.cost);
+      const remainingAmount = cost.minus(aidRequest.currentPayment);
+
+      if (remainingAmount.lte(0)) {
+        throw new BadRequestException(this.t('AID_REQUEST_FULLY_FUNDED', lang));
+      }
+
+      if (amount.gt(remainingAmount)) {
+        throw new BadRequestException(
+          this.t('DONATION_AMOUNT_EXCEEDS_REMAINING', lang, {
+            remainingAmount: remainingAmount.toFixed(2),
+          }),
+        );
+      }
+
+      const wallet = await tx.wallet.findUnique({
+        where: { donorId: donor.userId },
+        select: { id: true, runningBalance: true },
+      });
+
+      if (!wallet) {
+        throw new NotFoundException(this.t('WALLET_NOT_FOUND', lang));
+      }
+
+      if (new Prisma.Decimal(wallet.runningBalance).lt(amount)) {
+        throw new BadRequestException(this.t('INSUFFICIENT_WALLET_BALANCE', lang));
+      }
+
+      const walletUpdate = await tx.wallet.updateMany({
+        where: {
+          id: wallet.id,
+          runningBalance: { gte: amount },
+        },
+        data: {
+          runningBalance: { decrement: amount },
+        },
+      });
+
+      if (walletUpdate.count === 0) {
+        throw new BadRequestException(this.t('INSUFFICIENT_WALLET_BALANCE', lang));
+      }
+
+      const aidRequestUpdate = await tx.requestAid.updateMany({
+        where: {
+          id: aidRequest.id,
+          status: Status.ACCEPTED,
+          currentPayment: { lte: cost.minus(amount) },
+        },
+        data: {
+          currentPayment: { increment: amount },
+        },
+      });
+
+      if (aidRequestUpdate.count === 0) {
+        throw new BadRequestException(
+          this.t('WALLET_DONATION_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { id: true, runningBalance: true },
+      });
+      const updatedAidRequest = await tx.requestAid.findUnique({
+        where: { id: aidRequest.id },
+        select: { id: true, cost: true, currentPayment: true },
+      });
+
+      if (!updatedWallet || !updatedAidRequest) {
+        throw new BadRequestException(
+          this.t('WALLET_DONATION_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const walletTransaction = await tx.walletTransaction.create({
+        data: {
+          walletId: updatedWallet.id,
+          transactionId: null,
+          amount,
+          type: TransactionType.AID_REQUEST_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: REQUEST_AID_REFERENCE_TYPE,
+          referenceId: requestId,
+          balanceAfter: updatedWallet.runningBalance,
+        },
+        select: { id: true },
+      });
+
+      const currentPayment = new Prisma.Decimal(updatedAidRequest.currentPayment);
+      const updatedCost = new Prisma.Decimal(updatedAidRequest.cost);
+      const updatedRemainingAmount = updatedCost.minus(currentPayment);
+
+      return {
+        walletTransactionId: walletTransaction.id,
+        donatedAmount: amount.toFixed(2),
+        balanceAfter: new Prisma.Decimal(updatedWallet.runningBalance).toFixed(2),
+        requestId,
+        currentPayment: currentPayment.toFixed(2),
+        remainingAmount: updatedRemainingAmount.toFixed(2),
+        compliancePercentage: currentPayment.times(100).div(updatedCost).toFixed(2),
+      };
     });
   }
 
@@ -242,7 +380,11 @@ export class PaymentsService {
     return user.id;
   }
 
-  private parsePaymentAmount(amount: number | string, lang: string): Prisma.Decimal {
+  private parsePaymentAmount(
+    amount: number | string,
+    lang: string,
+    options: { requireExactlyTwoDecimals?: boolean } = {},
+  ): Prisma.Decimal {
     if (typeof amount !== 'number' && typeof amount !== 'string') {
       throw new BadRequestException(this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang));
     }
@@ -252,10 +394,18 @@ export class PaymentsService {
     }
 
     const amountText = String(amount).trim();
+    const amountPattern = options.requireExactlyTwoDecimals
+      ? /^\d+\.\d{2}$/
+      : /^\d+(\.\d{1,2})?$/;
 
-    if (!/^\d+(\.\d{1,2})?$/.test(amountText)) {
+    if (!amountPattern.test(amountText)) {
       throw new BadRequestException(
-        this.t('PAYMENT_AMOUNT_MAX_TWO_DECIMALS', lang),
+        this.t(
+          options.requireExactlyTwoDecimals
+            ? 'PAYMENT_AMOUNT_EXACTLY_TWO_DECIMALS'
+            : 'PAYMENT_AMOUNT_MAX_TWO_DECIMALS',
+          lang,
+        ),
       );
     }
 
@@ -266,6 +416,24 @@ export class PaymentsService {
     }
 
     return decimalAmount;
+  }
+
+  private async assertNoBlockingSponsorship(
+    prisma: SponsorshipReader,
+    donorUserId: number,
+    lang: string,
+  ): Promise<void> {
+    const sponsorship = await prisma.sponsorship.findFirst({
+      where: {
+        donorId: donorUserId,
+        status: { in: BLOCKING_SPONSORSHIP_STATUSES },
+      },
+      select: { id: true },
+    });
+
+    if (sponsorship) {
+      throw new ForbiddenException(this.t('WALLET_RESERVED_FOR_SPONSORSHIP', lang));
+    }
   }
 
   private async createStripeBackedTransaction(

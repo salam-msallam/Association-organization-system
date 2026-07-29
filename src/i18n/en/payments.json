@@ -24,5 +24,11 @@
   "PAYMENT_AMOUNT_MUST_BE_NUMBER": "Donation amount must be a number with no more than two decimal places.",
   "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "Donation amount must be positive.",
   "PAYMENT_AMOUNT_MUST_BE_STRING": "Payment amount must be a decimal string.",
-  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_DECIMAL": "Payment amount must be positive with no more than two decimal places."
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_DECIMAL": "Payment amount must be positive with no more than two decimal places.",
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_TWO_DECIMAL_PLACES": "Payment amount must be positive with exactly two decimal places.",
+  "PAYMENT_AMOUNT_EXACTLY_TWO_DECIMALS": "Payment amount must have exactly two decimal places.",
+  "WALLET_RESERVED_FOR_SPONSORSHIP": "Wallet balance is reserved for paying sponsorship and cannot be used for donations.",
+  "WALLET_NOT_FOUND": "Donor wallet was not found.",
+  "INSUFFICIENT_WALLET_BALANCE": "Wallet balance is insufficient.",
+  "WALLET_DONATION_CONCURRENT_UPDATE": "Wallet donation could not be completed because the balance or remaining aid request amount changed. Please try again."
 }

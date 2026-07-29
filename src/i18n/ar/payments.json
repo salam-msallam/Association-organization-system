@@ -24,5 +24,11 @@
   "PAYMENT_AMOUNT_MUST_BE_NUMBER": "يجب أن يكون مبلغ التبرع رقماً وألا يحتوي على أكثر من منزلتين عشريتين.",
   "PAYMENT_AMOUNT_MUST_BE_POSITIVE": "يجب أن يكون مبلغ التبرع موجباً.",
   "PAYMENT_AMOUNT_MUST_BE_STRING": "يجب أن يكون مبلغ الدفع نصاً عشرياً.",
-  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_DECIMAL": "يجب أن يكون مبلغ الدفع موجباً وألا يحتوي على أكثر من منزلتين عشريتين."
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_DECIMAL": "يجب أن يكون مبلغ الدفع موجباً وألا يحتوي على أكثر من منزلتين عشريتين.",
+  "PAYMENT_AMOUNT_MUST_BE_POSITIVE_TWO_DECIMAL_PLACES": "يجب أن يكون مبلغ الدفع موجباً وبمنزلتين عشريتين بالضبط.",
+  "PAYMENT_AMOUNT_EXACTLY_TWO_DECIMALS": "يجب أن يحتوي مبلغ الدفع على منزلتين عشريتين بالضبط.",
+  "WALLET_RESERVED_FOR_SPONSORSHIP": "رصيد المحفظة محجوز لدفع الكفالة ولا يمكن استخدامه للتبرع.",
+  "WALLET_NOT_FOUND": "محفظة المتبرع غير موجودة.",
+  "INSUFFICIENT_WALLET_BALANCE": "رصيد المحفظة غير كافٍ.",
+  "WALLET_DONATION_CONCURRENT_UPDATE": "تعذر إتمام التبرع من المحفظة لأن الرصيد أو المبلغ المتبقي لطلب الإعانة تغيّر. يرجى المحاولة مرة أخرى."
 }
