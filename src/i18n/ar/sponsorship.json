@@ -1,0 +1,9 @@
+{
+  "AUTHENTICATION_REQUIRED": "تسجيل الدخول مطلوب.",
+  "ONLY_DONORS_CAN_APPLY": "يمكن للمتبرعين فقط إنشاء طلبات الكفالة.",
+  "DONOR_ACCOUNT_NOT_FOUND": "لم يتم العثور على حساب المتبرع الحالي.",
+  "INSUFFICIENT_WALLET_BALANCE": "رصيد المحفظة هو {walletBalance} دولار، بينما يلزم {requiredBalance} دولار لتغطية ثلاثة أشهر لجميع الكفالات المعلقة والمقبولة.",
+  "REQUEST_CREATED": "طلب الكفالة قيد المراجعة من قبل الموظف.",
+  "FETCH_SUCCESS": "تم جلب كفالاتك بنجاح.",
+  "INVALID_STATUS": "حالة الكفالة غير صالحة."
+}
