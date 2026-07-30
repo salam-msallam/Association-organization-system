@@ -182,11 +182,11 @@ model Sponsorship {
   id              Int       @id @default(autoincrement())
   donorId         Int
   donor           Donor     @relation(fields: [donorId], references: [userId], onDelete: Restrict)
-  orphanId        Int
-  orphan          Orphan    @relation(fields: [orphanId], references: [id], onDelete: Restrict)
-  employeeId      Int
-  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  amount          Decimal   @db.Decimal(10, 2)
+  orphanId        Int?
+  orphan          Orphan?   @relation(fields: [orphanId], references: [id], onDelete: Restrict)
+  employeeId      Int?
+  employee        Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount          Decimal   @default(10.00) @db.Decimal(10, 2)
   status          Status    @default(PENDING)
   rejectionReason Json?
   startDate       DateTime? @db.Date

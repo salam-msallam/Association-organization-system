@@ -4,12 +4,12 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmployeeModule } from './employee/employee.module';
 import { TranslationInterceptor } from './interceptors/translation.interceptor';
-import { APP_INTERCEPTOR } from '@nestjs/core'; 
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { CaslModule } from './casl/casl.module';
 import { RoleModule } from './role/role.module';
 import { AcceptLanguageResolver, I18nModule, QueryResolver } from 'nestjs-i18n';
 import { AuthModule } from './auth/auth.module';
-import * as path from 'path'; 
+import * as path from 'path';
 import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
@@ -19,24 +19,23 @@ import { BeneficiaryModule } from './beneficiary/beneficiary.module';
 import { CategoryModule } from './category/category.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProfileModule } from './profile/profile.module';
+import { SponsorshipModule } from './sponsorship/sponsorship.module';
 
 @Module({
-  imports: 
-  [PrismaModule,
+  imports: [
+    PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
     EmployeeModule,
     CaslModule,
     I18nModule.forRoot({
-      fallbackLanguage: 'ar', 
+      fallbackLanguage: 'ar',
       loaderOptions: {
-        path: path.join(__dirname, '..', 'i18n'), 
+        path: path.join(__dirname, '..', 'i18n'),
         watch: true,
       },
-      resolvers: [
-        new AcceptLanguageResolver(), 
-      ],
+      resolvers: [new AcceptLanguageResolver()],
     }),
     RoleModule,
     AuthModule,
@@ -48,15 +47,14 @@ import { ProfileModule } from './profile/profile.module';
     CategoryModule,
     PaymentsModule,
     ProfileModule,
-    
-
+    SponsorshipModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    { 
+    {
       provide: APP_INTERCEPTOR,
-      useClass: TranslationInterceptor, 
+      useClass: TranslationInterceptor,
     },
   ],
 })

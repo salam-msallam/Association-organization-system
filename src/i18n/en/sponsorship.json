@@ -1,0 +1,9 @@
+{
+  "AUTHENTICATION_REQUIRED": "Authentication is required.",
+  "ONLY_DONORS_CAN_APPLY": "Only donors can create sponsorship requests.",
+  "DONOR_ACCOUNT_NOT_FOUND": "The authenticated donor account was not found.",
+  "INSUFFICIENT_WALLET_BALANCE": "The wallet balance is {walletBalance} USD, but {requiredBalance} USD is required to cover three months for all pending and accepted sponsorships.",
+  "REQUEST_CREATED": "Your sponsorship request is pending employee review.",
+  "FETCH_SUCCESS": "Your sponsorships were fetched successfully.",
+  "INVALID_STATUS": "The sponsorship status is invalid."
+}
