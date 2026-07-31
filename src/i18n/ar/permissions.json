@@ -8,5 +8,13 @@
   "create:employees": "إنشاء حساب موظف جديد",
   "update:employees": "تعديل معلومات موظف",
   "delete:employees": "حذف حساب موظف",
-  "read:aid_requests": "عرض طلبات الإعانة"
+  "read:donors": "عرض قائمة المتبرعين",
+  "read:beneficiaries": "عرض قائمة المستفيدين",
+  "status:beneficiaries": "تغيير حالة المستفيدين",
+  "status:aid_requests": "تغيير حالة طلبات الإعانة",
+  "read:aid_requests": "عرض طلبات الإعانة",
+  "read:roles": "عرض قائمة الأدوار",
+  "create:roles": "إنشاء دور جديد",
+  "update:roles": "تعديل دور",
+  "delete:roles": "حذف دور"
 }

@@ -1,3 +1,14 @@
 {
-  "FETCH_SUCCESS": "Roles fetched successfully."
+  "FETCH_SUCCESS": "Roles fetched successfully.",
+  "FETCH_ONE_SUCCESS": "Role fetched successfully.",
+  "CREATE_SUCCESS": "Role created successfully.",
+  "UPDATE_SUCCESS": "Role updated successfully.",
+  "DELETE_SUCCESS": "Role deleted successfully.",
+  "INVALID_ID": "Invalid role ID.",
+  "NOT_FOUND": "Role was not found.",
+  "NAME_REQUIRED": "Role name is required.",
+  "NAME_ALREADY_EXISTS": "A role with this name already exists.",
+  "SOME_PERMISSIONS_NOT_FOUND": "Some selected permissions do not exist. Please check the input.",
+  "ROLE_ASSIGNED_TO_EMPLOYEES": "This role is assigned to employees. Reassign or remove it from those employees first.",
+  "PROTECTED_ROLE_CANNOT_BE_DELETED": "This system role is protected and cannot be deleted."
 }

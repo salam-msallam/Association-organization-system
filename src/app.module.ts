@@ -20,6 +20,7 @@ import { CategoryModule } from './category/category.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProfileModule } from './profile/profile.module';
 import { SponsorshipModule } from './sponsorship/sponsorship.module';
+import { DonorModule } from './donor/donor.module';
 
 @Module({
   imports: [
@@ -48,6 +49,9 @@ import { SponsorshipModule } from './sponsorship/sponsorship.module';
     PaymentsModule,
     ProfileModule,
     SponsorshipModule,
+    DonorModule,
+    
+
   ],
   controllers: [AppController],
   providers: [

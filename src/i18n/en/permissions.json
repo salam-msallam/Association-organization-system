@@ -8,5 +8,13 @@
   "create:employees": "Create New Employee Account",
   "update:employees": "Update Employee Permissions",
   "delete:employees": "Delete Employee Account",
-  "read:aid_requests": "View Assistance Requests"
+  "read:donors": "View Donors List",
+  "read:beneficiaries": "View Beneficiaries List",
+  "status:beneficiaries": "Update Beneficiary Status",
+  "status:aid_requests": "Update Assistance Request Status",
+  "read:aid_requests": "View Assistance Requests",
+  "read:roles": "View Roles List",
+  "create:roles": "Create New Role",
+  "update:roles": "Update Role",
+  "delete:roles": "Delete Role"
 }
