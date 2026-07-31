@@ -18,5 +18,7 @@
     "EMAIL_MUST_BE_VALID": "Please enter a valid email address.",
     "EMAIL_REQUIRED": "Email is required.",
     "PASSWORD_REQUIRED": "Password is required.",
-    "PASSWORD_MIN_LENGTH": "Password must be at least 6 characters."
+    "PASSWORD_MIN_LENGTH": "Password must be at least 6 characters.",
+    "ARABIC_TEXT_REQUIRED": "The Arabic field must contain Arabic text only and cannot be blank.",
+    "ENGLISH_TEXT_REQUIRED": "The English field must contain English text only and cannot be blank."
 }

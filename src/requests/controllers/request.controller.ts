@@ -10,17 +10,25 @@ import {
   UseInterceptors,
   Body,
   Patch,
+  Query,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiExtraModels,
+  ApiForbiddenResponse,
+  ApiHeader,
+  ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { Status } from '@prisma/client';
 import { Request } from 'express';
+import { I18nLang } from 'nestjs-i18n';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { UpdateRequestAidDto } from '../dto/update-request-aid.dto';
 import { RequestAidService } from '../requests.service';
@@ -37,6 +45,12 @@ interface AuthenticatedRequest extends Request {
 
 @ApiTags('Requests')
 @ApiExtraModels(UpdateRequestAidDto)
+@ApiHeader({
+  name: 'accept-language',
+  description: 'Language used for translated fields and errors',
+  required: false,
+  schema: { default: 'ar', enum: ['ar', 'en'] },
+})
 @Controller('requests')
 @UseGuards(JwtAuthGuard)
 export class RequestsController {
@@ -44,8 +58,29 @@ export class RequestsController {
 
   @Get('my-requests')
   @ApiBearerAuth('jwt')
-  getMyRequests(@Req() req: AuthenticatedRequest) {
-    return this.requestAidService.getMyRequests(req.user.id);
+  @ApiOperation({
+    summary: 'Get assistance requests for the authenticated beneficiary',
+    description:
+      'Returns all requests owned by the beneficiary, optionally filtered by status.',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: Status,
+    description:
+      'Optional filter: PENDING, ACCEPTED, REJECTED, or CANCELLED. Omit it to return all statuses.',
+  })
+  @ApiOkResponse({ description: 'Assistance requests fetched successfully.' })
+  @ApiBadRequestResponse({ description: 'The status filter is invalid.' })
+  @ApiForbiddenResponse({
+    description: 'The authenticated account is not a beneficiary.',
+  })
+  getMyRequests(
+    @Req() req: AuthenticatedRequest,
+    @Query('status') status: string | undefined,
+    @I18nLang() lang = 'ar',
+  ) {
+    return this.requestAidService.getMyRequests(req.user.id, status, lang);
   }
 
   @Delete('cancel/:id')

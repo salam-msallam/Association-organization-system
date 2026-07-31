@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AcademicAchievement,
   Gender,
@@ -871,5 +875,95 @@ describe('RequestAidService admin APIs', () => {
     ).rejects.toThrow(BadRequestException);
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['ar', 'صحي', 'جراحة', 'الوثائق ناقصة'],
+    ['en', 'Health', 'Surgery', 'Documents are incomplete'],
+  ])(
+    'filters beneficiary requests by status and localizes fields in %s',
+    async (lang, categoryName, subCategoryName, rejectionReason) => {
+      prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+      prisma.requestAid.findMany.mockResolvedValue([
+        {
+          id: 13,
+          categoryId: 2,
+          subCategoryId: 7,
+          status: Status.REJECTED,
+          rejectionReason: {
+            ar: 'الوثائق ناقصة',
+            en: 'Documents are incomplete',
+          },
+          cost: new Prisma.Decimal(100),
+          currentPayment: new Prisma.Decimal(0),
+          isUrgent: null,
+          createdAt: new Date('2026-07-30T12:00:00.000Z'),
+          updatedAt: new Date('2026-07-30T12:00:00.000Z'),
+          category: {
+            id: 2,
+            name: { ar: 'صحي', en: 'Health' },
+          },
+          subCategory: {
+            id: 7,
+            name: { ar: 'جراحة', en: 'Surgery' },
+          },
+        },
+      ]);
+
+      const result = await service.getMyRequests(19, 'rejected', lang);
+
+      expect(prisma.requestAid.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { beneficiaryId: 5, status: Status.REJECTED },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: 13,
+          status: Status.REJECTED,
+          rejectionReason,
+          cost: '100',
+          currentPayment: '0',
+          category: { id: 2, name: categoryName },
+          subCategory: { id: 7, name: subCategoryName },
+        }),
+      ]);
+    },
+  );
+
+  it('returns every beneficiary request when status is omitted', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.requestAid.findMany.mockResolvedValue([]);
+
+    await service.getMyRequests(19, undefined, 'ar');
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { beneficiaryId: 5 } }),
+    );
+  });
+
+  it('rejects an invalid my-requests status in the requested language', async () => {
+    await expect(service.getMyRequests(19, 'unknown', 'en')).rejects.toThrow(
+      BadRequestException,
+    );
+
+    expect(i18n.t).toHaveBeenCalledWith('help-requests.INVALID_STATUS', {
+      lang: 'en',
+    });
+    expect(prisma.requestAid.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns a translated error when the account is not a beneficiary', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue(null);
+
+    await expect(service.getMyRequests(19, undefined, 'en')).rejects.toThrow(
+      ForbiddenException,
+    );
+
+    expect(i18n.t).toHaveBeenCalledWith(
+      'help-requests.BENEFICIARY_PROFILE_REQUIRED',
+      { lang: 'en' },
+    );
   });
 });

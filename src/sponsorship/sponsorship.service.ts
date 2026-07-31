@@ -2,9 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, Status, UserType } from '@prisma/client';
+import { CancellationSource, Prisma, Status, UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -134,6 +135,8 @@ export class SponsorshipService {
         rejectionReason: true,
         startDate: true,
         endDate: true,
+        cancelledAt: true,
+        cancellationSource: true,
         createdAt: true,
         orphan: {
           select: {
@@ -163,6 +166,8 @@ export class SponsorshipService {
         ),
         startDate: sponsorship.startDate,
         endDate: sponsorship.endDate,
+        cancelledAt: sponsorship.cancelledAt,
+        cancellationSource: sponsorship.cancellationSource,
         createdAt: sponsorship.createdAt,
         orphan: sponsorship.orphan
           ? {
@@ -173,6 +178,129 @@ export class SponsorshipService {
           : null,
       })),
     };
+  }
+
+  async cancel(
+    sponsorshipId: number,
+    user: SponsorshipUserPayload,
+    lang = 'ar',
+  ) {
+    const donorUserId = this.getAuthenticatedDonorUserId(user, lang);
+
+    const donor = await this.prisma.donor.findUnique({
+      where: { userId: donorUserId },
+      select: { userId: true },
+    });
+
+    if (!donor) {
+      throw new ForbiddenException(this.t('DONOR_ACCOUNT_NOT_FOUND', lang));
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const sponsorship = await tx.sponsorship.findFirst({
+        where: { id: sponsorshipId, donorId: donorUserId },
+        select: {
+          id: true,
+          donorId: true,
+          status: true,
+          orphanId: true,
+          startDate: true,
+        },
+      });
+
+      if (!sponsorship) {
+        throw new NotFoundException(this.t('NOT_FOUND', lang));
+      }
+
+      if (sponsorship.status === Status.CANCELLED) {
+        throw new BadRequestException(this.t('ALREADY_CANCELLED', lang));
+      }
+
+      if (
+        sponsorship.status !== Status.PENDING &&
+        sponsorship.status !== Status.ACCEPTED
+      ) {
+        throw new BadRequestException(this.t('CANCELLATION_NOT_ALLOWED', lang));
+      }
+
+      const wasAccepted = sponsorship.status === Status.ACCEPTED;
+      const cancelledAt = new Date();
+      const updateResult = await tx.sponsorship.updateMany({
+        where: {
+          id: sponsorship.id,
+          donorId: donorUserId,
+          status: sponsorship.status,
+        },
+        data: {
+          status: Status.CANCELLED,
+          cancelledAt,
+          cancellationSource: CancellationSource.DONOR,
+          ...(wasAccepted && { endDate: cancelledAt }),
+        },
+      });
+
+      if (updateResult.count !== 1) {
+        throw new BadRequestException(
+          this.t('CANCELLATION_STATE_CHANGED', lang),
+        );
+      }
+
+      let orphanReleased = false;
+
+      if (wasAccepted) {
+        if (sponsorship.orphanId) {
+          const otherAcceptedSponsorships = await tx.sponsorship.count({
+            where: {
+              id: { not: sponsorship.id },
+              orphanId: sponsorship.orphanId,
+              status: Status.ACCEPTED,
+            },
+          });
+
+          if (otherAcceptedSponsorships === 0) {
+            await tx.orphan.update({
+              where: { id: sponsorship.orphanId },
+              data: { isSupported: false },
+            });
+            orphanReleased = true;
+          }
+        }
+
+        const remainingAcceptedSponsorships = await tx.sponsorship.count({
+          where: { donorId: donorUserId, status: Status.ACCEPTED },
+        });
+
+        if (remainingAcceptedSponsorships === 0) {
+          await tx.donor.update({
+            where: { userId: donorUserId },
+            data: { isSponsor: false },
+          });
+        }
+      }
+
+      const cancelledSponsorship = await tx.sponsorship.findUnique({
+        where: { id: sponsorship.id },
+        select: {
+          id: true,
+          donorId: true,
+          orphanId: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          cancelledAt: true,
+          cancellationSource: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: this.t('CANCEL_SUCCESS', lang),
+        data: {
+          ...cancelledSponsorship,
+          orphanReleased,
+        },
+      };
+    });
   }
 
   private getAuthenticatedDonorUserId(

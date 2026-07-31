@@ -191,7 +191,14 @@ model Sponsorship {
   rejectionReason Json?
   startDate       DateTime? @db.Date
   endDate         DateTime? @db.Date
+  cancelledAt     DateTime?
+  cancellationSource CancellationSource?
   createdAt       DateTime  @default(now())
+}
+
+enum CancellationSource {
+  DONOR
+  AUTOMATIC
 }
 
 enum SocialStatus {

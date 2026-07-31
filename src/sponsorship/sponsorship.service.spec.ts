@@ -1,9 +1,10 @@
 import {
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, Status, UserType } from '@prisma/client';
+import { CancellationSource, Prisma, Status, UserType } from '@prisma/client';
 import { SponsorshipService } from './sponsorship.service';
 
 describe('SponsorshipService', () => {
@@ -21,6 +22,15 @@ describe('SponsorshipService', () => {
       sponsorship: {
         count: jest.fn(),
         create: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      orphan: {
+        update: jest.fn(),
+      },
+      donor: {
+        update: jest.fn(),
       },
     };
     prisma = {
@@ -254,5 +264,137 @@ describe('SponsorshipService', () => {
       args: undefined,
     });
     expect(prisma.sponsorship.findMany).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending request without setting start or end dates', async () => {
+    const cancelledAt = new Date('2026-07-31T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(cancelledAt);
+    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    tx.sponsorship.findFirst.mockResolvedValue({
+      id: 4,
+      donorId: 7,
+      status: Status.PENDING,
+      orphanId: null,
+      startDate: null,
+    });
+    tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
+    tx.sponsorship.findUnique.mockResolvedValue({
+      id: 4,
+      donorId: 7,
+      orphanId: null,
+      status: Status.CANCELLED,
+      startDate: null,
+      endDate: null,
+      cancelledAt,
+      cancellationSource: CancellationSource.DONOR,
+    });
+
+    const result = await service.cancel(
+      4,
+      { id: 7, type: UserType.DONOR },
+      'ar',
+    );
+
+    expect(tx.sponsorship.updateMany).toHaveBeenCalledWith({
+      where: { id: 4, donorId: 7, status: Status.PENDING },
+      data: {
+        status: Status.CANCELLED,
+        cancelledAt,
+        cancellationSource: CancellationSource.DONOR,
+      },
+    });
+    expect(tx.orphan.update).not.toHaveBeenCalled();
+    expect(tx.donor.update).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      message: 'sponsorship.CANCEL_SUCCESS',
+      data: expect.objectContaining({
+        id: 4,
+        status: Status.CANCELLED,
+        startDate: null,
+        endDate: null,
+        cancelledAt,
+        cancellationSource: CancellationSource.DONOR,
+        orphanReleased: false,
+      }),
+    });
+    jest.useRealTimers();
+  });
+
+  it('cancels an accepted sponsorship and releases the orphan', async () => {
+    const cancelledAt = new Date('2026-07-31T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(cancelledAt);
+    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    tx.sponsorship.findFirst.mockResolvedValue({
+      id: 5,
+      donorId: 7,
+      status: Status.ACCEPTED,
+      orphanId: 3,
+      startDate: new Date('2026-06-01T00:00:00.000Z'),
+    });
+    tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
+    tx.sponsorship.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+    tx.sponsorship.findUnique.mockResolvedValue({
+      id: 5,
+      donorId: 7,
+      orphanId: 3,
+      status: Status.CANCELLED,
+      startDate: new Date('2026-06-01T00:00:00.000Z'),
+      endDate: cancelledAt,
+      cancelledAt,
+      cancellationSource: CancellationSource.DONOR,
+    });
+
+    const result = await service.cancel(5, {
+      id: 7,
+      type: UserType.DONOR,
+    });
+
+    expect(tx.sponsorship.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ endDate: cancelledAt }),
+      }),
+    );
+    expect(tx.orphan.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { isSupported: false },
+    });
+    expect(tx.donor.update).toHaveBeenCalledWith({
+      where: { userId: 7 },
+      data: { isSponsor: false },
+    });
+    expect(result.data.orphanReleased).toBe(true);
+    jest.useRealTimers();
+  });
+
+  it('does not allow a rejected sponsorship to be cancelled', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    tx.sponsorship.findFirst.mockResolvedValue({
+      id: 6,
+      donorId: 7,
+      status: Status.REJECTED,
+      orphanId: null,
+      startDate: null,
+    });
+
+    await expect(
+      service.cancel(6, { id: 7, type: UserType.DONOR }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not reveal or cancel another donor sponsorship', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    tx.sponsorship.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.cancel(99, { id: 7, type: UserType.DONOR }),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(tx.sponsorship.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 99, donorId: 7 } }),
+    );
+    expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
   });
 });

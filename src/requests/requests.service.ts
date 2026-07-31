@@ -511,19 +511,24 @@ export class RequestAidService {
     });
   }
 
-  async getMyRequests(userId: number) {
+  async getMyRequests(userId: number, status?: string, lang = 'ar') {
+    const normalizedStatus = this.normalizeStatus(status, lang);
+
     const beneficiary = await this.prisma.beneficiary.findUnique({
       where: { userId },
     });
 
     if (!beneficiary) {
       throw new ForbiddenException(
-        'هذا الحساب غير مرتبط بملف مستفيد، لا يمكن عرض طلبات المساعدة.',
+        this.i18n.t('help-requests.BENEFICIARY_PROFILE_REQUIRED', { lang }),
       );
     }
 
     const requests = await this.prisma.requestAid.findMany({
-      where: { beneficiaryId: beneficiary.id },
+      where: {
+        beneficiaryId: beneficiary.id,
+        ...(normalizedStatus && { status: normalizedStatus }),
+      },
       select: {
         id: true,
         categoryId: true,
@@ -547,8 +552,19 @@ export class RequestAidService {
 
     return requests.map((request) => ({
       ...request,
+      rejectionReason: this.localizeJsonText(request.rejectionReason, lang),
       cost: request.cost.toString(),
       currentPayment: request.currentPayment.toString(),
+      category: {
+        ...request.category,
+        name: this.localizeJsonText(request.category.name, lang),
+      },
+      subCategory: request.subCategory
+        ? {
+            ...request.subCategory,
+            name: this.localizeJsonText(request.subCategory.name, lang),
+          }
+        : null,
     }));
   }
 

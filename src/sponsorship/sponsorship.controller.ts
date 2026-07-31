@@ -3,6 +3,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -16,6 +19,7 @@ import {
   ApiHeader,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -25,6 +29,7 @@ import type { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateSponsorshipResponseDto } from './dto/create-sponsorship-response.dto';
+import { CancelSponsorshipResponseDto } from './dto/cancel-sponsorship-response.dto';
 import { SponsorshipListResponseDto } from './dto/sponsorship-list-response.dto';
 import { SponsorshipService } from './sponsorship.service';
 
@@ -96,5 +101,31 @@ export class SponsorshipController {
     @I18nLang() lang = 'ar',
   ) {
     return this.sponsorshipService.findMine(req.user, status, lang);
+  }
+
+  @Patch(':id/cancel')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Cancel a pending or accepted sponsorship',
+    description:
+      'Cancels a sponsorship owned by the authenticated donor. An accepted sponsorship ends immediately and releases its orphan.',
+  })
+  @ApiParam({ name: 'id', type: Number, example: 4 })
+  @ApiOkResponse({ type: CancelSponsorshipResponseDto })
+  @ApiBadRequestResponse({
+    description:
+      'The sponsorship is already cancelled, rejected, or changed concurrently.',
+  })
+  @ApiUnauthorizedResponse({ description: 'JWT token is missing or invalid.' })
+  @ApiForbiddenResponse({
+    description: 'The authenticated user is not a donor.',
+  })
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedSponsorshipRequest,
+    @I18nLang() lang = 'ar',
+  ) {
+    return this.sponsorshipService.cancel(id, req.user, lang);
   }
 }

@@ -7,5 +7,6 @@
   "INVALID_REVIEW_STATUS": "Review status must be ACCEPTED or REJECTED.",
   "ACCEPTANCE_FIELDS_REQUIRED": "Title, description, and urgency status are required when accepting an assistance request.",
   "REJECTION_REASON_REQUIRED": "Rejection reason is required when rejecting an assistance request.",
-  "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "Cancelled assistance requests cannot be reviewed."
+  "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "Cancelled assistance requests cannot be reviewed.",
+  "BENEFICIARY_PROFILE_REQUIRED": "This account is not linked to a beneficiary profile, so assistance requests cannot be displayed."
 }

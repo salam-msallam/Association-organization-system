@@ -7,5 +7,6 @@
   "STATUS_UPDATE_SUCCESS": "تم تحديث حالة طلب الإعانة بنجاح.",
   "INVALID_REVIEW_STATUS": "حالة المراجعة يجب أن تكون ACCEPTED أو REJECTED.",
   "REJECTION_REASON_REQUIRED": "سبب الرفض مطلوب عند رفض طلب الإعانة.",
-  "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "لا يمكن مراجعة طلبات الإعانة الملغاة."
+  "CANCELLED_REQUEST_CANNOT_BE_REVIEWED": "لا يمكن مراجعة طلبات الإعانة الملغاة.",
+  "BENEFICIARY_PROFILE_REQUIRED": "هذا الحساب غير مرتبط بملف مستفيد، لذلك لا يمكن عرض طلبات الإعانة."
 }

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Gender, Status } from '@prisma/client';
+import { CancellationSource, Gender, Status } from '@prisma/client';
 
 class SponsorshipOrphanSummaryDto {
   @ApiProperty({ example: 5 })
@@ -45,6 +45,12 @@ class SponsorshipListItemDto {
 
   @ApiProperty({ example: null, nullable: true })
   endDate!: Date | null;
+
+  @ApiProperty({ example: null, nullable: true })
+  cancelledAt!: Date | null;
+
+  @ApiProperty({ enum: CancellationSource, nullable: true })
+  cancellationSource!: CancellationSource | null;
 
   @ApiProperty({ example: '2026-07-29T12:00:00.000Z' })
   createdAt!: Date;
