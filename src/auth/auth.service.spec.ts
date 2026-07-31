@@ -184,6 +184,120 @@ describe('AuthService', () => {
     expect(otpService.createRegistrationOtp).not.toHaveBeenCalled();
   });
 
+  it('loads staff roles with nested permissions during validation', async () => {
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 1,
+      email: 'admin@gmail.com',
+      password: hashedPassword,
+      userType: UserType.ADMIN,
+      roles: [],
+    });
+
+    const result = await service.validateUser(
+      { email: 'admin@gmail.com', password: 'password123' },
+      'en',
+    );
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { email: 'admin@gmail.com' },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(result.email).toBe('admin@gmail.com');
+  });
+
+  it('returns staff roles with permission objects on login', async () => {
+    jwtService.sign.mockReturnValueOnce('staff-token');
+
+    const result = await service.login(
+      {
+        id: 1,
+        email: 'admin@gmail.com',
+        userType: UserType.ADMIN,
+        roles: [
+          {
+            role: {
+              id: 2,
+              name: 'employee_manager',
+              label: 'Employee Management',
+              permissions: [
+                {
+                  permission: {
+                    id: 7,
+                    name: 'read:employees',
+                  },
+                },
+                {
+                  permission: {
+                    id: 8,
+                    name: 'create:employees',
+                  },
+                },
+              ],
+            },
+          },
+          {
+            role: {
+              id: 3,
+              name: 'donor_reader',
+              label: 'Donor Reader',
+              permissions: [],
+            },
+          },
+        ],
+      },
+      'en',
+    );
+
+    expect(jwtService.sign).toHaveBeenCalledWith({
+      sub: 1,
+      email: 'admin@gmail.com',
+      userType: UserType.ADMIN,
+    });
+    expect(result).toEqual({
+      success: true,
+      message: 'auth.LOGIN_SUCCESS',
+      accessToken: 'staff-token',
+      roles: [
+        {
+          id: 2,
+          name: 'employee_manager',
+          label: 'Employee Management',
+          permissions: [
+            {
+              id: 7,
+              name: 'read:employees',
+            },
+            {
+              id: 8,
+              name: 'create:employees',
+            },
+          ],
+        },
+        {
+          id: 3,
+          name: 'donor_reader',
+          label: 'Donor Reader',
+          permissions: [],
+        },
+      ],
+    });
+  });
+
   it('normalizes client login before querying by phone components', async () => {
     const hashedPassword = await bcrypt.hash('password123', 10);
     prisma.user.findFirst.mockResolvedValueOnce({
