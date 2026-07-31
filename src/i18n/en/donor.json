@@ -1,0 +1,8 @@
+{
+  "FETCH_SUCCESS": "Donors fetched successfully.",
+  "HISTORY_FETCH_SUCCESS": "Donor history fetched successfully.",
+  "INVALID_ID": "Invalid donor ID.",
+  "NOT_FOUND": "Donor was not found.",
+  "INVALID_PAGINATION": "page and limit must be positive integers.",
+  "INVALID_IS_SPONSOR": "isSponsor must be true or false."
+}

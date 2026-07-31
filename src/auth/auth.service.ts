@@ -55,7 +55,15 @@ export class AuthService {
     include: {
       roles: {
         include: {
-          role: true,
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -85,6 +93,12 @@ export class AuthService {
       id: userRole.role.id,
       name: userRole.role.name,
       label: userRole.role.label,
+      permissions: (userRole.role.permissions || []).map(
+        ({ permission }: any) => ({
+          id: permission.id,
+          name: permission.name,
+        }),
+      ),
     }));
   }
     return {

@@ -19,6 +19,7 @@ import { BeneficiaryModule } from './beneficiary/beneficiary.module';
 import { CategoryModule } from './category/category.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProfileModule } from './profile/profile.module';
+import { DonorModule } from './donor/donor.module';
 
 @Module({
   imports: 
@@ -48,6 +49,7 @@ import { ProfileModule } from './profile/profile.module';
     CategoryModule,
     PaymentsModule,
     ProfileModule,
+    DonorModule,
     
 
   ],

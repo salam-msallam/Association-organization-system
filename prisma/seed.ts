@@ -4,6 +4,10 @@ import {
   seedBeneficiaries,
 } from './seeds/beneficiaries.seed';
 import { seedCategories } from './seeds/categories.seed';
+import {
+  DONOR_FINANCIAL_HISTORY_TEST_PASSWORD,
+  seedDonorFinancialHistory,
+} from './seeds/donor-financial-history.seed';
 import { ensureSeedMediaFiles } from './seeds/media.seed';
 import { seedPermissions } from './seeds/permissions.seed';
 import { seedRequestAids } from './seeds/request-aids.seed';
@@ -29,6 +33,11 @@ async function main() {
     subCategories,
     beneficiaries.acceptedBeneficiaries,
   );
+  const donorFinancialHistoryAccounts = await seedDonorFinancialHistory(
+    prisma,
+    categories,
+    beneficiaries.acceptedBeneficiaries,
+  );
 
   console.log('\nSeeded beneficiary test accounts:');
   console.table(beneficiaries.accounts);
@@ -37,6 +46,11 @@ async function main() {
   );
   console.log(
     `Seeded ${requestCount} assistance requests linked to accepted beneficiaries.`,
+  );
+  console.log('\nSeeded donor financial history test accounts:');
+  console.table(donorFinancialHistoryAccounts);
+  console.log(
+    `All seeded donor financial history passwords are "${DONOR_FINANCIAL_HISTORY_TEST_PASSWORD}".`,
   );
   console.log('Run this seeder with: npm run seed');
 }
