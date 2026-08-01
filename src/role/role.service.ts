@@ -7,7 +7,12 @@ import {
 import { Prisma } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateRoleDto, RoleResponseDto, UpdateRoleDto } from './dto/role.dto';
+import {
+  CreateRoleDto,
+  PermissionResponseDto,
+  RoleDetailResponseDto,
+  UpdateRoleDto,
+} from './dto/role.dto';
 
 const PROTECTED_SYSTEM_ROLE_NAMES = new Set([
   'orphan_manager',
@@ -62,7 +67,20 @@ export class RoleService {
     }));
   }
 
-  async findOne(id: string | number, lang = 'ar'): Promise<RoleResponseDto> {
+  async findAllPermissions(): Promise<PermissionResponseDto[]> {
+    return this.prisma.permission.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  async findOne(
+    id: string | number,
+    lang = 'ar',
+  ): Promise<RoleDetailResponseDto> {
     const roleId = this.parseRoleId(id, lang);
     const role = await this.findRoleWithRelations(roleId);
 
@@ -70,14 +88,14 @@ export class RoleService {
       throw new NotFoundException(this.i18n.t('role.NOT_FOUND', { lang }));
     }
 
-    return this.mapRoleDetail(role, lang);
+    return this.mapRoleDetail(role);
   }
 
   async create(
     createRoleDto: CreateRoleDto,
     lang = 'ar',
-  ): Promise<RoleResponseDto> {
-    const name = this.normalizeRoleName(createRoleDto.name, lang);
+  ): Promise<RoleDetailResponseDto> {
+    const name = this.generateRoleNameFromLabel(createRoleDto.label.en, lang);
     const permissionIds = this.uniqueIds(createRoleDto.permissionIds);
 
     await this.ensureRoleNameIsAvailable(name, undefined, lang);
@@ -101,14 +119,14 @@ export class RoleService {
       });
     });
 
-    return this.mapRoleDetail(role as RoleWithRelations, lang);
+    return this.mapRoleDetail(role as RoleWithRelations);
   }
 
   async update(
     id: string | number,
     updateRoleDto: UpdateRoleDto,
     lang = 'ar',
-  ): Promise<RoleResponseDto> {
+  ): Promise<RoleDetailResponseDto> {
     const roleId = this.parseRoleId(id, lang);
     const existingRole = await this.prisma.role.findUnique({
       where: { id: roleId },
@@ -119,18 +137,10 @@ export class RoleService {
       throw new NotFoundException(this.i18n.t('role.NOT_FOUND', { lang }));
     }
 
-    const name =
-      updateRoleDto.name !== undefined
-        ? this.normalizeRoleName(updateRoleDto.name, lang)
-        : undefined;
     const permissionIds =
       updateRoleDto.permissionIds !== undefined
         ? this.uniqueIds(updateRoleDto.permissionIds)
         : undefined;
-
-    if (name !== undefined) {
-      await this.ensureRoleNameIsAvailable(name, roleId, lang);
-    }
 
     if (permissionIds !== undefined) {
       await this.ensurePermissionsExist(permissionIds, lang);
@@ -140,7 +150,6 @@ export class RoleService {
       await tx.role.update({
         where: { id: roleId },
         data: {
-          ...(name !== undefined && { name }),
           ...(updateRoleDto.label !== undefined && {
             label: this.toInputJson(updateRoleDto.label),
           }),
@@ -165,7 +174,7 @@ export class RoleService {
       });
     });
 
-    return this.mapRoleDetail(role as RoleWithRelations, lang);
+    return this.mapRoleDetail(role as RoleWithRelations);
   }
 
   async remove(id: string | number, lang = 'ar') {
@@ -270,8 +279,12 @@ export class RoleService {
     return roleId;
   }
 
-  private normalizeRoleName(name: string, lang: string): string {
-    const normalizedName = name.trim();
+  private generateRoleNameFromLabel(labelEn: string, lang: string): string {
+    const normalizedName = labelEn
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
 
     if (!normalizedName) {
       throw new BadRequestException(this.i18n.t('role.NAME_REQUIRED', { lang }));
@@ -322,11 +335,11 @@ export class RoleService {
     }
   }
 
-  private mapRoleDetail(role: RoleWithRelations, lang: string): RoleResponseDto {
+  private mapRoleDetail(role: RoleWithRelations): RoleDetailResponseDto {
     return {
       id: role.id,
       name: role.name,
-      label: this.localizeJsonText(role.label, lang),
+      label: this.toBilingualText(role.label),
       createdAt: role.createdAt,
       permissions: role.permissions.map(({ permission }) => permission),
       employees: role.users.map(({ user }) => ({
@@ -334,6 +347,27 @@ export class RoleService {
         firstName: user.firstName,
         lastName: user.lastName,
       })),
+    };
+  }
+
+  private toBilingualText(value: Prisma.JsonValue): RoleDetailResponseDto['label'] {
+    if (typeof value === 'string') {
+      try {
+        return this.toBilingualText(JSON.parse(value));
+      } catch {
+        return { ar: value, en: value };
+      }
+    }
+
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      return { ar: '', en: '' };
+    }
+
+    const record = value as Record<string, Prisma.JsonValue>;
+
+    return {
+      ar: typeof record.ar === 'string' ? record.ar : '',
+      en: typeof record.en === 'string' ? record.en : '',
     };
   }
 

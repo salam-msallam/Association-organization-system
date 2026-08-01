@@ -1,5 +1,6 @@
 {
   "FETCH_SUCCESS": "Roles fetched successfully.",
+  "PERMISSIONS_FETCH_SUCCESS": "Permissions fetched successfully.",
   "FETCH_ONE_SUCCESS": "Role fetched successfully.",
   "CREATE_SUCCESS": "Role created successfully.",
   "UPDATE_SUCCESS": "Role updated successfully.",

@@ -26,11 +26,13 @@ import {
 } from '@nestjs/swagger';
 import { I18nLang, I18nService } from 'nestjs-i18n';
 import { CheckAbilities } from '../decorators/abilities.decorator';
+import { PreserveLabelResponse } from '../decorators/preserve-label-response.decorator';
 import { AbilitiesGuard } from '../guards/abilities.guard';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
 import {
   CreateRoleDto,
-  RoleResponseDto,
+  PermissionResponseDto,
+  RoleDetailResponseDto,
   UpdateRoleDto,
 } from './dto/role.dto';
 import { RoleService } from './role.service';
@@ -38,13 +40,18 @@ import { RoleService } from './role.service';
 const roleExample = {
   id: 6,
   name: 'role_manager',
-  label: 'Role Management',
+  label: { ar: 'إدارة الأدوار', en: 'Role Management' },
   createdAt: '2026-07-31T12:00:00.000Z',
   permissions: [
     { id: 1, name: 'read:roles' },
     { id: 2, name: 'create:roles' },
   ],
   employees: [{ userId: 7, firstName: 'Ahmad', lastName: 'Saleh' }],
+};
+
+const permissionExample = {
+  id: 1,
+  name: 'read:roles',
 };
 
 @ApiTags('Roles')
@@ -94,12 +101,39 @@ export class RoleController {
     };
   }
 
+  @Get('permissions')
+  @CheckAbilities({ action: 'read', subject: 'Role' })
+  @ApiOperation({ summary: 'List all permissions for role management' })
+  @ApiOkResponse({
+    type: PermissionResponseDto,
+    isArray: true,
+    description: 'Permissions fetched successfully',
+    example: {
+      success: true,
+      message: 'Permissions fetched successfully.',
+      data: [permissionExample],
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required' })
+  @ApiForbiddenResponse({
+    description: 'Staff access and read:roles permission are required',
+  })
+  async findAllPermissions(@I18nLang() lang = 'ar') {
+    const permissions = await this.roleService.findAllPermissions();
+    return {
+      success: true,
+      message: this.i18n.t('role.PERMISSIONS_FETCH_SUCCESS', { lang }),
+      data: permissions,
+    };
+  }
+
   @Get(':id')
+  @PreserveLabelResponse()
   @CheckAbilities({ action: 'read', subject: 'Role' })
   @ApiOperation({ summary: 'Get role details for authorized staff' })
   @ApiParam({ name: 'id', type: Number, example: 6 })
   @ApiOkResponse({
-    type: RoleResponseDto,
+    type: RoleDetailResponseDto,
     description: 'Role fetched successfully',
     example: {
       success: true,
@@ -123,6 +157,7 @@ export class RoleController {
   }
 
   @Post()
+  @PreserveLabelResponse()
   @CheckAbilities({ action: 'create', subject: 'Role' })
   @ApiOperation({ summary: 'Create a role for authorized staff' })
   @ApiBody({ type: CreateRoleDto })
@@ -155,6 +190,7 @@ export class RoleController {
   }
 
   @Patch(':id')
+  @PreserveLabelResponse()
   @CheckAbilities({ action: 'update', subject: 'Role' })
   @ApiOperation({ summary: 'Update a role for authorized staff' })
   @ApiParam({ name: 'id', type: Number, example: 6 })

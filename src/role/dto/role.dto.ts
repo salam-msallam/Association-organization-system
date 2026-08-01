@@ -5,9 +5,7 @@ import {
   IsArray,
   IsDefined,
   IsInt,
-  IsNotEmpty,
   IsOptional,
-  IsString,
 } from 'class-validator';
 import {
   BilingualTextDto,
@@ -32,12 +30,6 @@ const parseIdArray = (value: unknown) => {
 };
 
 export class CreateRoleDto {
-  @ApiProperty({ example: 'finance_manager' })
-  @IsString()
-  @IsNotEmpty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  name!: string;
-
   @ApiProperty({
     type: BilingualTextDto,
     example: { ar: 'إدارة المالية', en: 'Finance Management' },
@@ -56,16 +48,6 @@ export class CreateRoleDto {
 }
 
 export class UpdateRoleDto {
-  @ApiPropertyOptional({ example: 'finance_manager' })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @Transform(({ value }) => {
-    if (value === '') return undefined;
-    return typeof value === 'string' ? value.trim() : value;
-  })
-  name?: string;
-
   @ApiPropertyOptional({
     type: BilingualTextDto,
     example: { ar: 'إدارة المالية', en: 'Finance Management' },
@@ -84,6 +66,14 @@ export class UpdateRoleDto {
 }
 
 export class RolePermissionResponseDto {
+  @ApiProperty({ example: 1 })
+  id!: number;
+
+  @ApiProperty({ example: 'read:roles' })
+  name!: string;
+}
+
+export class PermissionResponseDto {
   @ApiProperty({ example: 1 })
   id!: number;
 
@@ -111,6 +101,29 @@ export class RoleResponseDto {
 
   @ApiProperty({ example: 'Role Management' })
   label!: string;
+
+  @ApiProperty({ example: '2026-07-31T12:00:00.000Z' })
+  createdAt!: Date;
+
+  @ApiProperty({ type: [RolePermissionResponseDto] })
+  permissions!: RolePermissionResponseDto[];
+
+  @ApiProperty({ type: [RoleEmployeeResponseDto] })
+  employees!: RoleEmployeeResponseDto[];
+}
+
+export class RoleDetailResponseDto {
+  @ApiProperty({ example: 1 })
+  id!: number;
+
+  @ApiProperty({ example: 'role_manager' })
+  name!: string;
+
+  @ApiProperty({
+    type: BilingualTextDto,
+    example: { ar: 'إدارة الأدوار', en: 'Role Management' },
+  })
+  label!: BilingualTextDto;
 
   @ApiProperty({ example: '2026-07-31T12:00:00.000Z' })
   createdAt!: Date;

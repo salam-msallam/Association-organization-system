@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import { PRESERVE_BILINGUAL_RESPONSE } from '../decorators/preserve-bilingual-response.decorator';
+import { PRESERVE_LABEL_RESPONSE } from '../decorators/preserve-label-response.decorator';
 
 @Injectable()
 export class TranslationInterceptor implements NestInterceptor {
@@ -18,10 +19,19 @@ export class TranslationInterceptor implements NestInterceptor {
       PRESERVE_BILINGUAL_RESPONSE,
       [context.getHandler(), context.getClass()],
     );
+    const preserveLabelResponse = this.reflector.getAllAndOverride<boolean>(
+      PRESERVE_LABEL_RESPONSE,
+      [context.getHandler(), context.getClass()],
+    );
 
     return next.handle().pipe(
       map((data) => {
-        return this.processTranslation(data, lang, preserveBilingualResponse);
+        return this.processTranslation(
+          data,
+          lang,
+          preserveBilingualResponse,
+          preserveLabelResponse,
+        );
       }),
     );
   }
@@ -30,6 +40,7 @@ export class TranslationInterceptor implements NestInterceptor {
     data: any,
     lang: string,
     preserveBilingualResponse = false,
+    preserveLabelResponse = false,
   ): any {
     if (!data || typeof data !== 'object') return data;
     if (data instanceof Date) return data;
@@ -49,7 +60,12 @@ export class TranslationInterceptor implements NestInterceptor {
 
     if (Array.isArray(data)) {
       return data.map((item) =>
-        this.processTranslation(item, lang, preserveBilingualResponse),
+        this.processTranslation(
+          item,
+          lang,
+          preserveBilingualResponse,
+          preserveLabelResponse,
+        ),
       );
     }
 
@@ -57,8 +73,15 @@ export class TranslationInterceptor implements NestInterceptor {
 
     for (const key in data) {
       if (data.hasOwnProperty(key)) {
-        if (key === 'label' && data[key] && typeof data[key] === 'object' && 'ar' in data[key]) {
-          result[key] = data[key][lang] || data[key]['ar'];
+        if (
+          key === 'label' &&
+          data[key] &&
+          typeof data[key] === 'object' &&
+          'ar' in data[key]
+        ) {
+          result[key] = preserveLabelResponse
+            ? data[key]
+            : data[key][lang] || data[key]['ar'];
           continue;
         }
         if (key === 'name' && typeof data[key] === 'string' && data[key].includes(':')) {
@@ -72,6 +95,7 @@ export class TranslationInterceptor implements NestInterceptor {
           data[key],
           lang,
           preserveBilingualResponse,
+          preserveLabelResponse,
         );
       }
     }
