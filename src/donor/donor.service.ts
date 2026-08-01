@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   AdminDonorHistoryResponseDto,
   AdminDonorListResponseDto,
+  AdminDonorSponsorshipProfileResponseDto,
   DonorHistoryAidRequestDto,
   DonorHistoryItemDto,
   DonorHistoryOrphanDto,
@@ -190,12 +191,106 @@ export class DonorService {
       ...walletTransactions.map((transaction) =>
         this.mapWalletTransaction(transaction, aidRequestMap, orphanMap),
       ),
-    ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    ].sort(
+      (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+    );
 
     return {
       success: true,
       message: this.t('HISTORY_FETCH_SUCCESS', lang),
       data,
+    };
+  }
+
+  async getSponsorshipProfile(
+    donorIdInput: string | number,
+    lang = 'ar',
+  ): Promise<AdminDonorSponsorshipProfileResponseDto> {
+    const donorId = this.parsePositiveInteger(donorIdInput, undefined, lang, {
+      messageKey: 'INVALID_ID',
+    });
+
+    const donor = await this.prisma.donor.findFirst({
+      where: { id: donorId, isSponsor: true },
+      select: {
+        id: true,
+        userId: true,
+        zipCode: true,
+        isSponsor: true,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            number: true,
+            countryCode: true,
+            countryName: true,
+            gender: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        sponsorships: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            rejectionReason: true,
+            startDate: true,
+            endDate: true,
+            cancellationSource: true,
+            createdAt: true,
+            orphan: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!donor) {
+      throw new NotFoundException(this.t('SPONSOR_NOT_FOUND', lang));
+    }
+
+    return {
+      success: true,
+      message: this.t('SPONSORSHIP_PROFILE_FETCH_SUCCESS', lang),
+      data: {
+        donor: {
+          donorId: donor.id,
+          userId: donor.userId,
+          firstName: donor.user.firstName,
+          lastName: donor.user.lastName,
+          email: donor.user.email,
+          number: donor.user.number,
+          countryCode: donor.user.countryCode,
+          countryName: donor.user.countryName,
+          gender: donor.user.gender,
+          zipCode: donor.zipCode,
+          isSponsor: donor.isSponsor,
+          createdAt: donor.user.createdAt,
+          updatedAt: donor.user.updatedAt,
+        },
+        sponsorshipHistory: donor.sponsorships.map((sponsorship) => ({
+          id: sponsorship.id,
+          monthlyAmount: sponsorship.amount.toFixed(2),
+          status: sponsorship.status,
+          rejectionReason: this.localizeJsonValue(
+            sponsorship.rejectionReason,
+            lang,
+          ),
+          startDate: sponsorship.startDate,
+          endDate: sponsorship.endDate,
+          cancellationSource: sponsorship.cancellationSource,
+          createdAt: sponsorship.createdAt,
+          orphan: sponsorship.orphan,
+        })),
+      },
     };
   }
 
@@ -381,6 +476,26 @@ export class DonorService {
     }
 
     return parsed;
+  }
+
+  private localizeJsonValue(value: unknown, lang: string): unknown {
+    if (!value || typeof value !== 'object') return value ?? null;
+
+    if (!Array.isArray(value) && ('ar' in value || 'en' in value)) {
+      const bilingualValue = value as Record<string, unknown>;
+      return bilingualValue[lang] ?? bilingualValue.ar ?? bilingualValue.en;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.localizeJsonValue(item, lang));
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        this.localizeJsonValue(item, lang),
+      ]),
+    );
   }
 
   private parseOptionalBoolean(

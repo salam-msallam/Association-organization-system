@@ -30,5 +30,10 @@
   "WALLET_RESERVED_FOR_SPONSORSHIP": "رصيد المحفظة محجوز لدفع الكفالة ولا يمكن استخدامه للتبرع.",
   "WALLET_NOT_FOUND": "محفظة المتبرع غير موجودة.",
   "INSUFFICIENT_WALLET_BALANCE": "رصيد المحفظة غير كافٍ.",
-  "WALLET_DONATION_CONCURRENT_UPDATE": "تعذر إتمام التبرع من المحفظة لأن الرصيد أو المبلغ المتبقي لطلب الإعانة تغيّر. يرجى المحاولة مرة أخرى."
+  "WALLET_DONATION_CONCURRENT_UPDATE": "تعذر إتمام التبرع من المحفظة لأن الرصيد أو المبلغ المتبقي لطلب الإعانة تغيّر. يرجى المحاولة مرة أخرى.",
+  "SPONSORSHIP_NOT_FOUND": "لم يتم العثور على كفالة مقبولة تخص هذا المتبرع.",
+  "SPONSORSHIP_RENEWAL_NOT_OPEN": "يمكن تأكيد دفعة الكفالة التالية ابتداءً من يوم 20 من الشهر.",
+  "SPONSORSHIP_ALREADY_PAID": "تم تأكيد دفعة الكفالة لهذه الفترة مسبقاً.",
+  "SPONSORSHIP_PAYMENT_CONCURRENT_UPDATE": "تعذر إتمام دفع الكفالة بسبب تغير حالتها أو رصيد المحفظة، يرجى المحاولة مجدداً.",
+  "SPONSORSHIP_PAYMENT_SUCCESS": "تم تأكيد دفع الكفالة بنجاح."
 }

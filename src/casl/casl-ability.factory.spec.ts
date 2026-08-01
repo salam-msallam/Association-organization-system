@@ -26,6 +26,28 @@ describe('CaslAbilityFactory beneficiary review permission', () => {
     expect(ability.can('status', 'Beneficiary')).toBe(false);
   });
 
+  it('maps sponsorship permissions for authorized staff', () => {
+    const ability = factory.createForUser({
+      id: 3,
+      userType: UserType.EMPLOYEE,
+      permissions: ['read:sponsorships', 'status:sponsorships'],
+    });
+
+    expect(ability.can('read', 'Sponsorship')).toBe(true);
+    expect(ability.can('status', 'Sponsorship')).toBe(true);
+  });
+
+  it('allows admins to manage sponsorships', () => {
+    const ability = factory.createForUser({
+      id: 4,
+      userType: UserType.ADMIN,
+      permissions: [],
+    });
+
+    expect(ability.can('read', 'Sponsorship')).toBe(true);
+    expect(ability.can('status', 'Sponsorship')).toBe(true);
+  });
+
   it('protects the beneficiary status endpoint with the review permission', () => {
     const requiredAbility = Reflect.getMetadata(
       CHECK_ABILITY,

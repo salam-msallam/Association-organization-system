@@ -26,11 +26,18 @@ describe('SponsorshipService', () => {
         findUnique: jest.fn(),
         updateMany: jest.fn(),
       },
+      employee: {
+        findUnique: jest.fn(),
+      },
       orphan: {
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       donor: {
         update: jest.fn(),
+      },
+      walletTransaction: {
+        findFirst: jest.fn(),
       },
     };
     prisma = {
@@ -38,6 +45,10 @@ describe('SponsorshipService', () => {
         findUnique: jest.fn(),
       },
       sponsorship: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      walletTransaction: {
         findMany: jest.fn(),
       },
       $transaction: jest.fn((callback: (client: any) => unknown) =>
@@ -53,6 +64,10 @@ describe('SponsorshipService', () => {
       }),
     };
     service = new SponsorshipService(prisma, i18n);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -83,14 +98,14 @@ describe('SponsorshipService', () => {
 
   it('creates the first pending request when the wallet contains exactly $30', async () => {
     const createdAt = new Date('2026-07-28T12:00:00.000Z');
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.wallet.findUnique.mockResolvedValue({
       runningBalance: new Prisma.Decimal(30),
     });
     tx.sponsorship.count.mockResolvedValue(0);
     tx.sponsorship.create.mockResolvedValue({
       id: 42,
-      donorId: 7,
+      donorId: 3,
       amount: new Prisma.Decimal(10),
       status: Status.PENDING,
       orphanId: null,
@@ -110,13 +125,13 @@ describe('SponsorshipService', () => {
     });
     expect(tx.sponsorship.count).toHaveBeenCalledWith({
       where: {
-        donorId: 7,
+        donorId: 3,
         status: { in: [Status.PENDING, Status.ACCEPTED] },
       },
     });
     expect(tx.sponsorship.create).toHaveBeenCalledWith({
       data: {
-        donorId: 7,
+        donorId: 3,
         amount: new Prisma.Decimal(10),
         status: Status.PENDING,
       },
@@ -135,7 +150,7 @@ describe('SponsorshipService', () => {
       message: 'sponsorship.REQUEST_CREATED',
       data: {
         id: 42,
-        donorId: 7,
+        donorId: 3,
         monthlyAmount: '10.00',
         status: Status.PENDING,
         orphanId: null,
@@ -148,7 +163,7 @@ describe('SponsorshipService', () => {
   });
 
   it('requires $30 for each existing pending or accepted sponsorship plus the new request', async () => {
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.wallet.findUnique.mockResolvedValue({
       runningBalance: new Prisma.Decimal('59.99'),
     });
@@ -172,7 +187,7 @@ describe('SponsorshipService', () => {
   });
 
   it('treats a missing wallet as a zero balance', async () => {
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.wallet.findUnique.mockResolvedValue(null);
     tx.sponsorship.count.mockResolvedValue(0);
 
@@ -185,11 +200,11 @@ describe('SponsorshipService', () => {
 
   it('returns only the authenticated donor sponsorships filtered by status', async () => {
     const createdAt = new Date('2026-07-29T12:00:00.000Z');
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     prisma.sponsorship.findMany.mockResolvedValue([
       {
         id: 8,
-        donorId: 7,
+        donorId: 3,
         amount: new Prisma.Decimal(10),
         status: Status.REJECTED,
         rejectionReason: {
@@ -218,7 +233,7 @@ describe('SponsorshipService', () => {
     );
 
     expect(prisma.sponsorship.findMany).toHaveBeenCalledWith({
-      where: { donorId: 7, status: Status.REJECTED },
+      where: { donorId: 3, status: Status.REJECTED },
       orderBy: { id: 'desc' },
       select: expect.any(Object),
     });
@@ -228,7 +243,7 @@ describe('SponsorshipService', () => {
       data: [
         expect.objectContaining({
           id: 8,
-          donorId: 7,
+          donorId: 3,
           monthlyAmount: '10.00',
           status: Status.REJECTED,
           rejectionReason: 'الرصيد غير كافٍ',
@@ -243,13 +258,13 @@ describe('SponsorshipService', () => {
   });
 
   it('returns all statuses when the status filter is omitted', async () => {
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     prisma.sponsorship.findMany.mockResolvedValue([]);
 
     const result = await service.findMine({ id: 7, type: UserType.DONOR });
 
     expect(prisma.sponsorship.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { donorId: 7 } }),
+      expect.objectContaining({ where: { donorId: 3 } }),
     );
     expect(result.data).toEqual([]);
   });
@@ -266,13 +281,240 @@ describe('SponsorshipService', () => {
     expect(prisma.sponsorship.findMany).not.toHaveBeenCalled();
   });
 
-  it('cancels a pending request without setting start or end dates', async () => {
-    const cancelledAt = new Date('2026-07-31T12:00:00.000Z');
-    jest.useFakeTimers().setSystemTime(cancelledAt);
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+  it('lists all sponsorship requests for staff with an optional status filter', async () => {
+    const createdAt = new Date('2026-07-20T09:00:00.000Z');
+    prisma.sponsorship.findMany.mockResolvedValue([
+      {
+        id: 5,
+        amount: new Prisma.Decimal(10),
+        status: Status.REJECTED,
+        rejectionReason: {
+          ar: 'سبب الرفض',
+          en: 'Rejection reason',
+        },
+        startDate: null,
+        endDate: null,
+        cancellationSource: null,
+        createdAt,
+        donor: {
+          userId: 7,
+          user: { firstName: 'Sara', lastName: 'Ali' },
+        },
+        orphan: null,
+      },
+    ]);
+
+    const result = await service.findAllForStaff('rejected', 'en');
+
+    expect(prisma.sponsorship.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: Status.REJECTED } }),
+    );
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        id: 5,
+        monthlyAmount: '10.00',
+        rejectionReason: 'Rejection reason',
+        donor: { id: 7, firstName: 'Sara', lastName: 'Ali' },
+      }),
+    );
+  });
+
+  it('returns one sponsorship request for staff with localized JSON fields', async () => {
+    const createdAt = new Date('2026-07-20T09:00:00.000Z');
+    prisma.sponsorship.findUnique.mockResolvedValue({
+      id: 5,
+      amount: new Prisma.Decimal(10),
+      status: Status.REJECTED,
+      rejectionReason: {
+        ar: 'سبب الرفض',
+        en: 'Rejection reason',
+      },
+      startDate: null,
+      endDate: null,
+      cancellationSource: null,
+      createdAt,
+      donor: {
+        userId: 7,
+        user: { firstName: 'Sara', lastName: 'Ali' },
+      },
+      orphan: {
+        id: 3,
+        firstName: 'Ahmad',
+        lastName: 'Ali',
+        fatherName: 'Mohammad',
+        motherName: 'Fatima',
+        birthOfDate: new Date('2015-04-12T00:00:00.000Z'),
+        gender: 'MALE',
+        class: { ar: 'الصف الرابع', en: 'Fourth grade' },
+        Diseases: { ar: 'لا توجد أمراض', en: 'No diseases' },
+        FamilyStatement: 'uploads/orphans/family-statement.pdf',
+        brotherAndSisterNumber: 3,
+        guardianName: 'Mahmoud Hassan',
+        guaranteedPhone: '+963933123456',
+        bodySize: 130,
+        shoesSize: 34,
+        currentAddress: { ar: 'دمشق', en: 'Damascus' },
+        previousAddress: { ar: 'حمص', en: 'Homs' },
+        talent: { ar: 'الرسم', en: 'Drawing' },
+        isSupported: true,
+        createdAt,
+        updatedAt: createdAt,
+      },
+    });
+
+    const result = await service.findOneForStaff(5, 'ar');
+
+    expect(prisma.sponsorship.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 5 } }),
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'sponsorship.ADMIN_FETCH_ONE_SUCCESS',
+      data: expect.objectContaining({
+        id: 5,
+        monthlyAmount: '10.00',
+        rejectionReason: 'سبب الرفض',
+        donor: { id: 7, firstName: 'Sara', lastName: 'Ali' },
+        orphan: expect.objectContaining({
+          id: 3,
+          fatherName: 'Mohammad',
+          class: 'الصف الرابع',
+          Diseases: 'لا توجد أمراض',
+          currentAddress: 'دمشق',
+          previousAddress: 'حمص',
+          talent: 'الرسم',
+        }),
+      }),
+    });
+  });
+
+  it('returns not found when staff requests a missing sponsorship', async () => {
+    prisma.sponsorship.findUnique.mockResolvedValue(null);
+
+    await expect(service.findOneForStaff(999, 'en')).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(i18n.t).toHaveBeenCalledWith('sponsorship.NOT_FOUND', {
+      lang: 'en',
+      args: undefined,
+    });
+  });
+
+  it('accepts a pending sponsorship and atomically reserves an available orphan', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
+    tx.sponsorship.findUnique
+      .mockResolvedValueOnce({ id: 5, donorId: 3, status: Status.PENDING })
+      .mockResolvedValueOnce({
+        id: 5,
+        amount: new Prisma.Decimal(10),
+        status: Status.ACCEPTED,
+        rejectionReason: null,
+        startDate: new Date('2026-07-25T00:00:00.000Z'),
+        endDate: null,
+        cancellationSource: null,
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+        donor: {
+          userId: 7,
+          user: { firstName: 'Sara', lastName: 'Ali' },
+        },
+        orphan: { id: 3, firstName: 'Ahmad', lastName: 'Ali' },
+      });
+    tx.employee.findUnique.mockResolvedValue({ id: 12 });
+    tx.orphan.updateMany.mockResolvedValue({ count: 1 });
+    tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.reviewStatus(
+      5,
+      20,
+      { status: Status.ACCEPTED, orphanId: 3 },
+      'en',
+    );
+
+    expect(tx.orphan.updateMany).toHaveBeenCalledWith({
+      where: { id: 3, isSupported: false },
+      data: { isSupported: true },
+    });
+    expect(tx.sponsorship.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: Status.PENDING },
+      data: {
+        status: Status.ACCEPTED,
+        orphanId: 3,
+        employeeId: 12,
+        startDate: new Date('2026-07-25T00:00:00.000Z'),
+        rejectionReason: Prisma.DbNull,
+      },
+    });
+    expect(tx.donor.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { isSponsor: true },
+    });
+    expect(result.data.status).toBe(Status.ACCEPTED);
+  });
+
+  it('rejects an unavailable orphan without accepting the sponsorship', async () => {
+    tx.sponsorship.findUnique.mockResolvedValue({
+      id: 5,
+      donorId: 3,
+      status: Status.PENDING,
+    });
+    tx.employee.findUnique.mockResolvedValue({ id: 12 });
+    tx.orphan.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.reviewStatus(5, 20, {
+        status: Status.ACCEPTED,
+        orphanId: 3,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a pending sponsorship with a bilingual reason', async () => {
+    tx.sponsorship.findUnique
+      .mockResolvedValueOnce({ id: 5, donorId: 3, status: Status.PENDING })
+      .mockResolvedValueOnce({
+        id: 5,
+        amount: new Prisma.Decimal(10),
+        status: Status.REJECTED,
+        rejectionReason: { ar: 'سبب الرفض', en: 'Rejection reason' },
+        startDate: null,
+        endDate: null,
+        cancellationSource: null,
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+        donor: {
+          userId: 7,
+          user: { firstName: 'Sara', lastName: 'Ali' },
+        },
+        orphan: null,
+      });
+    tx.employee.findUnique.mockResolvedValue({ id: 12 });
+    tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.reviewStatus(5, 20, {
+      status: Status.REJECTED,
+      rejectionReason: { ar: 'سبب الرفض', en: 'Rejection reason' },
+    });
+
+    expect(tx.sponsorship.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: Status.PENDING },
+      data: {
+        status: Status.REJECTED,
+        employeeId: 12,
+        rejectionReason: { ar: 'سبب الرفض', en: 'Rejection reason' },
+      },
+    });
+    expect(tx.orphan.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending request and stores the exact end time', async () => {
+    const endDate = new Date('2026-07-31T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(endDate);
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.sponsorship.findFirst.mockResolvedValue({
       id: 4,
-      donorId: 7,
+      donorId: 3,
       status: Status.PENDING,
       orphanId: null,
       startDate: null,
@@ -280,12 +522,11 @@ describe('SponsorshipService', () => {
     tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
     tx.sponsorship.findUnique.mockResolvedValue({
       id: 4,
-      donorId: 7,
+      donorId: 3,
       orphanId: null,
       status: Status.CANCELLED,
       startDate: null,
-      endDate: null,
-      cancelledAt,
+      endDate,
       cancellationSource: CancellationSource.DONOR,
     });
 
@@ -296,10 +537,10 @@ describe('SponsorshipService', () => {
     );
 
     expect(tx.sponsorship.updateMany).toHaveBeenCalledWith({
-      where: { id: 4, donorId: 7, status: Status.PENDING },
+      where: { id: 4, donorId: 3, status: Status.PENDING },
       data: {
         status: Status.CANCELLED,
-        cancelledAt,
+        endDate,
         cancellationSource: CancellationSource.DONOR,
       },
     });
@@ -312,8 +553,7 @@ describe('SponsorshipService', () => {
         id: 4,
         status: Status.CANCELLED,
         startDate: null,
-        endDate: null,
-        cancelledAt,
+        endDate,
         cancellationSource: CancellationSource.DONOR,
         orphanReleased: false,
       }),
@@ -322,12 +562,12 @@ describe('SponsorshipService', () => {
   });
 
   it('cancels an accepted sponsorship and releases the orphan', async () => {
-    const cancelledAt = new Date('2026-07-31T12:00:00.000Z');
-    jest.useFakeTimers().setSystemTime(cancelledAt);
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    const endDate = new Date('2026-07-31T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(endDate);
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.sponsorship.findFirst.mockResolvedValue({
       id: 5,
-      donorId: 7,
+      donorId: 3,
       status: Status.ACCEPTED,
       orphanId: 3,
       startDate: new Date('2026-06-01T00:00:00.000Z'),
@@ -336,12 +576,11 @@ describe('SponsorshipService', () => {
     tx.sponsorship.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
     tx.sponsorship.findUnique.mockResolvedValue({
       id: 5,
-      donorId: 7,
+      donorId: 3,
       orphanId: 3,
       status: Status.CANCELLED,
       startDate: new Date('2026-06-01T00:00:00.000Z'),
-      endDate: cancelledAt,
-      cancelledAt,
+      endDate,
       cancellationSource: CancellationSource.DONOR,
     });
 
@@ -352,7 +591,7 @@ describe('SponsorshipService', () => {
 
     expect(tx.sponsorship.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ endDate: cancelledAt }),
+        data: expect.objectContaining({ endDate }),
       }),
     );
     expect(tx.orphan.update).toHaveBeenCalledWith({
@@ -360,7 +599,7 @@ describe('SponsorshipService', () => {
       data: { isSupported: false },
     });
     expect(tx.donor.update).toHaveBeenCalledWith({
-      where: { userId: 7 },
+      where: { id: 3 },
       data: { isSponsor: false },
     });
     expect(result.data.orphanReleased).toBe(true);
@@ -368,10 +607,10 @@ describe('SponsorshipService', () => {
   });
 
   it('does not allow a rejected sponsorship to be cancelled', async () => {
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.sponsorship.findFirst.mockResolvedValue({
       id: 6,
-      donorId: 7,
+      donorId: 3,
       status: Status.REJECTED,
       orphanId: null,
       startDate: null,
@@ -385,7 +624,7 @@ describe('SponsorshipService', () => {
   });
 
   it('does not reveal or cancel another donor sponsorship', async () => {
-    prisma.donor.findUnique.mockResolvedValue({ userId: 7 });
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
     tx.sponsorship.findFirst.mockResolvedValue(null);
 
     await expect(
@@ -393,8 +632,55 @@ describe('SponsorshipService', () => {
     ).rejects.toThrow(NotFoundException);
 
     expect(tx.sponsorship.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 99, donorId: 7 } }),
+      expect.objectContaining({ where: { id: 99, donorId: 3 } }),
     );
     expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('automatically cancels an accepted sponsorship missing the previous renewal payment', async () => {
+    const now = new Date('2026-08-01T09:00:00.000Z');
+    prisma.sponsorship.findMany.mockResolvedValue([{ id: 5 }]);
+    prisma.walletTransaction.findMany.mockResolvedValue([]);
+    tx.sponsorship.findFirst.mockResolvedValue({
+      id: 5,
+      donorId: 3,
+      orphanId: 3,
+      status: Status.ACCEPTED,
+    });
+    tx.walletTransaction.findFirst.mockResolvedValue(null);
+    tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
+    tx.sponsorship.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+
+    const result = await service.cancelOverdueSponsorships(now);
+
+    expect(tx.sponsorship.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: Status.ACCEPTED },
+      data: {
+        status: Status.CANCELLED,
+        endDate: now,
+        cancellationSource: CancellationSource.AUTOMATIC,
+      },
+    });
+    expect(tx.orphan.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { isSupported: false },
+    });
+    expect(tx.donor.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { isSponsor: false },
+    });
+    expect(result).toBe(1);
+  });
+
+  it('keeps an accepted sponsorship when the previous renewal payment exists', async () => {
+    prisma.sponsorship.findMany.mockResolvedValue([{ id: 5 }]);
+    prisma.walletTransaction.findMany.mockResolvedValue([{ referenceId: 5 }]);
+
+    const result = await service.cancelOverdueSponsorships(
+      new Date('2026-08-01T09:00:00.000Z'),
+    );
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(result).toBe(0);
   });
 });

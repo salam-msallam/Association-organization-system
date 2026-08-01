@@ -1,6 +1,8 @@
 {
   "FETCH_SUCCESS": "Donors fetched successfully.",
   "HISTORY_FETCH_SUCCESS": "Donor history fetched successfully.",
+  "SPONSORSHIP_PROFILE_FETCH_SUCCESS": "Donor sponsorship profile fetched successfully.",
+  "SPONSOR_NOT_FOUND": "Sponsor was not found.",
   "INVALID_ID": "Invalid donor ID.",
   "NOT_FOUND": "Donor was not found.",
   "INVALID_PAGINATION": "page and limit must be positive integers.",

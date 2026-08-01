@@ -17,11 +17,8 @@ class CancelledSponsorshipDataDto {
   @ApiProperty({ example: null, nullable: true })
   startDate!: Date | null;
 
-  @ApiProperty({ example: null, nullable: true })
-  endDate!: Date | null;
-
   @ApiProperty({ example: '2026-07-31T12:00:00.000Z' })
-  cancelledAt!: Date;
+  endDate!: Date | null;
 
   @ApiProperty({
     enum: CancellationSource,

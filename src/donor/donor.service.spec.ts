@@ -19,6 +19,7 @@ describe('DonorService', () => {
       donor: {
         findMany: jest.fn(),
         count: jest.fn(),
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
       },
       transaction: {
@@ -39,7 +40,9 @@ describe('DonorService', () => {
       },
     };
     i18n = {
-      t: jest.fn((key: string, options?: any) => `${key}:${options?.lang ?? 'ar'}`),
+      t: jest.fn(
+        (key: string, options?: any) => `${key}:${options?.lang ?? 'ar'}`,
+      ),
     };
 
     service = new DonorService(prisma, i18n);
@@ -375,6 +378,99 @@ describe('DonorService', () => {
       success: true,
       message: 'donor.HISTORY_FETCH_SUCCESS:en',
       data: [],
+    });
+  });
+
+  it('returns donor personal data with complete localized sponsorship history', async () => {
+    const createdAt = new Date('2026-07-20T09:30:00.000Z');
+    const updatedAt = new Date('2026-07-25T11:00:00.000Z');
+    prisma.donor.findFirst.mockResolvedValue({
+      id: 3,
+      userId: 7,
+      zipCode: '10001',
+      isSponsor: true,
+      user: {
+        firstName: 'Ahmad',
+        lastName: 'Saleh',
+        email: 'ahmad@example.com',
+        number: '959522414',
+        countryCode: '+963',
+        countryName: 'syria',
+        gender: 'MALE',
+        createdAt,
+        updatedAt,
+      },
+      sponsorships: [
+        {
+          id: 15,
+          amount: new Prisma.Decimal(10),
+          status: 'REJECTED',
+          rejectionReason: {
+            ar: 'سبب الرفض',
+            en: 'Rejection reason',
+          },
+          startDate: null,
+          endDate: null,
+          cancellationSource: null,
+          createdAt,
+          orphan: null,
+        },
+      ],
+    });
+
+    const result = await service.getSponsorshipProfile('3', 'en');
+
+    expect(prisma.donor.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 3, isSponsor: true } }),
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'donor.SPONSORSHIP_PROFILE_FETCH_SUCCESS:en',
+      data: {
+        donor: {
+          donorId: 3,
+          userId: 7,
+          firstName: 'Ahmad',
+          lastName: 'Saleh',
+          email: 'ahmad@example.com',
+          number: '959522414',
+          countryCode: '+963',
+          countryName: 'syria',
+          gender: 'MALE',
+          zipCode: '10001',
+          isSponsor: true,
+          createdAt,
+          updatedAt,
+        },
+        sponsorshipHistory: [
+          {
+            id: 15,
+            monthlyAmount: '10.00',
+            status: 'REJECTED',
+            rejectionReason: 'Rejection reason',
+            startDate: null,
+            endDate: null,
+            cancellationSource: null,
+            createdAt,
+            orphan: null,
+          },
+        ],
+      },
+    });
+  });
+
+  it('returns not found when the donor is not an active sponsor', async () => {
+    prisma.donor.findFirst.mockResolvedValue(null);
+
+    await expect(service.getSponsorshipProfile('999', 'ar')).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(prisma.donor.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 999, isSponsor: true } }),
+    );
+    expect(i18n.t).toHaveBeenCalledWith('donor.SPONSOR_NOT_FOUND', {
+      lang: 'ar',
     });
   });
 });

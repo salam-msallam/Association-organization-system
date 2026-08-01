@@ -10,5 +10,12 @@
   "ALREADY_CANCELLED": "الكفالة ملغاة بالفعل.",
   "CANCELLATION_NOT_ALLOWED": "لا يمكن إلغاء كفالة مرفوضة.",
   "CANCELLATION_STATE_CHANGED": "تغيرت حالة الكفالة أثناء تنفيذ الطلب، يرجى المحاولة مجدداً.",
-  "CANCEL_SUCCESS": "تم إلغاء الكفالة بنجاح."
+  "CANCEL_SUCCESS": "تم إلغاء الكفالة بنجاح.",
+  "ADMIN_FETCH_SUCCESS": "تم جلب طلبات الكفالة بنجاح.",
+  "ADMIN_FETCH_ONE_SUCCESS": "تم جلب طلب الكفالة بنجاح.",
+  "ALREADY_REVIEWED": "تمت مراجعة طلب الكفالة مسبقاً.",
+  "ORPHAN_NOT_AVAILABLE": "اليتيم المحدد غير موجود أو مكفول مسبقاً.",
+  "REVIEW_STATE_CHANGED": "تغير طلب الكفالة أثناء مراجعته، يرجى المحاولة مجدداً.",
+  "ACCEPT_SUCCESS": "تم قبول طلب الكفالة بنجاح.",
+  "REJECT_SUCCESS": "تم رفض طلب الكفالة بنجاح."
 }

@@ -10,6 +10,7 @@ describe('DonorController', () => {
     donorService = {
       findAll: jest.fn(),
       getHistory: jest.fn(),
+      getSponsorshipProfile: jest.fn(),
     };
     controller = new DonorController(donorService);
   });
@@ -21,21 +22,20 @@ describe('DonorController', () => {
   });
 
   it('preserves bilingual JSON fields for donor history responses', () => {
-    expect(Reflect.getMetadata(PRESERVE_BILINGUAL_RESPONSE, DonorController)).toBe(
-      true,
-    );
+    expect(
+      Reflect.getMetadata(PRESERVE_BILINGUAL_RESPONSE, DonorController),
+    ).toBe(true);
   });
 
   it('protects donor routes with class-level guards', () => {
-    expect(Reflect.getMetadata(GUARDS_METADATA, DonorController)).toHaveLength(3);
+    expect(Reflect.getMetadata(GUARDS_METADATA, DonorController)).toHaveLength(
+      3,
+    );
   });
 
   it('requires read access to the Donor subject', () => {
     expect(
-      Reflect.getMetadata(
-        'check_ability',
-        DonorController.prototype.findAll,
-      ),
+      Reflect.getMetadata('check_ability', DonorController.prototype.findAll),
     ).toEqual({ action: 'read', subject: 'Donor' });
     expect(
       Reflect.getMetadata(
@@ -43,6 +43,15 @@ describe('DonorController', () => {
         DonorController.prototype.getHistory,
       ),
     ).toEqual({ action: 'read', subject: 'Donor' });
+  });
+
+  it('requires sponsorship read access for the donor sponsorship profile', () => {
+    expect(
+      Reflect.getMetadata(
+        'check_ability',
+        DonorController.prototype.getSponsorshipProfile,
+      ),
+    ).toEqual({ action: 'read', subject: 'Sponsorship' });
   });
 
   it('passes list query parameters to the service', async () => {
@@ -59,5 +68,13 @@ describe('DonorController', () => {
     await controller.getHistory('3', 'ar');
 
     expect(donorService.getHistory).toHaveBeenCalledWith('3', 'ar');
+  });
+
+  it('passes donor ID and language to the sponsorship profile service', async () => {
+    donorService.getSponsorshipProfile.mockResolvedValue({ data: {} });
+
+    await controller.getSponsorshipProfile('3', 'en');
+
+    expect(donorService.getSponsorshipProfile).toHaveBeenCalledWith('3', 'en');
   });
 });
