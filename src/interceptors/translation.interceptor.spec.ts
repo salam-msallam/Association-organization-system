@@ -59,4 +59,21 @@ describe('TranslationInterceptor', () => {
     expect(result.label).toBe('Manager');
     expect(result.data.address).toEqual({ ar: 'دمشق', en: 'Damascus' });
   });
+
+  it('preserves label fields when explicitly requested', () => {
+    const bilingualLabel = { ar: 'مدير', en: 'Manager' };
+
+    const result = (interceptor as any).processTranslation(
+      {
+        data: {
+          label: bilingualLabel,
+        },
+      },
+      'en',
+      false,
+      true,
+    );
+
+    expect(result.data.label).toEqual(bilingualLabel);
+  });
 });

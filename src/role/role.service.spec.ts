@@ -86,6 +86,37 @@ describe('RoleService', () => {
     ]);
   });
 
+  it('lists all permissions without labels', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { id: 1, name: 'read:roles' },
+      { id: 2, name: 'create:roles' },
+    ]);
+
+    const result = await service.findAllPermissions();
+
+    expect(prisma.permission.findMany).toHaveBeenCalledWith({
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+    expect(i18n.t).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^permissions\./),
+      expect.anything(),
+    );
+    expect(result).toEqual([
+      {
+        id: 1,
+        name: 'read:roles',
+      },
+      {
+        id: 2,
+        name: 'create:roles',
+      },
+    ]);
+  });
+
   it('returns role detail with permissions and employees', async () => {
     prisma.role.findUnique.mockResolvedValue(roleRecord);
 
@@ -109,7 +140,7 @@ describe('RoleService', () => {
     expect(result).toEqual({
       id: 6,
       name: 'custom_manager',
-      label: 'Custom Management',
+      label: { ar: 'إدارة مخصصة', en: 'Custom Management' },
       createdAt,
       permissions: [
         { id: 1, name: 'read:roles' },
@@ -139,7 +170,6 @@ describe('RoleService', () => {
     await expect(
       service.create(
         {
-          name: 'custom_manager',
           label: { ar: 'مخصص', en: 'Custom' },
           permissionIds: [1],
         },
@@ -158,7 +188,6 @@ describe('RoleService', () => {
     await expect(
       service.create(
         {
-          name: 'custom_manager',
           label: { ar: 'مخصص', en: 'Custom' },
           permissionIds: [1, 99],
         },
@@ -168,6 +197,19 @@ describe('RoleService', () => {
     expect(i18n.t).toHaveBeenCalledWith('role.SOME_PERMISSIONS_NOT_FOUND', {
       lang: 'en',
     });
+  });
+
+  it('rejects create when label.en cannot generate a role name', async () => {
+    await expect(
+      service.create(
+        {
+          label: { ar: 'غير صالح', en: '!!!' },
+          permissionIds: [1],
+        },
+        'en',
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(i18n.t).toHaveBeenCalledWith('role.NAME_REQUIRED', { lang: 'en' });
   });
 
   it('creates role and role permissions inside a transaction', async () => {
@@ -183,7 +225,6 @@ describe('RoleService', () => {
 
     const result = await service.create(
       {
-        name: ' custom_manager ',
         label: { ar: 'إدارة مخصصة', en: 'Custom Management' },
         permissionIds: [1, 2, 2],
       },
@@ -192,7 +233,7 @@ describe('RoleService', () => {
 
     expect(tx.role.create).toHaveBeenCalledWith({
       data: {
-        name: 'custom_manager',
+        name: 'custom_management',
         label: { ar: 'إدارة مخصصة', en: 'Custom Management' },
         permissions: {
           create: [{ permissionId: 1 }, { permissionId: 2 }],
@@ -201,22 +242,6 @@ describe('RoleService', () => {
       select: { id: true },
     });
     expect(result.id).toBe(6);
-  });
-
-  it('rejects duplicate role names on update excluding current role', async () => {
-    prisma.role.findUnique.mockResolvedValue({ id: 6 });
-    prisma.role.findFirst.mockResolvedValue({ id: 7 });
-
-    await expect(
-      service.update('6', { name: 'custom_manager' }, 'en'),
-    ).rejects.toThrow(ConflictException);
-    expect(prisma.role.findFirst).toHaveBeenCalledWith({
-      where: {
-        name: 'custom_manager',
-        NOT: { id: 6 },
-      },
-      select: { id: true },
-    });
   });
 
   it('replaces role permissions during update when permissionIds is provided', async () => {
@@ -245,6 +270,12 @@ describe('RoleService', () => {
 
     expect(tx.rolePermission.deleteMany).toHaveBeenCalledWith({
       where: { roleId: 6 },
+    });
+    expect(tx.role.update).toHaveBeenCalledWith({
+      where: { id: 6 },
+      data: {
+        label: { ar: 'تحديث', en: 'Updated' },
+      },
     });
     expect(tx.rolePermission.createMany).toHaveBeenCalledWith({
       data: [

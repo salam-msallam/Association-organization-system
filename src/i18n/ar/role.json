@@ -1,5 +1,6 @@
 {
   "FETCH_SUCCESS": "تم جلب قائمة الأدوار بنجاح.",
+  "PERMISSIONS_FETCH_SUCCESS": "تم جلب قائمة الصلاحيات بنجاح.",
   "FETCH_ONE_SUCCESS": "تم جلب بيانات الدور بنجاح.",
   "CREATE_SUCCESS": "تم إنشاء الدور بنجاح.",
   "UPDATE_SUCCESS": "تم تحديث الدور بنجاح.",

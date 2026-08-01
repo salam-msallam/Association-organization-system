@@ -5,10 +5,17 @@ describe('RoleController', () => {
   let roleService: any;
   let i18n: any;
 
-  const role = {
+  const roleListItem = {
     id: 6,
     name: 'custom_manager',
     label: 'Custom Management',
+    createdAt: new Date('2026-07-31T12:00:00.000Z'),
+  };
+
+  const role = {
+    id: 6,
+    name: 'custom_manager',
+    label: { ar: 'ط¥ط¯ط§ط±ط© ظ…ط®طµطµط©', en: 'Custom Management' },
     createdAt: new Date('2026-07-31T12:00:00.000Z'),
     permissions: [{ id: 1, name: 'read:roles' }],
     employees: [{ userId: 7, firstName: 'Ahmad', lastName: 'Saleh' }],
@@ -17,6 +24,7 @@ describe('RoleController', () => {
   beforeEach(() => {
     roleService = {
       findAll: jest.fn(),
+      findAllPermissions: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -30,13 +38,27 @@ describe('RoleController', () => {
   });
 
   it('wraps role list responses with localized messages', async () => {
-    roleService.findAll.mockResolvedValue([role]);
+    roleService.findAll.mockResolvedValue([roleListItem]);
 
     await expect(controller.findAll('en')).resolves.toEqual({
       success: true,
       message: 'role.FETCH_SUCCESS:en',
-      data: [role],
+      data: [roleListItem],
     });
+  });
+
+  it('delegates permission list lookup and wraps the response', async () => {
+    const permissions = [
+      { id: 1, name: 'read:roles' },
+    ];
+    roleService.findAllPermissions.mockResolvedValue(permissions);
+
+    await expect(controller.findAllPermissions('en')).resolves.toEqual({
+      success: true,
+      message: 'role.PERMISSIONS_FETCH_SUCCESS:en',
+      data: permissions,
+    });
+    expect(roleService.findAllPermissions).toHaveBeenCalledWith();
   });
 
   it('delegates role detail lookup and wraps the response', async () => {
@@ -52,7 +74,6 @@ describe('RoleController', () => {
 
   it('delegates role creation and wraps the response', async () => {
     const dto = {
-      name: 'custom_manager',
       label: { ar: 'إدارة مخصصة', en: 'Custom Management' },
       permissionIds: [1],
     };
