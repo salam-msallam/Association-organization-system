@@ -274,6 +274,7 @@ describe('PaymentsService', () => {
         amount: 2500,
         currency: 'usd',
         customer: 'cus_123',
+        automatic_payment_methods: { enabled: true },
         metadata: {
           transactionId: '55',
           donorId: '7',
@@ -362,6 +363,7 @@ describe('PaymentsService', () => {
         amount: 5000,
         currency: 'usd',
         customer: 'cus_123',
+        automatic_payment_methods: { enabled: true },
         metadata: {
           transactionId: '77',
           donorId: '7',

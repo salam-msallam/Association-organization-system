@@ -464,6 +464,7 @@ export class PaymentsService {
         amount: this.toStripeMinorUnits(input.amount, input.lang),
         currency,
         customer: stripeCustomerId,
+        automatic_payment_methods: { enabled: true },
         metadata: {
           transactionId: String(transaction.id),
           donorId: String(input.donor.userId),
