@@ -21,6 +21,7 @@ describe('PaymentsService', () => {
   let service: PaymentsService;
 
   const donor = {
+    id: 3,
     userId: 7,
     stripeCustomerId: null,
     user: {
@@ -93,6 +94,10 @@ describe('PaymentsService', () => {
     (service as any).stripe = stripe;
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   function mockValidDonationSetup() {
     prisma.donor.findUnique.mockResolvedValue(donor);
     prisma.requestAid.findFirst.mockResolvedValue({
@@ -101,7 +106,10 @@ describe('PaymentsService', () => {
       currentPayment: new Prisma.Decimal(40),
     });
     stripe.customers.create.mockResolvedValue({ id: 'cus_123' });
-    prisma.donor.update.mockResolvedValue({ ...donor, stripeCustomerId: 'cus_123' });
+    prisma.donor.update.mockResolvedValue({
+      ...donor,
+      stripeCustomerId: 'cus_123',
+    });
     prisma.transaction.create.mockResolvedValue({
       id: 55,
       amount: new Prisma.Decimal(25),
@@ -157,11 +165,52 @@ describe('PaymentsService', () => {
     return tx;
   }
 
+  function createSponsorshipPaymentTx() {
+    return {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 5 }]),
+      sponsorship: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 5,
+          amount: new Prisma.Decimal(10),
+        }),
+      },
+      wallet: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 9,
+            runningBalance: new Prisma.Decimal(100),
+          })
+          .mockResolvedValueOnce({
+            runningBalance: new Prisma.Decimal(90),
+          }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      walletTransaction: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
+          id: 115,
+          createdAt: new Date('2026-07-10T09:00:00.000Z'),
+        }),
+      },
+    };
+  }
+
+  function mockValidSponsorshipPaymentSetup() {
+    const tx = createSponsorshipPaymentTx();
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    return tx;
+  }
+
   function mockValidWalletTopUpSetup() {
     prisma.donor.findUnique.mockResolvedValue(donor);
     prisma.wallet.upsert.mockResolvedValue({ id: 9 });
     stripe.customers.create.mockResolvedValue({ id: 'cus_123' });
-    prisma.donor.update.mockResolvedValue({ ...donor, stripeCustomerId: 'cus_123' });
+    prisma.donor.update.mockResolvedValue({
+      ...donor,
+      stripeCustomerId: 'cus_123',
+    });
     prisma.transaction.create.mockResolvedValue({
       id: 77,
       amount: new Prisma.Decimal(50),
@@ -282,9 +331,9 @@ describe('PaymentsService', () => {
       },
       { idempotencyKey: 'payment-intent:55' },
     );
-    expect(
-      prisma.transaction.create.mock.invocationCallOrder[0],
-    ).toBeLessThan(stripe.paymentIntents.create.mock.invocationCallOrder[0]);
+    expect(prisma.transaction.create.mock.invocationCallOrder[0]).toBeLessThan(
+      stripe.paymentIntents.create.mock.invocationCallOrder[0],
+    );
     expect(prisma.transaction.update).toHaveBeenCalledWith({
       where: { id: 55 },
       data: { stripePaymentIntentId: 'pi_123' },
@@ -413,7 +462,7 @@ describe('PaymentsService', () => {
 
     expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
       where: {
-        donorId: 7,
+        donorId: 3,
         status: { in: [Status.PENDING, Status.ACCEPTED] },
       },
       select: { id: true },
@@ -465,6 +514,141 @@ describe('PaymentsService', () => {
       remainingAmount: '35.00',
       compliancePercentage: '65.00',
     });
+  });
+
+  it('pays the first accepted sponsorship installment from the wallet without Stripe', async () => {
+    const now = new Date('2026-07-10T09:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+    const tx = mockValidSponsorshipPaymentSetup();
+
+    const result = await service.donateWalletToSponsorship(
+      5,
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
+      where: { id: 5, donorId: 3, status: Status.ACCEPTED },
+      select: { id: true, amount: true },
+    });
+    expect(tx.wallet.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 9,
+        runningBalance: { gte: new Prisma.Decimal(10) },
+      },
+      data: {
+        runningBalance: { decrement: new Prisma.Decimal(10) },
+      },
+    });
+    expect(tx.walletTransaction.create).toHaveBeenCalledWith({
+      data: {
+        walletId: 9,
+        transactionId: null,
+        amount: new Prisma.Decimal(10),
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: 'SPONSORSHIP',
+        referenceId: 5,
+        balanceAfter: new Prisma.Decimal(90),
+        createdAt: now,
+      },
+      select: { id: true, createdAt: true },
+    });
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      message: 'payments.SPONSORSHIP_PAYMENT_SUCCESS:en',
+      data: {
+        walletTransactionId: 115,
+        sponsorshipId: 5,
+        paidAmount: '10.00',
+        balanceAfter: '90.00',
+        coveredMonth: '2026-07',
+        paidAt: now,
+      },
+    });
+  });
+
+  it('treats a first payment on or after day 20 as next-month coverage', async () => {
+    const now = new Date('2026-07-25T09:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.create.mockResolvedValue({ id: 116, createdAt: now });
+
+    const result = await service.donateWalletToSponsorship(5, {
+      id: 7,
+      type: UserType.DONOR,
+    });
+
+    expect(result.data.coveredMonth).toBe('2026-08');
+    expect(tx.walletTransaction.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a duplicate sponsorship payment in the same renewal window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.findFirst
+      .mockResolvedValueOnce({ id: 100 })
+      .mockResolvedValueOnce({ id: 101 });
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects renewal before day 20 when a first payment already exists', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T09:00:00.000Z'));
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.findFirst.mockResolvedValueOnce({ id: 100 });
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not reveal or pay an accepted sponsorship owned by another donor', async () => {
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.sponsorship.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('does not create a sponsorship payment when the wallet balance is insufficient', async () => {
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.wallet.findUnique.mockReset().mockResolvedValueOnce({
+      id: 9,
+      runningBalance: new Prisma.Decimal(5),
+    });
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
 
   it('rejects wallet donations with insufficient balance', async () => {
@@ -554,7 +738,7 @@ describe('PaymentsService', () => {
 
     expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
       where: {
-        donorId: 7,
+        donorId: 3,
         status: { in: [Status.PENDING, Status.ACCEPTED] },
       },
       select: { id: true },
@@ -572,9 +756,9 @@ describe('PaymentsService', () => {
         { id: 7, type: UserType.DONOR },
       );
 
-      expect(tx.sponsorship.findFirst.mock.calls[0][0].where.status.in).not.toContain(
-        status,
-      );
+      expect(
+        tx.sponsorship.findFirst.mock.calls[0][0].where.status.in,
+      ).not.toContain(status);
       expect(tx.walletTransaction.create).toHaveBeenCalled();
     },
   );

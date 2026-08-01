@@ -14,6 +14,7 @@ export interface SeededRoles {
   donorReaderRole: Role;
   roleManagerRole: Role;
   aidRequestManagerRole: Role;
+  sponsorshipManagerRole: Role;
 }
 
 export interface SeededCategories {

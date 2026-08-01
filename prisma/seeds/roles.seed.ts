@@ -121,6 +121,38 @@ export async function seedRoles(
     },
   });
 
+  const sponsorshipManagerRole = await prisma.role.upsert({
+    where: { name: 'sponsorship_manager' },
+    update: {
+      label: {
+        ar: 'إدارة الكفالات',
+        en: 'Sponsorship Management',
+      },
+      permissions: {
+        deleteMany: {},
+        create: permissionLinks(permissions, [
+          'read:sponsorships',
+          'status:sponsorships',
+          'read:orphans',
+        ]),
+      },
+    },
+    create: {
+      name: 'sponsorship_manager',
+      label: {
+        ar: 'إدارة الكفالات',
+        en: 'Sponsorship Management',
+      },
+      permissions: {
+        create: permissionLinks(permissions, [
+          'read:sponsorships',
+          'status:sponsorships',
+          'read:orphans',
+        ]),
+      },
+    },
+  });
+
   const roleManagerRole = await prisma.role.upsert({
     where: { name: 'role_manager' },
     update: {},
@@ -143,6 +175,7 @@ export async function seedRoles(
     donorReaderRole,
     roleManagerRole,
     aidRequestManagerRole,
+    sponsorshipManagerRole,
   };
 }
 

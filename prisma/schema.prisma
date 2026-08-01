@@ -118,7 +118,7 @@ model Beneficiary {
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   personalPhoto    String
   familyStatement  String
-  dateOfBirth       DateTime?        @db.Date
+  dateOfBirth      DateTime?    @db.Date
   address          Json
   status           Status       @default(PENDING)
   rejectionReason  Json?
@@ -179,21 +179,20 @@ model AnnualReport {
 }
 
 model Sponsorship {
-  id              Int       @id @default(autoincrement())
-  donorId         Int
-  donor           Donor     @relation(fields: [donorId], references: [userId], onDelete: Restrict)
-  orphanId        Int?
-  orphan          Orphan?   @relation(fields: [orphanId], references: [id], onDelete: Restrict)
-  employeeId      Int?
-  employee        Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  amount          Decimal   @default(10.00) @db.Decimal(10, 2)
-  status          Status    @default(PENDING)
-  rejectionReason Json?
-  startDate       DateTime? @db.Date
-  endDate         DateTime? @db.Date
-  cancelledAt     DateTime?
+  id                 Int                 @id @default(autoincrement())
+  donorId            Int
+  donor              Donor               @relation(fields: [donorId], references: [id], onDelete: Restrict)
+  orphanId           Int?
+  orphan             Orphan?             @relation(fields: [orphanId], references: [id], onDelete: Restrict)
+  employeeId         Int?
+  employee           Employee?           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount             Decimal             @default(10.00) @db.Decimal(10, 2)
+  status             Status              @default(PENDING)
+  rejectionReason    Json?
+  startDate          DateTime?           @db.Date
+  endDate            DateTime?
   cancellationSource CancellationSource?
-  createdAt       DateTime  @default(now())
+  createdAt          DateTime            @default(now())
 }
 
 enum CancellationSource {

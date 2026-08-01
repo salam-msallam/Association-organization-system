@@ -27,6 +27,7 @@ import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-pa
 import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
 import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
+import { WalletSponsorshipDonationResponseDto } from './dto/wallet-sponsorship-donation-response.dto';
 import { PaymentsService } from './payments.service';
 
 interface AuthenticatedWalletRequest extends Request {
@@ -100,6 +101,39 @@ export class WalletController {
     return this.paymentsService.donateWalletToAidRequest(
       requestId,
       dto,
+      req.user,
+      lang,
+    );
+  }
+
+  @Post('donate/sponsorships/:sponsorshipId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Confirm a sponsorship payment from the donor wallet balance',
+    description:
+      'Pays the fixed monthly sponsorship amount from the wallet. No request body or Stripe PaymentIntent is required.',
+  })
+  @ApiParam({ name: 'sponsorshipId', type: Number, example: 5 })
+  @ApiOkResponse({ type: WalletSponsorshipDonationResponseDto })
+  @ApiBadRequestResponse({
+    description:
+      'Insufficient balance, renewal window is not open, payment already exists, or the state changed concurrently.',
+  })
+  @ApiForbiddenResponse({
+    description: 'The authenticated user is not a donor.',
+  })
+  @ApiUnauthorizedResponse({ description: 'JWT token is missing or invalid.' })
+  @ApiNotFoundResponse({
+    description: 'An accepted sponsorship owned by the donor was not found.',
+  })
+  donateWalletToSponsorship(
+    @Param('sponsorshipId', ParseIntPipe) sponsorshipId: number,
+    @Req() req: AuthenticatedWalletRequest,
+    @I18nLang() lang: string,
+  ): Promise<WalletSponsorshipDonationResponseDto> {
+    return this.paymentsService.donateWalletToSponsorship(
+      sponsorshipId,
       req.user,
       lang,
     );

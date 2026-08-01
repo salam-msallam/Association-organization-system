@@ -30,5 +30,10 @@
   "WALLET_RESERVED_FOR_SPONSORSHIP": "Wallet balance is reserved for paying sponsorship and cannot be used for donations.",
   "WALLET_NOT_FOUND": "Donor wallet was not found.",
   "INSUFFICIENT_WALLET_BALANCE": "Wallet balance is insufficient.",
-  "WALLET_DONATION_CONCURRENT_UPDATE": "Wallet donation could not be completed because the balance or remaining aid request amount changed. Please try again."
+  "WALLET_DONATION_CONCURRENT_UPDATE": "Wallet donation could not be completed because the balance or remaining aid request amount changed. Please try again.",
+  "SPONSORSHIP_NOT_FOUND": "The accepted sponsorship was not found for this donor.",
+  "SPONSORSHIP_RENEWAL_NOT_OPEN": "The next sponsorship payment can be confirmed starting on day 20 of the month.",
+  "SPONSORSHIP_ALREADY_PAID": "The sponsorship payment for this billing period was already confirmed.",
+  "SPONSORSHIP_PAYMENT_CONCURRENT_UPDATE": "The sponsorship payment could not be completed because its state or wallet balance changed. Please try again.",
+  "SPONSORSHIP_PAYMENT_SUCCESS": "The sponsorship payment was confirmed successfully."
 }

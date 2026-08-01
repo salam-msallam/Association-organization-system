@@ -1,6 +1,8 @@
 {
   "FETCH_SUCCESS": "تم جلب قائمة المتبرعين بنجاح.",
   "HISTORY_FETCH_SUCCESS": "تم جلب سجل المتبرع بنجاح.",
+  "SPONSORSHIP_PROFILE_FETCH_SUCCESS": "تم جلب بيانات الكفيل وسجل كفالاته بنجاح.",
+  "SPONSOR_NOT_FOUND": "لم يتم العثور على الكفيل.",
   "INVALID_ID": "معرف المتبرع غير صالح.",
   "NOT_FOUND": "لم يتم العثور على المتبرع.",
   "INVALID_PAGINATION": "يجب أن تكون قيم page و limit أعدادا صحيحة موجبة.",

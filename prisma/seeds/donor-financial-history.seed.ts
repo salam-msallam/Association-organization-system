@@ -164,12 +164,14 @@ async function rollbackPreviousSeedHistory(
       },
     },
     select: {
+      id: true,
       userId: true,
       wallet: { select: { id: true } },
     },
   });
 
   const donorUserIds = existingSeedDonors.map((donor) => donor.userId);
+  const donorIds = existingSeedDonors.map((donor) => donor.id);
   const walletIds = existingSeedDonors
     .map((donor) => donor.wallet?.id)
     .filter((id): id is number => id !== undefined);
@@ -187,7 +189,7 @@ async function rollbackPreviousSeedHistory(
       where: { donorId: { in: donorUserIds } },
     });
     await transaction.sponsorship.deleteMany({
-      where: { donorId: { in: donorUserIds } },
+      where: { donorId: { in: donorIds } },
     });
     await transaction.wallet.updateMany({
       where: { donorId: { in: donorUserIds } },
@@ -274,7 +276,9 @@ async function ensureAidRequests(
   acceptedBeneficiaries: AcceptedBeneficiary[],
 ): Promise<IdOnly[]> {
   if (acceptedBeneficiaries.length === 0) {
-    throw new Error('Cannot seed donor history without accepted beneficiaries.');
+    throw new Error(
+      'Cannot seed donor history without accepted beneficiaries.',
+    );
   }
 
   const reusableRequests = await transaction.requestAid.findMany({
@@ -583,7 +587,7 @@ async function createDonorHistoryScenario(
     directSecond: new Prisma.Decimal(45 + input.donorIndex * 10),
     topUp: new Prisma.Decimal(200 + input.donorIndex * 20),
     walletAid: new Prisma.Decimal(25 + input.donorIndex * 5),
-    sponsorship: new Prisma.Decimal(70 + input.donorIndex * 10),
+    sponsorship: new Prisma.Decimal(10),
   };
   const baseMonth = input.donorIndex * 2;
   const directFirstDate = seedDate(baseMonth, 3, 9);
@@ -660,7 +664,7 @@ async function createDonorHistoryScenario(
 
   const sponsorship = await transaction.sponsorship.create({
     data: {
-      donorId: input.donor.userId,
+      donorId: input.donor.donorId,
       orphanId: input.orphanId,
       employeeId: input.employeeId,
       amount: amounts.sponsorship,

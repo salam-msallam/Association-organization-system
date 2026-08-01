@@ -18,14 +18,17 @@ import {
 import Stripe from 'stripe';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { getSponsorshipPaymentContext } from '../sponsorship/sponsorship-billing-period';
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
 import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
 import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
 import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
+import { WalletSponsorshipDonationResponseDto } from './dto/wallet-sponsorship-donation-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
 const WALLET_REFERENCE_TYPE = 'WALLET';
+const SPONSORSHIP_REFERENCE_TYPE = 'SPONSORSHIP';
 const STRIPE_API_VERSION: Stripe.LatestApiVersion = '2026-06-24.dahlia';
 const BLOCKING_SPONSORSHIP_STATUSES = [Status.PENDING, Status.ACCEPTED];
 
@@ -36,6 +39,7 @@ type PaymentUserPayload = {
 };
 
 type DonorWithUser = {
+  id: number;
   userId: number;
   stripeCustomerId: string | null;
   user: {
@@ -59,7 +63,9 @@ type CreateStripeBackedTransactionInput = {
 
 type SponsorshipReader = {
   sponsorship: {
-    findFirst(args: Prisma.SponsorshipFindFirstArgs): Promise<{ id: number } | null>;
+    findFirst(
+      args: Prisma.SponsorshipFindFirstArgs,
+    ): Promise<{ id: number } | null>;
   };
 };
 
@@ -88,7 +94,9 @@ export class PaymentsService {
     });
 
     if (!aidRequest) {
-      throw new NotFoundException(this.t('ACCEPTED_AID_REQUEST_NOT_FOUND', lang));
+      throw new NotFoundException(
+        this.t('ACCEPTED_AID_REQUEST_NOT_FOUND', lang),
+      );
     }
 
     const remainingAmount = new Prisma.Decimal(aidRequest.cost).minus(
@@ -164,7 +172,7 @@ export class PaymentsService {
     const donor = await this.getAuthenticatedDonor(user, lang);
 
     return this.prisma.$transaction(async (tx) => {
-      await this.assertNoBlockingSponsorship(tx, donor.userId, lang);
+      await this.assertNoBlockingSponsorship(tx, donor.id, lang);
 
       const aidRequest = await tx.requestAid.findFirst({
         where: { id: requestId, status: Status.ACCEPTED },
@@ -202,7 +210,9 @@ export class PaymentsService {
       }
 
       if (new Prisma.Decimal(wallet.runningBalance).lt(amount)) {
-        throw new BadRequestException(this.t('INSUFFICIENT_WALLET_BALANCE', lang));
+        throw new BadRequestException(
+          this.t('INSUFFICIENT_WALLET_BALANCE', lang),
+        );
       }
 
       const walletUpdate = await tx.wallet.updateMany({
@@ -216,7 +226,9 @@ export class PaymentsService {
       });
 
       if (walletUpdate.count === 0) {
-        throw new BadRequestException(this.t('INSUFFICIENT_WALLET_BALANCE', lang));
+        throw new BadRequestException(
+          this.t('INSUFFICIENT_WALLET_BALANCE', lang),
+        );
       }
 
       const aidRequestUpdate = await tx.requestAid.updateMany({
@@ -265,18 +277,166 @@ export class PaymentsService {
         select: { id: true },
       });
 
-      const currentPayment = new Prisma.Decimal(updatedAidRequest.currentPayment);
+      const currentPayment = new Prisma.Decimal(
+        updatedAidRequest.currentPayment,
+      );
       const updatedCost = new Prisma.Decimal(updatedAidRequest.cost);
       const updatedRemainingAmount = updatedCost.minus(currentPayment);
 
       return {
         walletTransactionId: walletTransaction.id,
         donatedAmount: amount.toFixed(2),
-        balanceAfter: new Prisma.Decimal(updatedWallet.runningBalance).toFixed(2),
+        balanceAfter: new Prisma.Decimal(updatedWallet.runningBalance).toFixed(
+          2,
+        ),
         requestId,
         currentPayment: currentPayment.toFixed(2),
         remainingAmount: updatedRemainingAmount.toFixed(2),
-        compliancePercentage: currentPayment.times(100).div(updatedCost).toFixed(2),
+        compliancePercentage: currentPayment
+          .times(100)
+          .div(updatedCost)
+          .toFixed(2),
+      };
+    });
+  }
+
+  async donateWalletToSponsorship(
+    sponsorshipId: number,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<WalletSponsorshipDonationResponseDto> {
+    const donor = await this.getAuthenticatedDonor(user, lang);
+    const now = new Date();
+    const paymentContext = getSponsorshipPaymentContext(now);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id
+        FROM Sponsorship
+        WHERE id = ${sponsorshipId}
+        FOR UPDATE
+      `;
+
+      const sponsorship = await tx.sponsorship.findFirst({
+        where: {
+          id: sponsorshipId,
+          donorId: donor.id,
+          status: Status.ACCEPTED,
+        },
+        select: { id: true, amount: true },
+      });
+
+      if (!sponsorship) {
+        throw new NotFoundException(this.t('SPONSORSHIP_NOT_FOUND', lang));
+      }
+
+      const anyPreviousPayment = await tx.walletTransaction.findFirst({
+        where: {
+          type: TransactionType.SPONSORSHIP_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: SPONSORSHIP_REFERENCE_TYPE,
+          referenceId: sponsorship.id,
+        },
+        select: { id: true },
+      });
+
+      if (anyPreviousPayment && !paymentContext.isRenewalWindowOpen) {
+        throw new BadRequestException(
+          this.t('SPONSORSHIP_RENEWAL_NOT_OPEN', lang),
+        );
+      }
+
+      if (paymentContext.isRenewalWindowOpen) {
+        const paymentInCurrentWindow = await tx.walletTransaction.findFirst({
+          where: {
+            type: TransactionType.SPONSORSHIP_DONATION,
+            direction: WalletTransactionDirection.DEBIT,
+            referenceType: SPONSORSHIP_REFERENCE_TYPE,
+            referenceId: sponsorship.id,
+            createdAt: {
+              gte: paymentContext.renewalWindowStart,
+              lt: paymentContext.renewalWindowEnd,
+            },
+          },
+          select: { id: true },
+        });
+
+        if (paymentInCurrentWindow) {
+          throw new BadRequestException(
+            this.t('SPONSORSHIP_ALREADY_PAID', lang),
+          );
+        }
+      }
+
+      const amount = new Prisma.Decimal(sponsorship.amount);
+      const wallet = await tx.wallet.findUnique({
+        where: { donorId: donor.userId },
+        select: { id: true, runningBalance: true },
+      });
+
+      if (!wallet) {
+        throw new NotFoundException(this.t('WALLET_NOT_FOUND', lang));
+      }
+
+      if (new Prisma.Decimal(wallet.runningBalance).lt(amount)) {
+        throw new BadRequestException(
+          this.t('INSUFFICIENT_WALLET_BALANCE', lang),
+        );
+      }
+
+      const walletUpdate = await tx.wallet.updateMany({
+        where: {
+          id: wallet.id,
+          runningBalance: { gte: amount },
+        },
+        data: { runningBalance: { decrement: amount } },
+      });
+
+      if (walletUpdate.count !== 1) {
+        throw new BadRequestException(
+          this.t('SPONSORSHIP_PAYMENT_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { runningBalance: true },
+      });
+
+      if (!updatedWallet) {
+        throw new BadRequestException(
+          this.t('SPONSORSHIP_PAYMENT_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const walletTransaction = await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          transactionId: null,
+          amount,
+          type: TransactionType.SPONSORSHIP_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: SPONSORSHIP_REFERENCE_TYPE,
+          referenceId: sponsorship.id,
+          balanceAfter: updatedWallet.runningBalance,
+          createdAt: now,
+        },
+        select: { id: true, createdAt: true },
+      });
+
+      return {
+        success: true,
+        message: this.t('SPONSORSHIP_PAYMENT_SUCCESS', lang),
+        data: {
+          walletTransactionId: walletTransaction.id,
+          sponsorshipId: sponsorship.id,
+          paidAmount: amount.toFixed(2),
+          balanceAfter: new Prisma.Decimal(
+            updatedWallet.runningBalance,
+          ).toFixed(2),
+          coveredMonth: paymentContext.coveredMonth,
+          paidAt: walletTransaction.createdAt,
+        },
       };
     });
   }
@@ -318,15 +478,11 @@ export class PaymentsService {
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await this.handlePaymentIntentSucceeded(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.handlePaymentIntentSucceeded(event.data.object);
         break;
       case 'payment_intent.payment_failed':
       case 'payment_intent.canceled':
-        await this.handlePaymentIntentFailed(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.handlePaymentIntentFailed(event.data.object);
         break;
       default:
         break;
@@ -357,7 +513,9 @@ export class PaymentsService {
     });
 
     if (!donor) {
-      throw new ForbiddenException(this.t('AUTHENTICATED_USER_NOT_DONOR', lang));
+      throw new ForbiddenException(
+        this.t('AUTHENTICATED_USER_NOT_DONOR', lang),
+      );
     }
 
     return donor;
@@ -374,7 +532,9 @@ export class PaymentsService {
     const userType = user.type ?? user.userType;
 
     if (userType !== UserType.DONOR) {
-      throw new ForbiddenException(this.t('ONLY_DONORS_CAN_CREATE_PAYMENTS', lang));
+      throw new ForbiddenException(
+        this.t('ONLY_DONORS_CAN_CREATE_PAYMENTS', lang),
+      );
     }
 
     return user.id;
@@ -386,11 +546,15 @@ export class PaymentsService {
     options: { requireExactlyTwoDecimals?: boolean } = {},
   ): Prisma.Decimal {
     if (typeof amount !== 'number' && typeof amount !== 'string') {
-      throw new BadRequestException(this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang));
+      throw new BadRequestException(
+        this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang),
+      );
     }
 
     if (typeof amount === 'number' && !Number.isFinite(amount)) {
-      throw new BadRequestException(this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang));
+      throw new BadRequestException(
+        this.t('PAYMENT_AMOUNT_VALID_NUMBER', lang),
+      );
     }
 
     const amountText = String(amount).trim();
@@ -420,19 +584,21 @@ export class PaymentsService {
 
   private async assertNoBlockingSponsorship(
     prisma: SponsorshipReader,
-    donorUserId: number,
+    donorId: number,
     lang: string,
   ): Promise<void> {
     const sponsorship = await prisma.sponsorship.findFirst({
       where: {
-        donorId: donorUserId,
+        donorId,
         status: { in: BLOCKING_SPONSORSHIP_STATUSES },
       },
       select: { id: true },
     });
 
     if (sponsorship) {
-      throw new ForbiddenException(this.t('WALLET_RESERVED_FOR_SPONSORSHIP', lang));
+      throw new ForbiddenException(
+        this.t('WALLET_RESERVED_FOR_SPONSORSHIP', lang),
+      );
     }
   }
 
@@ -497,7 +663,9 @@ export class PaymentsService {
   private getStripe(lang: string): Stripe {
     if (this.stripe) return this.stripe;
 
-    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY')?.trim();
+    const secretKey = this.configService
+      .get<string>('STRIPE_SECRET_KEY')
+      ?.trim();
 
     if (!secretKey) {
       throw new InternalServerErrorException(
@@ -549,7 +717,9 @@ export class PaymentsService {
     const minorUnits = amount.times(100);
 
     if (!minorUnits.isInteger() || minorUnits.lte(0)) {
-      throw new BadRequestException(this.t('PAYMENT_AMOUNT_INVALID_FOR_STRIPE', lang));
+      throw new BadRequestException(
+        this.t('PAYMENT_AMOUNT_INVALID_FOR_STRIPE', lang),
+      );
     }
 
     const value = minorUnits.toNumber();

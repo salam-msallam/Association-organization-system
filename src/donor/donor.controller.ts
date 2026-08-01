@@ -22,6 +22,7 @@ import { DonorService } from './donor.service';
 import {
   AdminDonorHistoryResponseDto,
   AdminDonorListResponseDto,
+  AdminDonorSponsorshipProfileResponseDto,
 } from './dto/donor-response.dto';
 
 @ApiTags('Admin Donors')
@@ -85,5 +86,32 @@ export class DonorController {
     @I18nLang() lang = 'ar',
   ): Promise<AdminDonorHistoryResponseDto> {
     return this.donorService.getHistory(id, lang);
+  }
+
+  @Get(':id/sponsorships')
+  @CheckAbilities({ action: 'read', subject: 'Sponsorship' })
+  @ApiOperation({
+    summary: 'Get donor personal data and complete sponsorship history',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    example: 3,
+    description: 'Donor record ID, not user account ID',
+  })
+  @ApiOkResponse({ type: AdminDonorSponsorshipProfileResponseDto })
+  @ApiBadRequestResponse({ description: 'The donor ID is invalid' })
+  @ApiNotFoundResponse({
+    description: 'The donor was not found or is not currently a sponsor',
+  })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required' })
+  @ApiForbiddenResponse({
+    description: 'Staff access and read:sponsorships permission are required',
+  })
+  getSponsorshipProfile(
+    @Param('id') id: string,
+    @I18nLang() lang = 'ar',
+  ): Promise<AdminDonorSponsorshipProfileResponseDto> {
+    return this.donorService.getSponsorshipProfile(id, lang);
   }
 }

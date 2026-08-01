@@ -46,9 +46,6 @@ class SponsorshipListItemDto {
   @ApiProperty({ example: null, nullable: true })
   endDate!: Date | null;
 
-  @ApiProperty({ example: null, nullable: true })
-  cancelledAt!: Date | null;
-
   @ApiProperty({ enum: CancellationSource, nullable: true })
   cancellationSource!: CancellationSource | null;
 

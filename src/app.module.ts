@@ -21,6 +21,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ProfileModule } from './profile/profile.module';
 import { SponsorshipModule } from './sponsorship/sponsorship.module';
 import { DonorModule } from './donor/donor.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { DonorModule } from './donor/donor.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     EmployeeModule,
     CaslModule,
     I18nModule.forRoot({
@@ -50,8 +52,6 @@ import { DonorModule } from './donor/donor.module';
     ProfileModule,
     SponsorshipModule,
     DonorModule,
-    
-
   ],
   controllers: [AppController],
   providers: [

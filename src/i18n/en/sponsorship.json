@@ -10,5 +10,12 @@
   "ALREADY_CANCELLED": "The sponsorship is already cancelled.",
   "CANCELLATION_NOT_ALLOWED": "A rejected sponsorship cannot be cancelled.",
   "CANCELLATION_STATE_CHANGED": "The sponsorship status changed while processing the request. Please try again.",
-  "CANCEL_SUCCESS": "The sponsorship was cancelled successfully."
+  "CANCEL_SUCCESS": "The sponsorship was cancelled successfully.",
+  "ADMIN_FETCH_SUCCESS": "Sponsorship requests were fetched successfully.",
+  "ADMIN_FETCH_ONE_SUCCESS": "The sponsorship request was fetched successfully.",
+  "ALREADY_REVIEWED": "The sponsorship request has already been reviewed.",
+  "ORPHAN_NOT_AVAILABLE": "The selected orphan was not found or is already sponsored.",
+  "REVIEW_STATE_CHANGED": "The sponsorship request changed while it was being reviewed. Please try again.",
+  "ACCEPT_SUCCESS": "The sponsorship request was accepted successfully.",
+  "REJECT_SUCCESS": "The sponsorship request was rejected successfully."
 }

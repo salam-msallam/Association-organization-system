@@ -12,6 +12,7 @@ describe('PaymentsController', () => {
       createAidRequestPaymentIntent: jest.fn(),
       createWalletTopUpPaymentIntent: jest.fn(),
       donateWalletToAidRequest: jest.fn(),
+      donateWalletToSponsorship: jest.fn(),
       handleStripeWebhook: jest.fn(),
     };
     controller = new PaymentsController(paymentsService);
@@ -51,7 +52,12 @@ describe('PaymentsController', () => {
 
     const req = { user: { id: 7, type: 'DONOR' } } as any;
 
-    await controller.createAidRequestPaymentIntent(13, { amount: 25 }, req, 'en');
+    await controller.createAidRequestPaymentIntent(
+      13,
+      { amount: 25 },
+      req,
+      'en',
+    );
 
     expect(paymentsService.createAidRequestPaymentIntent).toHaveBeenCalledWith(
       13,
@@ -83,6 +89,7 @@ describe('WalletController', () => {
     paymentsService = {
       createWalletTopUpPaymentIntent: jest.fn(),
       donateWalletToAidRequest: jest.fn(),
+      donateWalletToSponsorship: jest.fn(),
     };
     controller = new WalletController(paymentsService);
   });
@@ -152,5 +159,20 @@ describe('WalletController', () => {
       'en',
     );
     expect(dto).not.toHaveProperty('donorId');
+  });
+
+  it('passes sponsorship ID and donor JWT payload without a request body', async () => {
+    paymentsService.donateWalletToSponsorship.mockResolvedValue({
+      success: true,
+    });
+    const req = { user: { id: 7, type: 'DONOR' } } as any;
+
+    await controller.donateWalletToSponsorship(5, req, 'ar');
+
+    expect(paymentsService.donateWalletToSponsorship).toHaveBeenCalledWith(
+      5,
+      req.user,
+      'ar',
+    );
   });
 });
