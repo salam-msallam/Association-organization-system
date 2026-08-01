@@ -89,8 +89,9 @@ export class RequestAidService {
   async getPublicAidRequests(
     categoryId?: number,
     lang = 'ar',
+    isUrgent?: boolean,
   ): Promise<PublicAidRequestListItemDto[]> {
-    return this.findPublicAidRequestListItems({ categoryId }, lang);
+    return this.findPublicAidRequestListItems({ categoryId, isUrgent }, lang);
   }
 
   async getCompletedPublicAidRequests(
@@ -107,13 +108,23 @@ export class RequestAidService {
   }
 
   private async findPublicAidRequestListItems(
-    options: { categoryId?: number; onlyCompleted?: boolean },
+    options: {
+      categoryId?: number;
+      isUrgent?: boolean;
+      onlyCompleted?: boolean;
+    },
     lang: string,
   ): Promise<PublicAidRequestListItemDto[]> {
     const where: Prisma.RequestAidWhereInput = { status: Status.ACCEPTED };
 
     if (options.categoryId !== undefined) {
       where.categoryId = options.categoryId;
+    }
+
+    if (options.isUrgent === true) {
+      where.isUrgent = true;
+    } else if (options.isUrgent === false) {
+      where.OR = [{ isUrgent: false }, { isUrgent: null }];
     }
 
     if (options.onlyCompleted) {

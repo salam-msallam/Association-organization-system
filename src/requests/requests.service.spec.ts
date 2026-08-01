@@ -150,6 +150,37 @@ describe('RequestAidService admin APIs', () => {
     );
   });
 
+  it('filters public aid requests to urgent cases when requested', async () => {
+    prisma.requestAid.findMany.mockResolvedValue([]);
+
+    await service.getPublicAidRequests(2, 'en', true);
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: Status.ACCEPTED,
+          categoryId: 2,
+          isUrgent: true,
+        },
+      }),
+    );
+  });
+
+  it('filters public aid requests to non-urgent and unset cases when requested', async () => {
+    prisma.requestAid.findMany.mockResolvedValue([]);
+
+    await service.getPublicAidRequests(undefined, 'ar', false);
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: Status.ACCEPTED,
+          OR: [{ isUrgent: false }, { isUrgent: null }],
+        },
+      }),
+    );
+  });
+
   it('lists only completed accepted public aid requests by category', async () => {
     prisma.requestAid.findMany.mockResolvedValue([
       {

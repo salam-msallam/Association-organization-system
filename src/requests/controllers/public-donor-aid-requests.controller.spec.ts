@@ -74,34 +74,63 @@ describe('PublicDonorAidRequestsController', () => {
   it('passes an optional positive categoryId to the public list service', async () => {
     requestAidService.getPublicAidRequests.mockResolvedValue([]);
 
-    await expect(controller.findAll('3', 'en')).resolves.toEqual([]);
+    await expect(controller.findAll('3', undefined, 'en')).resolves.toEqual([]);
 
     expect(requestAidService.getPublicAidRequests).toHaveBeenCalledWith(
       3,
       'en',
+      undefined,
     );
   });
 
   it('passes undefined categoryId when the query is omitted', async () => {
     requestAidService.getPublicAidRequests.mockResolvedValue([]);
 
-    await controller.findAll(undefined, 'ar');
+    await controller.findAll(undefined, undefined, 'ar');
 
     expect(requestAidService.getPublicAidRequests).toHaveBeenCalledWith(
       undefined,
       'ar',
+      undefined,
     );
   });
 
   it.each(['abc', '0', '-1', '1.5'])(
     'rejects invalid categoryId %s',
     (categoryId) => {
-      expect(() => controller.findAll(categoryId, 'en')).toThrow(
+      expect(() => controller.findAll(categoryId, undefined, 'en')).toThrow(
         BadRequestException,
       );
       expect(requestAidService.getPublicAidRequests).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    ['true', true],
+    ['1', true],
+    ['false', false],
+    ['0', false],
+  ])(
+    'passes parsed isUrgent=%s to the public list service',
+    async (queryValue, expectedValue) => {
+      requestAidService.getPublicAidRequests.mockResolvedValue([]);
+
+      await controller.findAll(undefined, queryValue, 'en');
+
+      expect(requestAidService.getPublicAidRequests).toHaveBeenCalledWith(
+        undefined,
+        'en',
+        expectedValue,
+      );
+    },
+  );
+
+  it.each(['yes', 'urgent', '2'])('rejects invalid isUrgent %s', (isUrgent) => {
+    expect(() => controller.findAll(undefined, isUrgent, 'en')).toThrow(
+      BadRequestException,
+    );
+    expect(requestAidService.getPublicAidRequests).not.toHaveBeenCalled();
+  });
 
   it('passes an optional positive categoryId to the completed public list service', async () => {
     requestAidService.getCompletedPublicAidRequests.mockResolvedValue([]);
