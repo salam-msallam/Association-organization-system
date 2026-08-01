@@ -90,10 +90,36 @@ export class RequestAidService {
     categoryId?: number,
     lang = 'ar',
   ): Promise<PublicAidRequestListItemDto[]> {
+    return this.findPublicAidRequestListItems({ categoryId }, lang);
+  }
+
+  async getCompletedPublicAidRequests(
+    categoryId?: number,
+    lang = 'ar',
+  ): Promise<PublicAidRequestListItemDto[]> {
+    return this.findPublicAidRequestListItems(
+      {
+        categoryId,
+        onlyCompleted: true,
+      },
+      lang,
+    );
+  }
+
+  private async findPublicAidRequestListItems(
+    options: { categoryId?: number; onlyCompleted?: boolean },
+    lang: string,
+  ): Promise<PublicAidRequestListItemDto[]> {
     const where: Prisma.RequestAidWhereInput = { status: Status.ACCEPTED };
 
-    if (categoryId !== undefined) {
-      where.categoryId = categoryId;
+    if (options.categoryId !== undefined) {
+      where.categoryId = options.categoryId;
+    }
+
+    if (options.onlyCompleted) {
+      where.currentPayment = {
+        equals: this.prisma.requestAid.fields.cost,
+      };
     }
 
     const requests = await this.prisma.requestAid.findMany({

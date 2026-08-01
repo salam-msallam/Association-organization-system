@@ -26,6 +26,9 @@ describe('RequestAidService admin APIs', () => {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
+        fields: {
+          cost: 'requestAid.cost',
+        },
       },
       employee: {
         findUnique: jest.fn(),
@@ -145,6 +148,54 @@ describe('RequestAidService admin APIs', () => {
         completionPercentage: 0,
       }),
     );
+  });
+
+  it('lists only completed accepted public aid requests by category', async () => {
+    prisma.requestAid.findMany.mockResolvedValue([
+      {
+        id: 5,
+        title: { ar: 'ط¹ظ„ط§ط¬ ظ…ظƒطھظ…ظ„', en: 'Completed treatment' },
+        cost: new Prisma.Decimal(2500),
+        currentPayment: new Prisma.Decimal(2500),
+        isUrgent: true,
+        aidDetails: {
+          donorImageUrl: 'uploads/request-media/completed-treatment.png',
+        },
+      },
+    ]);
+
+    const result = await service.getCompletedPublicAidRequests(4, 'en');
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith({
+      where: {
+        status: Status.ACCEPTED,
+        categoryId: 4,
+        currentPayment: {
+          equals: prisma.requestAid.fields.cost,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        cost: true,
+        currentPayment: true,
+        isUrgent: true,
+        aidDetails: { select: { donorImageUrl: true } },
+      },
+    });
+    expect(result).toEqual([
+      {
+        id: 5,
+        image: 'uploads/request-media/completed-treatment.png',
+        title: 'Completed treatment',
+        totalCost: '2500',
+        paidAmount: '2500',
+        remainingAmount: '0',
+        completionPercentage: 100,
+        isUrgent: true,
+      },
+    ]);
   });
 
   it('returns one accepted public aid request with localized description', async () => {

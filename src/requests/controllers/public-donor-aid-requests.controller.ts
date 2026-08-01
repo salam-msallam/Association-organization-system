@@ -52,6 +52,25 @@ export class PublicDonorAidRequestsController {
     );
   }
 
+  @Get('completed')
+  @ApiOperation({
+    summary: 'List completed approved aid requests for public donor browsing',
+  })
+  @ApiQuery({ name: 'categoryId', required: false, type: Number, example: 1 })
+  @ApiOkResponse({ type: PublicAidRequestListItemDto, isArray: true })
+  @ApiBadRequestResponse({
+    description: 'categoryId must be a positive integer',
+  })
+  findCompleted(
+    @Query('categoryId') categoryId?: string,
+    @I18nLang() lang = 'ar',
+  ): Promise<PublicAidRequestListItemDto[]> {
+    return this.requestAidService.getCompletedPublicAidRequests(
+      this.parseOptionalPositiveInteger(categoryId),
+      lang,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get one approved aid request for public donor browsing',
