@@ -1,17 +1,22 @@
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PRESERVE_BILINGUAL_RESPONSE } from '../decorators/preserve-bilingual-response.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { DonorMobileController } from './donor-mobile.controller';
 import { DonorController } from './donor.controller';
 
 describe('DonorController', () => {
   let donorService: any;
   let controller: DonorController;
+  let mobileController: DonorMobileController;
 
   beforeEach(() => {
     donorService = {
       findAll: jest.fn(),
       getHistory: jest.fn(),
+      getMyHistory: jest.fn(),
     };
     controller = new DonorController(donorService);
+    mobileController = new DonorMobileController(donorService);
   });
 
   it('uses the admin donors route prefix', () => {
@@ -59,5 +64,37 @@ describe('DonorController', () => {
     await controller.getHistory('3', 'ar');
 
     expect(donorService.getHistory).toHaveBeenCalledWith('3', 'ar');
+  });
+
+  it('uses the mobile donor me route prefix without preserving bilingual responses', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, DonorMobileController)).toBe(
+      'api/donors/me',
+    );
+    expect(
+      Reflect.getMetadata(PRESERVE_BILINGUAL_RESPONSE, DonorMobileController),
+    ).toBeUndefined();
+  });
+
+  it('protects mobile donor history with JwtAuthGuard', () => {
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        DonorMobileController.prototype.getMyHistory,
+      ),
+    ).toEqual([JwtAuthGuard]);
+  });
+
+  it('passes authenticated user and language to the mobile history service', async () => {
+    donorService.getMyHistory.mockResolvedValue({ data: { years: [] } });
+    const req = {
+      user: {
+        id: 7,
+        type: 'DONOR',
+      },
+    } as any;
+
+    await mobileController.getMyHistory(req, 'en');
+
+    expect(donorService.getMyHistory).toHaveBeenCalledWith(req.user, 'en');
   });
 });

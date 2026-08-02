@@ -1,8 +1,14 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   Prisma,
   TransactionStatus,
   TransactionType,
+  UserType,
   WalletTransactionDirection,
 } from '@prisma/client';
 import { DonorService } from './donor.service';
@@ -11,6 +17,7 @@ describe('DonorService', () => {
   let service: DonorService;
   let prisma: any;
   let i18n: any;
+  let configService: any;
 
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-31T12:00:00.000Z'));
@@ -41,8 +48,13 @@ describe('DonorService', () => {
     i18n = {
       t: jest.fn((key: string, options?: any) => `${key}:${options?.lang ?? 'ar'}`),
     };
+    configService = {
+      get: jest.fn((key: string) =>
+        key === 'APP_TIMEZONE' ? 'Asia/Damascus' : undefined,
+      ),
+    };
 
-    service = new DonorService(prisma, i18n);
+    service = new DonorService(prisma, i18n, configService);
   });
 
   afterEach(() => {
@@ -375,6 +387,236 @@ describe('DonorService', () => {
       success: true,
       message: 'donor.HISTORY_FETCH_SUCCESS:en',
       data: [],
+    });
+  });
+
+  it('rejects mobile history requests without an authenticated donor user', async () => {
+    await expect(service.getMyHistory({}, 'en')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(i18n.t).toHaveBeenCalledWith('donor.AUTHENTICATION_REQUIRED', {
+      lang: 'en',
+    });
+
+    await expect(
+      service.getMyHistory({ id: 7, type: UserType.EMPLOYEE }, 'en'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(i18n.t).toHaveBeenCalledWith('donor.ONLY_DONORS_CAN_VIEW_HISTORY', {
+      lang: 'en',
+    });
+  });
+
+  it('returns grouped mobile history for the authenticated donor using APP_TIMEZONE', async () => {
+    const localCurrentYearDate = new Date('2025-12-31T21:30:00.000Z');
+    const previousYearDate = new Date('2025-06-01T10:00:00.000Z');
+    const topUpDate = new Date('2026-02-01T10:00:00.000Z');
+    const sponsorshipDate = new Date('2026-03-01T10:00:00.000Z');
+
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        amount: new Prisma.Decimal('50.00'),
+        type: TransactionType.AID_REQUEST_DONATION,
+        createdAt: localCurrentYearDate,
+        referenceType: 'REQUEST_AID',
+        referenceId: 13,
+      },
+      {
+        amount: new Prisma.Decimal('100.00'),
+        type: TransactionType.WALLET_TOP_UP,
+        createdAt: topUpDate,
+        referenceType: 'WALLET',
+        referenceId: 9,
+      },
+    ]);
+    prisma.wallet.findUnique.mockResolvedValue({
+      id: 9,
+      transactions: [
+        {
+          amount: new Prisma.Decimal('30.00'),
+          type: TransactionType.AID_REQUEST_DONATION,
+          createdAt: previousYearDate,
+          referenceType: 'REQUEST_AID',
+          referenceId: 21,
+        },
+        {
+          amount: new Prisma.Decimal('75.00'),
+          type: TransactionType.SPONSORSHIP_DONATION,
+          createdAt: sponsorshipDate,
+          referenceType: 'SPONSORSHIP',
+          referenceId: 201,
+        },
+      ],
+    });
+    prisma.requestAid.findMany.mockResolvedValue([
+      { id: 13, title: { ar: 'طلب مباشر', en: 'Direct request' } },
+      { id: 21, title: { ar: 'طلب من المحفظة', en: 'Wallet request' } },
+    ]);
+    prisma.sponsorship.findMany.mockResolvedValue([
+      {
+        id: 201,
+        orphan: {
+          id: 5,
+          firstName: 'Omar',
+          lastName: 'Hassan',
+        },
+      },
+    ]);
+    prisma.orphan.findMany.mockResolvedValue([]);
+
+    const result = await service.getMyHistory(
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(configService.get).toHaveBeenCalledWith('APP_TIMEZONE');
+    expect(prisma.donor.findUnique).toHaveBeenCalledWith({
+      where: { userId: 7 },
+      select: { id: true, userId: true },
+    });
+    expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          donorId: 7,
+          status: TransactionStatus.SUCCESSFUL,
+          createdAt: {
+            gte: new Date('2024-12-31T21:00:00.000Z'),
+            lt: new Date('2026-12-31T21:00:00.000Z'),
+          },
+        }),
+      }),
+    );
+    expect(prisma.wallet.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { donorId: 7 },
+        select: expect.objectContaining({
+          transactions: expect.objectContaining({
+            where: expect.objectContaining({
+              createdAt: {
+                gte: new Date('2024-12-31T21:00:00.000Z'),
+                lt: new Date('2026-12-31T21:00:00.000Z'),
+              },
+              direction: WalletTransactionDirection.DEBIT,
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'donor.HISTORY_FETCH_SUCCESS:en',
+      data: {
+        years: [
+          {
+            year: 2026,
+            operations: [
+              {
+                amount: '75.00',
+                type: TransactionType.SPONSORSHIP_DONATION,
+                createdAt: sponsorshipDate,
+                orphan: {
+                  id: 5,
+                  firstName: 'Omar',
+                  lastName: 'Hassan',
+                },
+              },
+              {
+                amount: '100.00',
+                type: TransactionType.WALLET_TOP_UP,
+                createdAt: topUpDate,
+              },
+              {
+                amount: '50.00',
+                type: TransactionType.AID_REQUEST_DONATION,
+                createdAt: localCurrentYearDate,
+                aidRequest: {
+                  id: 13,
+                  title: 'Direct request',
+                },
+              },
+            ],
+          },
+          {
+            year: 2025,
+            operations: [
+              {
+                amount: '30.00',
+                type: TransactionType.AID_REQUEST_DONATION,
+                createdAt: previousYearDate,
+                aidRequest: {
+                  id: 21,
+                  title: 'Wallet request',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('falls back to Asia/Damascus when APP_TIMEZONE is missing', async () => {
+    configService.get.mockReturnValue(undefined);
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
+    prisma.transaction.findMany.mockResolvedValue([]);
+    prisma.wallet.findUnique.mockResolvedValue(null);
+
+    await service.getMyHistory({ id: 7, type: UserType.DONOR }, 'en');
+
+    expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          createdAt: {
+            gte: new Date('2024-12-31T21:00:00.000Z'),
+            lt: new Date('2026-12-31T21:00:00.000Z'),
+          },
+        }),
+      }),
+    );
+  });
+
+  it('includes localized aidRequest id and title for mobile aid-request donations', async () => {
+    const donationDate = new Date('2026-04-01T10:00:00.000Z');
+
+    prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        amount: new Prisma.Decimal('50.00'),
+        type: TransactionType.AID_REQUEST_DONATION,
+        createdAt: donationDate,
+        referenceType: 'REQUEST_AID',
+        referenceId: 13,
+      },
+    ]);
+    prisma.wallet.findUnique.mockResolvedValue({
+      id: 9,
+      transactions: [],
+    });
+    prisma.requestAid.findMany.mockResolvedValue([
+      {
+        id: 13,
+        title: {
+          ar: 'طلب مساعدة',
+          en: 'Aid request',
+        },
+      },
+    ]);
+
+    const result = await service.getMyHistory(
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(prisma.requestAid.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [13] } },
+      select: { id: true, title: true },
+    });
+    expect(result.data.years[0].operations[0]).toMatchObject({
+      type: TransactionType.AID_REQUEST_DONATION,
+      aidRequest: {
+        id: 13,
+        title: 'Aid request',
+      },
     });
   });
 });

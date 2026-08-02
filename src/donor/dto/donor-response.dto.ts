@@ -116,3 +116,27 @@ export class AdminDonorHistoryResponseDto {
   @ApiProperty({ type: [DonorHistoryItemDto] })
   data!: DonorHistoryItemDto[];
 }
+
+export class DonorHistoryYearDto {
+  @ApiProperty({ example: 2026 })
+  year!: number;
+
+  @ApiProperty({ type: [DonorHistoryItemDto] })
+  operations!: DonorHistoryItemDto[];
+}
+
+export class DonorHistoryYearsDataDto {
+  @ApiProperty({ type: [DonorHistoryYearDto] })
+  years!: DonorHistoryYearDto[];
+}
+
+export class MobileDonorHistoryResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: 'Donor history fetched successfully.' })
+  message!: string;
+
+  @ApiProperty({ type: DonorHistoryYearsDataDto })
+  data!: DonorHistoryYearsDataDto;
+}
