@@ -125,7 +125,6 @@ export class AdminDonorHistoryResponseDto {
   data!: DonorHistoryItemDto[];
 }
 
-<<<<<<< HEAD
 class AdminDonorSponsorshipProfileDto {
   @ApiProperty({ example: 3 })
   donorId!: number;
@@ -226,7 +225,8 @@ export class AdminDonorSponsorshipProfileResponseDto {
 
   @ApiProperty({ type: AdminDonorSponsorshipProfileDataDto })
   data!: AdminDonorSponsorshipProfileDataDto;
-=======
+}
+
 export class DonorHistoryYearDto {
   @ApiProperty({ example: 2026 })
   year!: number;
@@ -249,5 +249,4 @@ export class MobileDonorHistoryResponseDto {
 
   @ApiProperty({ type: DonorHistoryYearsDataDto })
   data!: DonorHistoryYearsDataDto;
->>>>>>> SalamBranch
 }

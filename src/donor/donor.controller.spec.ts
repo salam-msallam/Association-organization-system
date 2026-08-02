@@ -81,6 +81,8 @@ describe('DonorController', () => {
     await controller.getSponsorshipProfile('3', 'en');
 
     expect(donorService.getSponsorshipProfile).toHaveBeenCalledWith('3', 'en');
+  });
+
   it('uses the mobile donor me route prefix without preserving bilingual responses', () => {
     expect(Reflect.getMetadata(PATH_METADATA, DonorMobileController)).toBe(
       'api/donors/me',

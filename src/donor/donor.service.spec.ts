@@ -465,6 +465,12 @@ describe('DonorService', () => {
             cancellationSource: null,
             createdAt,
             orphan: null,
+          },
+        ],
+      },
+    });
+  });
+
   it('rejects mobile history requests without an authenticated donor user', async () => {
     await expect(service.getMyHistory({}, 'en')).rejects.toThrow(
       UnauthorizedException,
@@ -642,6 +648,9 @@ describe('DonorService', () => {
     );
     expect(i18n.t).toHaveBeenCalledWith('donor.SPONSOR_NOT_FOUND', {
       lang: 'ar',
+    });
+  });
+
   it('falls back to Asia/Damascus when APP_TIMEZONE is missing', async () => {
     configService.get.mockReturnValue(undefined);
     prisma.donor.findUnique.mockResolvedValue({ id: 3, userId: 7 });

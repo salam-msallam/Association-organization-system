@@ -303,6 +303,10 @@ export class DonorService {
           createdAt: sponsorship.createdAt,
           orphan: sponsorship.orphan,
         })),
+      },
+    };
+  }
+
   async getMyHistory(
     user: DonorUserPayload,
     lang = 'ar',
@@ -730,27 +734,6 @@ export class DonorService {
     );
 
     return zonedTimestamp - date.getTime();
-  }
-
-  private localizeJsonValue(value: unknown, lang: string): unknown {
-    if (!value || typeof value !== 'object') return value ?? null;
-
-    if (!Array.isArray(value) && ('ar' in value || 'en' in value)) {
-      const bilingualValue = value as Record<string, unknown>;
-
-      return bilingualValue[lang] ?? bilingualValue.ar ?? bilingualValue.en;
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item) => this.localizeJsonValue(item, lang));
-    }
-
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        this.localizeJsonValue(item, lang),
-      ]),
-    );
   }
 
   private t(key: string, lang: string): string {
