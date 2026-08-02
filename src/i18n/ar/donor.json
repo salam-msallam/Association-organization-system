@@ -3,8 +3,11 @@
   "HISTORY_FETCH_SUCCESS": "تم جلب سجل المتبرع بنجاح.",
   "SPONSORSHIP_PROFILE_FETCH_SUCCESS": "تم جلب بيانات الكفيل وسجل كفالاته بنجاح.",
   "SPONSOR_NOT_FOUND": "لم يتم العثور على الكفيل.",
+  "AUTHENTICATION_REQUIRED": "المصادقة مطلوبة.",
+  "AUTHENTICATED_USER_NOT_DONOR": "المستخدم المصادق عليه ليس متبرعاً.",
+  "ONLY_DONORS_CAN_VIEW_HISTORY": "يمكن للمتبرعين فقط عرض السجل المالي للمتبرع.",
   "INVALID_ID": "معرف المتبرع غير صالح.",
   "NOT_FOUND": "لم يتم العثور على المتبرع.",
-  "INVALID_PAGINATION": "يجب أن تكون قيم page و limit أعدادا صحيحة موجبة.",
+  "INVALID_PAGINATION": "يجب أن تكون قيم page و limit أعداداً صحيحة موجبة.",
   "INVALID_IS_SPONSOR": "يجب أن تكون قيمة isSponsor إما true أو false."
 }
