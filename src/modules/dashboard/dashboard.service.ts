@@ -1,59 +1,64 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, Status, TransactionStatus } from '@prisma/client';
+import {
+  Prisma,
+  Status,
+  TransactionStatus,
+  TransactionType,
+  WalletTransactionDirection,
+} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { HelpRequestStatsResponseDto } from './dto/help-request-stats-response.dto';
+import { DashboardUsersCountResponseDto } from './dto/dashboard-users-count-response.dto';
+import {
+  AidRequestCategoryDistributionItemDto,
+  AnnualDonationDistributionItemDto,
+  MonthlyDonationDistributionItemDto,
+  OrphanStatisticsResponseDto,
+  SponsorshipStatisticsResponseDto,
+} from './dto/admin-dashboard-statistics-response.dto';
+
+const ACTUAL_DONATION_TYPES = [
+  TransactionType.AID_REQUEST_DONATION,
+  TransactionType.SPONSORSHIP_DONATION,
+  TransactionType.GENERAL_DONATION,
+];
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDashboardStats() {
-    const now = new Date(); 
+    const now = new Date();
 
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthStart = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
 
     const [
-      totalDonationsAggregate,
-      currentMonthDonations,
-      previousMonthDonations,
+      totalDonations,
+      curMonthSum,
+      prevMonthSum,
       completedCasesCount,
       targetedCasesCount,
     ] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        _sum: { amount: true },
-        where: { status: TransactionStatus.SUCCESSFUL },
-      }),
-      this.prisma.transaction.aggregate({
-        _sum: { amount: true },
-        where: {
-          status: TransactionStatus.SUCCESSFUL,
-          createdAt: { gte: currentMonthStart, lt: nextMonthStart },
-        },
-      }),
-      this.prisma.transaction.aggregate({
-        _sum: { amount: true },
-        where: {
-          status: TransactionStatus.SUCCESSFUL,
-          createdAt: { gte: previousMonthStart, lt: currentMonthStart },
-        },
-      }),
+      this.sumActualDonations(),
+      this.sumActualDonations(currentMonthStart, nextMonthStart),
+      this.sumActualDonations(previousMonthStart, currentMonthStart),
       this.prisma.$queryRaw<any[]>`
         SELECT COUNT(*) as count 
         FROM RequestAid 
-        WHERE status = 'accepted' AND currentPayment >= cost
+        WHERE status = ${Status.ACCEPTED} AND currentPayment >= cost
       `.then(result => Number(result[0]?.count || 0)),
       this.prisma.requestAid.count({
-        where: { status: 'ACCEPTED' as any  },
+        where: { status: Status.ACCEPTED },
       }),
     ]);
 
-    const totalDonations = Number(totalDonationsAggregate._sum?.amount ?? 0);
-    const curMonthSum = Number(currentMonthDonations._sum?.amount ?? 0);
-    const prevMonthSum = Number(previousMonthDonations._sum?.amount ?? 0);
-
-    let growthRate = 0;
+    let growthRate: number | null = 0;
     if (prevMonthSum === 0) {
       growthRate = curMonthSum > 0 ? 100 : 0;
     } else {
@@ -62,9 +67,116 @@ export class DashboardService {
 
     return {
       total_donations: totalDonations,
-      donations_growth_percentage: Math.round((growthRate + Number.EPSILON) * 100) / 100,
+      donations_growth_percentage:
+        growthRate === null
+          ? null
+          : Math.round((growthRate + Number.EPSILON) * 100) / 100,
       completed_cases: completedCasesCount,
       targeted_completed_cases: targetedCasesCount,
+    };
+  }
+
+  async getUsersCount(): Promise<DashboardUsersCountResponseDto> {
+    const [donorsCount, beneficiariesCount] = await Promise.all([
+      this.prisma.donor.count(),
+      this.prisma.beneficiary.count(),
+    ]);
+
+    return {
+      donors_count: donorsCount,
+      beneficiaries_count: beneficiariesCount,
+    };
+  }
+
+  async getDonationDistribution(
+    period: 'annual' | 'monthly',
+  ): Promise<
+    AnnualDonationDistributionItemDto[] | MonthlyDonationDistributionItemDto[]
+  > {
+    const now = new Date();
+
+    if (period === 'annual') {
+      const currentYear = now.getFullYear();
+      const years = Array.from(
+        { length: 5 },
+        (_, index) => currentYear - 4 + index,
+      );
+
+      return Promise.all(
+        years.map(async (year) => ({
+          year,
+          amount: await this.sumActualDonations(
+            new Date(year, 0, 1),
+            new Date(year + 1, 0, 1),
+          ),
+        })),
+      );
+    }
+
+    const year = now.getFullYear();
+    const months = Array.from({ length: 12 }, (_, index) => index + 1);
+
+    return Promise.all(
+      months.map(async (month) => ({
+        month,
+        amount: await this.sumActualDonations(
+          new Date(year, month - 1, 1),
+          new Date(year, month, 1),
+        ),
+      })),
+    );
+  }
+
+  async getAidRequestCategoryDistribution(): Promise<
+    AidRequestCategoryDistributionItemDto[]
+  > {
+    const categories = await this.prisma.category.findMany({
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        _count: { select: { requests: true } },
+      },
+    });
+
+    return categories.map((category) => ({
+      category_id: category.id,
+      category: category.name,
+      count: category._count.requests,
+    }));
+  }
+
+  async getSponsorshipStatistics(): Promise<SponsorshipStatisticsResponseDto> {
+    const statusCounts = await this.prisma.sponsorship.groupBy({
+      by: ['status'],
+      where: {
+        status: {
+          in: [Status.ACCEPTED, Status.PENDING, Status.REJECTED],
+        },
+      },
+      _count: { _all: true },
+    });
+
+    const countByStatus = new Map(
+      statusCounts.map(({ status, _count }) => [status, _count._all]),
+    );
+
+    return {
+      accepted: countByStatus.get(Status.ACCEPTED) ?? 0,
+      pending: countByStatus.get(Status.PENDING) ?? 0,
+      rejected: countByStatus.get(Status.REJECTED) ?? 0,
+    };
+  }
+
+  async getOrphanStatistics(): Promise<OrphanStatisticsResponseDto> {
+    const [sponsored, notSponsored] = await Promise.all([
+      this.prisma.orphan.count({ where: { isSupported: true } }),
+      this.prisma.orphan.count({ where: { isSupported: false } }),
+    ]);
+
+    return {
+      sponsored,
+      not_sponsored: notSponsored,
     };
   }
 
@@ -91,6 +203,7 @@ export class DashboardService {
           WHERE status = ${Status.ACCEPTED}
             AND isUrgent = true
             AND reviewedAt IS NOT NULL
+            AND reviewedAt >= createdAt
         `,
       ]);
 
@@ -110,5 +223,40 @@ export class DashboardService {
       avg_review_time_days:
         Math.round((averageReviewTimeDays + Number.EPSILON) * 10) / 10,
     };
+  }
+
+  private async sumActualDonations(start?: Date, end?: Date): Promise<number> {
+    const createdAt =
+      start || end
+        ? {
+            ...(start ? { gte: start } : {}),
+            ...(end ? { lt: end } : {}),
+          }
+        : undefined;
+
+    const [transactionDonations, walletDonations] = await Promise.all([
+      this.prisma.transaction.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: TransactionStatus.SUCCESSFUL,
+          type: { in: ACTUAL_DONATION_TYPES },
+          ...(createdAt ? { createdAt } : {}),
+        },
+      }),
+      this.prisma.walletTransaction.aggregate({
+        _sum: { amount: true },
+        where: {
+          transactionId: null,
+          direction: WalletTransactionDirection.DEBIT,
+          type: { in: ACTUAL_DONATION_TYPES },
+          ...(createdAt ? { createdAt } : {}),
+        },
+      }),
+    ]);
+
+    return (
+      Number(transactionDonations._sum?.amount ?? 0) +
+      Number(walletDonations._sum?.amount ?? 0)
+    );
   }
 }

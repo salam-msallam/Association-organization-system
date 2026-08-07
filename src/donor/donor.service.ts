@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
+  Status,
   TransactionStatus,
   TransactionType,
   UserType,
@@ -24,6 +25,7 @@ import {
   DonorHistoryOrphanDto,
   MobileDonorHistoryResponseDto,
 } from './dto/donor-response.dto';
+import { CompletedAidCasesCountResponseDto } from './dto/public-statistics-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
 const DEFAULT_APP_TIMEZONE = 'Asia/Damascus';
@@ -52,6 +54,19 @@ export class DonorService {
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
   ) {}
+
+  async getCompletedAidCasesCount(): Promise<CompletedAidCasesCountResponseDto> {
+    const result = await this.prisma.$queryRaw<Array<{ count: bigint | number }>>`
+      SELECT COUNT(*) as count
+      FROM RequestAid
+      WHERE status = ${Status.ACCEPTED}
+        AND currentPayment >= cost
+    `;
+
+    return {
+      completed_aid_cases_count: Number(result[0]?.count ?? 0),
+    };
+  }
 
   async findAll(
     pageInput?: string,
