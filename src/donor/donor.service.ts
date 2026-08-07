@@ -1,12 +1,17 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
+  Status,
   TransactionStatus,
   TransactionType,
+  UserType,
   WalletTransactionDirection,
 } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
@@ -18,9 +23,12 @@ import {
   DonorHistoryAidRequestDto,
   DonorHistoryItemDto,
   DonorHistoryOrphanDto,
+  MobileDonorHistoryResponseDto,
 } from './dto/donor-response.dto';
+import { CompletedAidCasesCountResponseDto } from './dto/public-statistics-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
+const DEFAULT_APP_TIMEZONE = 'Asia/Damascus';
 
 type FinancialRecord = {
   amount: Prisma.Decimal;
@@ -33,12 +41,32 @@ type FinancialRecord = {
 type AidRequestMap = Map<number, DonorHistoryAidRequestDto>;
 type OrphanMap = Map<number, DonorHistoryOrphanDto>;
 
+type DonorUserPayload = {
+  id?: number;
+  type?: string;
+  userType?: string;
+};
+
 @Injectable()
 export class DonorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly configService: ConfigService,
   ) {}
+
+  async getCompletedAidCasesCount(): Promise<CompletedAidCasesCountResponseDto> {
+    const result = await this.prisma.$queryRaw<Array<{ count: bigint | number }>>`
+      SELECT COUNT(*) as count
+      FROM RequestAid
+      WHERE status = ${Status.ACCEPTED}
+        AND currentPayment >= cost
+    `;
+
+    return {
+      completed_aid_cases_count: Number(result[0]?.count ?? 0),
+    };
+  }
 
   async findAll(
     pageInput?: string,
@@ -294,8 +322,132 @@ export class DonorService {
     };
   }
 
+  async getMyHistory(
+    user: DonorUserPayload,
+    lang = 'ar',
+  ): Promise<MobileDonorHistoryResponseDto> {
+    const donorUserId = this.getAuthenticatedDonorUserId(user, lang);
+
+    const donor = await this.prisma.donor.findUnique({
+      where: { userId: donorUserId },
+      select: { id: true, userId: true },
+    });
+
+    if (!donor) {
+      throw new ForbiddenException(this.t('AUTHENTICATED_USER_NOT_DONOR', lang));
+    }
+
+    const timezone = this.getAppTimezone();
+    const { currentYear, previousYear, start, end } =
+      this.getCurrentAndPreviousYearRange(timezone);
+    const operations = await this.getHistoryItemsForDonor(
+      donor.userId,
+      start,
+      end,
+      lang,
+    );
+
+    return {
+      success: true,
+      message: this.t('HISTORY_FETCH_SUCCESS', lang),
+      data: {
+        years: [
+          {
+            year: currentYear,
+            operations: operations.filter(
+              (operation) =>
+                this.getYearInTimezone(operation.createdAt, timezone) === currentYear,
+            ),
+          },
+          {
+            year: previousYear,
+            operations: operations.filter(
+              (operation) =>
+                this.getYearInTimezone(operation.createdAt, timezone) === previousYear,
+            ),
+          },
+        ],
+      },
+    };
+  }
+
+  private async getHistoryItemsForDonor(
+    donorUserId: number,
+    start: Date,
+    end: Date,
+    lang?: string,
+  ): Promise<DonorHistoryItemDto[]> {
+    const [transactions, wallet] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: {
+          donorId: donorUserId,
+          status: TransactionStatus.SUCCESSFUL,
+          createdAt: { gte: start, lt: end },
+          type: {
+            in: [
+              TransactionType.AID_REQUEST_DONATION,
+              TransactionType.WALLET_TOP_UP,
+              TransactionType.GENERAL_DONATION,
+            ],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          amount: true,
+          type: true,
+          createdAt: true,
+          referenceType: true,
+          referenceId: true,
+        },
+      }),
+      this.prisma.wallet.findUnique({
+        where: { donorId: donorUserId },
+        select: {
+          id: true,
+          transactions: {
+            where: {
+              createdAt: { gte: start, lt: end },
+              direction: WalletTransactionDirection.DEBIT,
+              type: {
+                in: [
+                  TransactionType.AID_REQUEST_DONATION,
+                  TransactionType.SPONSORSHIP_DONATION,
+                ],
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+              amount: true,
+              type: true,
+              createdAt: true,
+              referenceType: true,
+              referenceId: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const walletTransactions = wallet?.transactions ?? [];
+    const aidRequestMap = await this.getAidRequestMap(
+      [...transactions, ...walletTransactions],
+      lang,
+    );
+    const orphanMap = await this.getOrphanMap(walletTransactions);
+
+    return [
+      ...transactions.map((transaction) =>
+        this.mapTransaction(transaction, aidRequestMap),
+      ),
+      ...walletTransactions.map((transaction) =>
+        this.mapWalletTransaction(transaction, aidRequestMap, orphanMap),
+      ),
+    ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  }
+
   private async getAidRequestMap(
     records: FinancialRecord[],
+    lang?: string,
   ): Promise<AidRequestMap> {
     const ids = [
       ...new Set(
@@ -322,7 +474,9 @@ export class DonorService {
         request.id,
         {
           id: request.id,
-          title: request.title,
+          title: lang
+            ? this.localizeJsonValue(request.title, lang)
+            : request.title,
         },
       ]),
     );
@@ -514,6 +668,87 @@ export class DonorService {
       start: new Date(now.getFullYear(), 0, 1),
       end: new Date(now.getFullYear() + 1, 0, 1),
     };
+  }
+
+  private getAuthenticatedDonorUserId(
+    user: DonorUserPayload,
+    lang: string,
+  ): number {
+    if (!user?.id) {
+      throw new UnauthorizedException(this.t('AUTHENTICATION_REQUIRED', lang));
+    }
+
+    const userType = user.type ?? user.userType;
+
+    if (userType !== UserType.DONOR) {
+      throw new ForbiddenException(this.t('ONLY_DONORS_CAN_VIEW_HISTORY', lang));
+    }
+
+    return user.id;
+  }
+
+  private getAppTimezone(): string {
+    const timezone = this.configService.get<string>('APP_TIMEZONE')?.trim();
+
+    return timezone || DEFAULT_APP_TIMEZONE;
+  }
+
+  private getCurrentAndPreviousYearRange(
+    timezone: string,
+    now = new Date(),
+  ): { currentYear: number; previousYear: number; start: Date; end: Date } {
+    const currentYear = this.getYearInTimezone(now, timezone);
+    const previousYear = currentYear - 1;
+
+    return {
+      currentYear,
+      previousYear,
+      start: this.getZonedYearStart(previousYear, timezone),
+      end: this.getZonedYearStart(currentYear + 1, timezone),
+    };
+  }
+
+  private getYearInTimezone(date: Date, timezone: string): number {
+    return Number(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+      }).format(date),
+    );
+  }
+
+  private getZonedYearStart(year: number, timezone: string): Date {
+    const localAsUtc = Date.UTC(year, 0, 1, 0, 0, 0);
+    const firstOffset = this.getTimezoneOffsetMs(new Date(localAsUtc), timezone);
+    const firstCandidate = new Date(localAsUtc - firstOffset);
+    const correctedOffset = this.getTimezoneOffsetMs(firstCandidate, timezone);
+
+    return new Date(localAsUtc - correctedOffset);
+  }
+
+  private getTimezoneOffsetMs(date: Date, timezone: string): number {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(date);
+    const getPart = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value);
+    const zonedTimestamp = Date.UTC(
+      getPart('year'),
+      getPart('month') - 1,
+      getPart('day'),
+      getPart('hour'),
+      getPart('minute'),
+      getPart('second'),
+    );
+
+    return zonedTimestamp - date.getTime();
   }
 
   private t(key: string, lang: string): string {

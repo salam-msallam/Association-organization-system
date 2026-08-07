@@ -3,12 +3,14 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiHeader,
   ApiOperation,
   ApiResponse,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { I18nLang, I18nService } from 'nestjs-i18n';
 import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
@@ -25,8 +27,10 @@ import {
 import {
   BadRequestException,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @ApiTags('Auth')
 @ApiHeader({
@@ -176,6 +180,26 @@ export class AuthController {
       forgotPasswordResetDto,
       lang,
     );
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: 'Logout the authenticated user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Logged out successfully.',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'JWT token is missing or invalid.' })
+  async logout(@I18nLang() lang: string) {
+    return this.authService.logout(lang);
   }
 
   @HttpCode(HttpStatus.OK)
