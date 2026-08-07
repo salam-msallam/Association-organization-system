@@ -22,6 +22,7 @@ import { ProfileModule } from './profile/profile.module';
 import { SponsorshipModule } from './sponsorship/sponsorship.module';
 import { DonorModule } from './donor/donor.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AnnualReportModule } from './annual-report/annual-report.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ProfileModule,
     SponsorshipModule,
     DonorModule,
+    AnnualReportModule,
   ],
   controllers: [AppController],
   providers: [

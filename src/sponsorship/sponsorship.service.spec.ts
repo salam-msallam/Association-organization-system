@@ -46,6 +46,7 @@ describe('SponsorshipService', () => {
       },
       sponsorship: {
         findMany: jest.fn(),
+        count: jest.fn(),
         findUnique: jest.fn(),
       },
       walletTransaction: {
@@ -297,26 +298,66 @@ describe('SponsorshipService', () => {
         cancellationSource: null,
         createdAt,
         donor: {
+          id: 3,
           userId: 7,
-          user: { firstName: 'Sara', lastName: 'Ali' },
+          user: {
+            firstName: 'Sara',
+            lastName: 'Ali',
+            email: 'sara@example.com',
+            number: '934206455',
+          },
         },
         orphan: null,
       },
     ]);
+    prisma.sponsorship.count.mockResolvedValue(11);
 
-    const result = await service.findAllForStaff('rejected', 'en');
+    const result = await service.findAllForStaff('rejected', 'en', '2', '5');
 
     expect(prisma.sponsorship.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: Status.REJECTED } }),
+      expect.objectContaining({
+        where: { status: Status.REJECTED },
+        skip: 5,
+        take: 5,
+      }),
     );
+    expect(prisma.sponsorship.count).toHaveBeenCalledWith({
+      where: { status: Status.REJECTED },
+    });
     expect(result.data[0]).toEqual(
       expect.objectContaining({
         id: 5,
         monthlyAmount: '10.00',
         rejectionReason: 'Rejection reason',
-        donor: { id: 7, firstName: 'Sara', lastName: 'Ali' },
+        donor: {
+          id: 3,
+          firstName: 'Sara',
+          lastName: 'Ali',
+          email: 'sara@example.com',
+          number: '934206455',
+        },
       }),
     );
+    expect(result.meta).toEqual({
+      totalCount: 11,
+      page: 2,
+      limit: 5,
+      totalPages: 3,
+      hasNextPage: true,
+      hasPreviousPage: true,
+    });
+  });
+
+  it('rejects invalid admin sponsorship pagination', async () => {
+    await expect(
+      service.findAllForStaff(undefined, 'ar', '0', '10'),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(i18n.t).toHaveBeenCalledWith('sponsorship.INVALID_PAGINATION', {
+      lang: 'ar',
+      args: undefined,
+    });
+    expect(prisma.sponsorship.findMany).not.toHaveBeenCalled();
   });
 
   it('returns one sponsorship request for staff with localized JSON fields', async () => {
@@ -334,8 +375,14 @@ describe('SponsorshipService', () => {
       cancellationSource: null,
       createdAt,
       donor: {
+        id: 3,
         userId: 7,
-        user: { firstName: 'Sara', lastName: 'Ali' },
+        user: {
+          firstName: 'Sara',
+          lastName: 'Ali',
+          email: 'sara@example.com',
+          number: '934206455',
+        },
       },
       orphan: {
         id: 3,
@@ -374,7 +421,13 @@ describe('SponsorshipService', () => {
         id: 5,
         monthlyAmount: '10.00',
         rejectionReason: 'سبب الرفض',
-        donor: { id: 7, firstName: 'Sara', lastName: 'Ali' },
+        donor: {
+          id: 3,
+          firstName: 'Sara',
+          lastName: 'Ali',
+          email: 'sara@example.com',
+          number: '934206455',
+        },
         orphan: expect.objectContaining({
           id: 3,
           fatherName: 'Mohammad',
@@ -415,8 +468,14 @@ describe('SponsorshipService', () => {
         cancellationSource: null,
         createdAt: new Date('2026-07-10T09:00:00.000Z'),
         donor: {
+          id: 3,
           userId: 7,
-          user: { firstName: 'Sara', lastName: 'Ali' },
+          user: {
+            firstName: 'Sara',
+            lastName: 'Ali',
+            email: 'sara@example.com',
+            number: '934206455',
+          },
         },
         orphan: { id: 3, firstName: 'Ahmad', lastName: 'Ali' },
       });
@@ -484,8 +543,14 @@ describe('SponsorshipService', () => {
         cancellationSource: null,
         createdAt: new Date('2026-07-10T09:00:00.000Z'),
         donor: {
+          id: 3,
           userId: 7,
-          user: { firstName: 'Sara', lastName: 'Ali' },
+          user: {
+            firstName: 'Sara',
+            lastName: 'Ali',
+            email: 'sara@example.com',
+            number: '934206455',
+          },
         },
         orphan: null,
       });

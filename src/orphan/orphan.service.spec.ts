@@ -61,17 +61,51 @@ describe('OrphanService read responses', () => {
   });
 
   it('returns bilingual JSON fields in orphan details', async () => {
-    prisma.orphan.findUnique.mockResolvedValue(orphan);
+    prisma.orphan.findUnique.mockResolvedValue({
+      ...orphan,
+      sponsorships: [],
+    });
 
     const result = await service.findOne(1, 'ar');
 
     expect(result).toEqual({
       message: 'orphan.FETCH_ONE_SUCCESS:ar',
-      data: orphan,
+      data: {
+        ...orphan,
+        sponsorshipId: null,
+      },
+    });
+    expect(prisma.orphan.findUnique).toHaveBeenCalledWith({
+      where: { id: 1 },
+      include: {
+        sponsorships: {
+          where: { status: 'ACCEPTED' },
+          select: { id: true },
+          orderBy: { id: 'desc' },
+          take: 1,
+        },
+      },
     });
     expect(i18n.t).toHaveBeenCalledWith('orphan.FETCH_ONE_SUCCESS', {
       lang: 'ar',
     });
+  });
+
+  it('returns only the accepted sponsorship id for a supported orphan', async () => {
+    prisma.orphan.findUnique.mockResolvedValue({
+      ...orphan,
+      isSupported: true,
+      sponsorships: [{ id: 17 }],
+    });
+
+    const result = await service.findOne(1, 'en');
+
+    expect(result.data).toEqual({
+      ...orphan,
+      isSupported: true,
+      sponsorshipId: 17,
+    });
+    expect(result.data).not.toHaveProperty('sponsorships');
   });
 
   it('returns bilingual JSON fields after creating an orphan', async () => {

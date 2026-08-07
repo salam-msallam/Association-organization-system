@@ -17,15 +17,13 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { WhatsappService } from './whatsapp.service';
 import { UsersService } from '../users/users.service';
 import { Status } from '@prisma/client';
-import {LoginClientDto} from './dto/login_client.dto';
+import { LoginClientDto } from './dto/login_client.dto';
 import { ForgotPasswordRequestOtpDto } from './dto/forgot-password-request-otp.dto';
 import { ForgotPasswordResetDto } from './dto/forgot-password-reset.dto';
 import {
   normalizeFullPhoneNumber,
   normalizePhoneComponents,
 } from './phone-number.util';
-
- 
 
 import {
   BadRequestException,
@@ -43,83 +41,88 @@ export class AuthService {
     private readonly otpService: OtpService,
     private readonly whatsappService: WhatsappService,
     private readonly i18n: I18nService,
-    private usersService: UsersService, 
+    private usersService: UsersService,
     private jwtService: JwtService,
   ) {}
 
   async validateUser(loginDto: LoginDto, lang = 'ar') {
     const { email, password } = loginDto;
 
-    const user = await this.prisma.user.findUnique({ 
-    where: { email },
-    include: {
-      roles: {
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true,
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
     });
     if (!user) {
-      throw new UnauthorizedException(this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }));
+      throw new UnauthorizedException(
+        this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }),
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException(this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }));
+      throw new UnauthorizedException(
+        this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }),
+      );
     }
 
-    return user; 
+    return user;
   }
 
   async login(user: any, lang = 'ar') {
-    const payload = { 
-      sub: user.id, 
-      email: user.email, 
-      userType: user.userType 
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      userType: user.userType,
     };
 
     let userRoles = [];
-   if (user.roles && user.roles.length > 0) {
-    userRoles = user.roles.map((userRole: any) => ({
-      id: userRole.role.id,
-      name: userRole.role.name,
-      label: userRole.role.label,
-      permissions: (userRole.role.permissions || []).map(
-        ({ permission }: any) => ({
-          id: permission.id,
-          name: permission.name,
-        }),
-      ),
-    }));
-  }
+    if (user.roles && user.roles.length > 0) {
+      userRoles = user.roles.map((userRole: any) => ({
+        id: userRole.role.id,
+        name: userRole.role.name,
+        label: userRole.role.label,
+        permissions: (userRole.role.permissions || []).map(
+          ({ permission }: any) => ({
+            id: permission.id,
+            name: permission.name,
+          }),
+        ),
+      }));
+    }
     return {
       success: true,
       message: this.i18n.t('auth.LOGIN_SUCCESS', { lang }),
-      accessToken: this.jwtService.sign(payload), 
+      accessToken: this.jwtService.sign(payload),
+      userType: user.userType,
       roles: userRoles,
     };
   }
-
-
 
   private getRegistrationCacheKey(countryCode: string, number: string): string {
     return `registration:${countryCode}${number}`;
   }
 
-  private normalizeRegistrationDto<T extends RegisterDonorDto | RegisterBeneficiaryDto>(
-    dto: T,
-    lang: string,
-  ): T {
-    const normalizedPhone = normalizePhoneComponents(dto.countryCode, dto.number);
+  private normalizeRegistrationDto<
+    T extends RegisterDonorDto | RegisterBeneficiaryDto,
+  >(dto: T, lang: string): T {
+    const normalizedPhone = normalizePhoneComponents(
+      dto.countryCode,
+      dto.number,
+    );
 
     if (!normalizedPhone) {
       throw new BadRequestException(
@@ -145,23 +148,23 @@ export class AuthService {
         number: dto.number,
       },
     });
-  if (existingUser) {
-    throw new BadRequestException(
-      this.i18n.t('auth.PHONE_ALREADY_REGISTERED', { lang })
-    );
-  }
+    if (existingUser) {
+      throw new BadRequestException(
+        this.i18n.t('auth.PHONE_ALREADY_REGISTERED', { lang }),
+      );
+    }
 
-  const existingUserByEmail = await this.prisma.user.findUnique({
-  where: {
-    email: dto.email, 
-  },
-});
+    const existingUserByEmail = await this.prisma.user.findUnique({
+      where: {
+        email: dto.email,
+      },
+    });
 
-if (existingUserByEmail) {
-  throw new BadRequestException(
-    this.i18n.t('auth.EMAIL_ALREADY_REGISTERED', { lang }) 
-  );
-}
+    if (existingUserByEmail) {
+      throw new BadRequestException(
+        this.i18n.t('auth.EMAIL_ALREADY_REGISTERED', { lang }),
+      );
+    }
     const cacheKey = this.getRegistrationCacheKey(dto.countryCode, dto.number);
 
     const cacheValue: PendingRegistrationCache = {
@@ -174,7 +177,10 @@ if (existingUserByEmail) {
     return cacheKey;
   }
 
-  private async clearPendingRegistration(countryCode: string, number: string): Promise<void> {
+  private async clearPendingRegistration(
+    countryCode: string,
+    number: string,
+  ): Promise<void> {
     const cacheKey = this.getRegistrationCacheKey(countryCode, number);
     await this.cacheManager.del(cacheKey);
   }
@@ -194,11 +200,16 @@ if (existingUserByEmail) {
     }
   }
 
-  private async findEligiblePasswordResetUser(phoneNumber: string, lang: string) {
+  private async findEligiblePasswordResetUser(
+    phoneNumber: string,
+    lang: string,
+  ) {
     const normalizedPhone = normalizeFullPhoneNumber(phoneNumber);
 
     if (!normalizedPhone) {
-      throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }),
+      );
     }
 
     const user = await this.prisma.user.findFirst({
@@ -218,7 +229,9 @@ if (existingUserByEmail) {
 
     if (user.userType === 'DONOR') {
       if (!user.donor) {
-        throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+        throw new NotFoundException(
+          this.i18n.t('auth.USER_NOT_FOUND', { lang }),
+        );
       }
 
       return { user, fullPhoneNumber: normalizedPhone.e164 };
@@ -226,7 +239,9 @@ if (existingUserByEmail) {
 
     if (user.userType === 'BENEFICIARY') {
       if (!user.beneficiary) {
-        throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+        throw new NotFoundException(
+          this.i18n.t('auth.USER_NOT_FOUND', { lang }),
+        );
       }
 
       if (user.beneficiary.status !== Status.ACCEPTED) {
@@ -241,34 +256,45 @@ if (existingUserByEmail) {
     throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
   }
 
- async registerDonor(dto: RegisterDonorDto, lang: string): Promise<{ message: string }> {
-  const normalizedDto = this.normalizeRegistrationDto(dto, lang);
-  await this.storePendingRegistration('DONOR', normalizedDto, lang);
+  async registerDonor(
+    dto: RegisterDonorDto,
+    lang: string,
+  ): Promise<{ message: string }> {
+    const normalizedDto = this.normalizeRegistrationDto(dto, lang);
+    await this.storePendingRegistration('DONOR', normalizedDto, lang);
 
-  let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
-  
-  try {
-    otpResult = await this.otpService.createRegistrationOtp(
-      normalizedDto.countryCode,
-      normalizedDto.number,
-    );
-  } catch (error) {
-    await this.clearPendingRegistration(
-      normalizedDto.countryCode,
-      normalizedDto.number,
-    );
-    throw error;
+    let otpResult:
+      | { code: string; fullPhoneNumber: string; expiresAt: Date }
+      | undefined;
+
+    try {
+      otpResult = await this.otpService.createRegistrationOtp(
+        normalizedDto.countryCode,
+        normalizedDto.number,
+      );
+    } catch (error) {
+      await this.clearPendingRegistration(
+        normalizedDto.countryCode,
+        normalizedDto.number,
+      );
+      throw error;
+    }
+
+    try {
+      await this.whatsappService.sendOtp(
+        otpResult.fullPhoneNumber,
+        otpResult.code,
+        lang,
+      );
+    } catch (whatsappError) {
+      console.error(
+        'WhatsApp sending failed, but OTP is kept in DB for testing:',
+      );
+      return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
+    }
+
+    return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
   }
-
-  try {
-    await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
-  } catch (whatsappError) {
-    console.error('WhatsApp sending failed, but OTP is kept in DB for testing:');
-    return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
-  }
-
-  return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
-}
 
   async registerBeneficiary(
     dto: RegisterBeneficiaryDto,
@@ -277,27 +303,35 @@ if (existingUserByEmail) {
     const normalizedDto = this.normalizeRegistrationDto(dto, lang);
     await this.storePendingRegistration('BENEFICIARY', normalizedDto, lang);
 
-    let otpResult: { code: string; fullPhoneNumber: string; expiresAt: Date } | undefined;
-  try {
+    let otpResult:
+      | { code: string; fullPhoneNumber: string; expiresAt: Date }
+      | undefined;
+    try {
       otpResult = await this.otpService.createRegistrationOtp(
         normalizedDto.countryCode,
         normalizedDto.number,
       );
-  } catch (error) {
-    await this.clearPendingRegistration(
-      normalizedDto.countryCode,
-      normalizedDto.number,
-    );
-    throw error;
-  }
-  try {
-    await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
-  } catch (whatsappError) {
-    console.error('WhatsApp sending failed, but OTP is kept in DB for testing:');
-    return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
-  }
+    } catch (error) {
+      await this.clearPendingRegistration(
+        normalizedDto.countryCode,
+        normalizedDto.number,
+      );
+      throw error;
+    }
+    try {
+      await this.whatsappService.sendOtp(
+        otpResult.fullPhoneNumber,
+        otpResult.code,
+        lang,
+      );
+    } catch (whatsappError) {
+      console.error(
+        'WhatsApp sending failed, but OTP is kept in DB for testing:',
+      );
+      return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
+    }
 
-  return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
+    return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
   }
 
   async requestPasswordResetOtp(
@@ -316,9 +350,15 @@ if (existingUserByEmail) {
     );
 
     try {
-      await this.whatsappService.sendOtp(otpResult.fullPhoneNumber, otpResult.code, lang);
+      await this.whatsappService.sendOtp(
+        otpResult.fullPhoneNumber,
+        otpResult.code,
+        lang,
+      );
     } catch (whatsappError) {
-      console.error('WhatsApp sending failed, but password reset OTP is kept in DB for testing:');
+      console.error(
+        'WhatsApp sending failed, but password reset OTP is kept in DB for testing:',
+      );
       return { message: this.i18n.t('auth.WHATSAPP_SENDING_FAILED', { lang }) };
     }
 
@@ -329,7 +369,10 @@ if (existingUserByEmail) {
     dto: ForgotPasswordResetDto,
     lang: string,
   ): Promise<{ success: boolean; message: string }> {
-    const otpRecord = await this.otpService.verifyPasswordResetOtp(dto.code, lang);
+    const otpRecord = await this.otpService.verifyPasswordResetOtp(
+      dto.code,
+      lang,
+    );
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
 
     try {
@@ -382,11 +425,15 @@ if (existingUserByEmail) {
       normalizedPhone.countryCode,
       normalizedPhone.number,
     );
-    const data = await this.cacheManager.get<PendingRegistrationCache>(cacheKey);
+    const data =
+      await this.cacheManager.get<PendingRegistrationCache>(cacheKey);
     return data || null;
   }
 
-  async deletePendingRegistration(countryCode: string, number: string): Promise<void> {
+  async deletePendingRegistration(
+    countryCode: string,
+    number: string,
+  ): Promise<void> {
     const normalizedPhone = normalizePhoneComponents(countryCode, number);
 
     if (!normalizedPhone) {
@@ -401,23 +448,35 @@ if (existingUserByEmail) {
   }
 
   async verifyRegistrationOtp(dto: VerifyOtpDto, lang: string) {
-    const normalizedPhone = normalizePhoneComponents(dto.countryCode, dto.number);
+    const normalizedPhone = normalizePhoneComponents(
+      dto.countryCode,
+      dto.number,
+    );
 
     if (!normalizedPhone) {
-      throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }),
+      );
     }
 
     const fullPhoneNumber = normalizedPhone.e164;
-    await this.otpService.verifyRegistrationOtp(fullPhoneNumber, dto.code, lang);
+    await this.otpService.verifyRegistrationOtp(
+      fullPhoneNumber,
+      dto.code,
+      lang,
+    );
 
     const cacheKey = this.getRegistrationCacheKey(
       normalizedPhone.countryCode,
       normalizedPhone.number,
     );
-    const pendingRegistration = await this.cacheManager.get<PendingRegistrationCache>(cacheKey);
+    const pendingRegistration =
+      await this.cacheManager.get<PendingRegistrationCache>(cacheKey);
 
     if (!pendingRegistration) {
-      throw new BadRequestException(this.i18n.t('auth.REGISTRATION_TIMEOUT', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('auth.REGISTRATION_TIMEOUT', { lang }),
+      );
     }
 
     const pendingData = pendingRegistration.data;
@@ -453,7 +512,7 @@ if (existingUserByEmail) {
             data: {
               userId: newUser.id,
               zipCode: donorData.zipCode,
-              isSponsor:false,
+              isSponsor: false,
             },
           });
         }
@@ -495,33 +554,38 @@ if (existingUserByEmail) {
     }
   }
 
-  async login_client(loginClientDto: LoginClientDto , lang:string) {
-
+  async login_client(loginClientDto: LoginClientDto, lang: string) {
     const { phoneNumber, password } = loginClientDto;
     const normalizedPhone = normalizeFullPhoneNumber(phoneNumber);
 
     if (!normalizedPhone) {
-      throw new BadRequestException(this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('auth.INVALID_PHONE_NUMBER', { lang }),
+      );
     }
 
     // const user = await this.usersService.findByPhoneComponents(countryCode, nationalNumber);
     const user = await this.prisma.user.findFirst({
       where: {
-        countryCode: normalizedPhone.countryCode, 
+        countryCode: normalizedPhone.countryCode,
         number: normalizedPhone.number,
       },
       include: {
-        beneficiary: true, 
+        beneficiary: true,
         donor: true,
-      }
+      },
     });
-      
+
     if (!user) {
-      throw new UnauthorizedException(this.i18n.t('auth.INVALID_PHONE_OR_PASSWORD', { lang }));
+      throw new UnauthorizedException(
+        this.i18n.t('auth.INVALID_PHONE_OR_PASSWORD', { lang }),
+      );
     }
     const isPasswordMatching = await bcrypt.compare(password, user.password);
     if (!isPasswordMatching) {
-      throw new UnauthorizedException(this.i18n.t('auth.INVALID_PASSWORD',{lang}));
+      throw new UnauthorizedException(
+        this.i18n.t('auth.INVALID_PASSWORD', { lang }),
+      );
     }
 
     if (user.userType === 'BENEFICIARY') {
@@ -541,12 +605,11 @@ if (existingUserByEmail) {
       }
     }
 
-    
-    const payload = { 
-      sub: user.id, 
-      countryCode: user.countryCode, 
+    const payload = {
+      sub: user.id,
+      countryCode: user.countryCode,
       number: user.number,
-      type: user.userType
+      type: user.userType,
     };
 
     return {

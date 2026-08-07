@@ -160,22 +160,22 @@ model Orphan {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  sponsorships  Sponsorship[]
-  annualReports AnnualReport[]
+  sponsorships Sponsorship[]
 
   @@unique([firstName(length: 50), lastName(length: 50), guardianName(length: 50)])
 }
 
 model AnnualReport {
-  id         Int      @id @default(autoincrement())
-  orphanId   Int
-  orphan     Orphan   @relation(fields: [orphanId], references: [id], onDelete: Cascade)
-  employeeId Int
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  year       Int
-  content    Json
-  mediaUrls  String
-  createdAt  DateTime @default(now())
+  id            Int         @id @default(autoincrement())
+  employeeId    Int
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  sponsorshipId Int
+  sponsorship   Sponsorship @relation(fields: [sponsorshipId], references: [id], onDelete: Restrict)
+  mediaUrl      Json
+  reportNumber  Int
+  createdAt     DateTime    @default(now())
+
+  @@unique([sponsorshipId, reportNumber])
 }
 
 model Sponsorship {
@@ -193,6 +193,8 @@ model Sponsorship {
   endDate            DateTime?
   cancellationSource CancellationSource?
   createdAt          DateTime            @default(now())
+
+  annualReports AnnualReport[]
 }
 
 enum CancellationSource {

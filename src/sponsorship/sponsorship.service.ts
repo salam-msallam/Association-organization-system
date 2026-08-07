@@ -75,8 +75,14 @@ type AdminSponsorshipRecord<TOrphan> = {
   cancellationSource: CancellationSource | null;
   createdAt: Date;
   donor: {
+    id: number;
     userId: number;
-    user: { firstName: string; lastName: string };
+    user: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      number: string;
+    };
   };
   orphan: TOrphan;
 };
@@ -240,33 +246,58 @@ export class SponsorshipService {
     };
   }
 
-  async findAllForStaff(status?: string, lang = 'ar') {
+  async findAllForStaff(
+    status?: string,
+    lang = 'ar',
+    pageInput?: string,
+    limitInput?: string,
+  ) {
     const normalizedStatus = this.normalizeStatus(status, lang);
-    const sponsorships = await this.prisma.sponsorship.findMany({
-      where: normalizedStatus ? { status: normalizedStatus } : {},
-      orderBy: { id: 'desc' },
-      select: {
-        id: true,
-        amount: true,
-        status: true,
-        rejectionReason: true,
-        startDate: true,
-        endDate: true,
-        cancellationSource: true,
-        createdAt: true,
-        donor: {
-          select: {
-            userId: true,
-            user: {
-              select: { firstName: true, lastName: true },
+    const page = this.parsePositiveInteger(pageInput, 1, lang);
+    const limit = this.parsePositiveInteger(limitInput, 10, lang);
+    const skip = (page - 1) * limit;
+    const where: Prisma.SponsorshipWhereInput = normalizedStatus
+      ? { status: normalizedStatus }
+      : {};
+
+    const [sponsorships, totalCount] = await Promise.all([
+      this.prisma.sponsorship.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { id: 'desc' },
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          rejectionReason: true,
+          startDate: true,
+          endDate: true,
+          cancellationSource: true,
+          createdAt: true,
+          donor: {
+            select: {
+              id: true,
+              userId: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  number: true,
+                },
+              },
             },
           },
+          orphan: {
+            select: { id: true, firstName: true, lastName: true },
+          },
         },
-        orphan: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-      },
-    });
+      }),
+      this.prisma.sponsorship.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
 
     return {
       success: true,
@@ -274,6 +305,14 @@ export class SponsorshipService {
       data: sponsorships.map((sponsorship) =>
         this.toAdminSponsorshipResponse(sponsorship, lang),
       ),
+      meta: {
+        totalCount,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
     };
   }
 
@@ -291,9 +330,15 @@ export class SponsorshipService {
         createdAt: true,
         donor: {
           select: {
+            id: true,
             userId: true,
             user: {
-              select: { firstName: true, lastName: true },
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                number: true,
+              },
             },
           },
         },
@@ -404,8 +449,16 @@ export class SponsorshipService {
           createdAt: true,
           donor: {
             select: {
+              id: true,
               userId: true,
-              user: { select: { firstName: true, lastName: true } },
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  number: true,
+                },
+              },
             },
           },
           orphan: {
@@ -693,9 +746,11 @@ export class SponsorshipService {
       cancellationSource: sponsorship.cancellationSource,
       createdAt: sponsorship.createdAt,
       donor: {
-        id: sponsorship.donor.userId,
+        id: sponsorship.donor.id,
         firstName: sponsorship.donor.user.firstName,
         lastName: sponsorship.donor.user.lastName,
+        email: sponsorship.donor.user.email,
+        number: sponsorship.donor.user.number,
       },
       orphan: sponsorship.orphan,
     };
@@ -754,6 +809,27 @@ export class SponsorshipService {
     }
 
     return normalizedStatus;
+  }
+
+  private parsePositiveInteger(
+    value: string | undefined,
+    defaultValue: number,
+    lang: string,
+  ): number {
+    if (value === undefined || value === '') return defaultValue;
+
+    const normalizedValue = value.trim();
+    const parsed = Number(normalizedValue);
+
+    if (
+      !/^\d+$/.test(normalizedValue) ||
+      !Number.isSafeInteger(parsed) ||
+      parsed <= 0
+    ) {
+      throw new BadRequestException(this.t('INVALID_PAGINATION', lang));
+    }
+
+    return parsed;
   }
 
   private localizeJsonValue(value: unknown, lang: string): unknown {

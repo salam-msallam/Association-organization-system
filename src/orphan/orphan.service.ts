@@ -3,7 +3,7 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Status } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrphanDto } from './dto/create-orphan.dto';
@@ -106,6 +106,14 @@ export class OrphanService {
   async findOne(id: number, lang = 'ar') {
     const orphan = await this.prisma.orphan.findUnique({
       where: { id },
+      include: {
+        sponsorships: {
+          where: { status: Status.ACCEPTED },
+          select: { id: true },
+          orderBy: { id: 'desc' },
+          take: 1,
+        },
+      },
     });
 
     if (!orphan) {
@@ -114,9 +122,14 @@ export class OrphanService {
       );
     }
 
+    const { sponsorships, ...orphanData } = orphan;
+
     return {
       message: this.i18n.t('orphan.FETCH_ONE_SUCCESS', { lang }),
-      data: orphan,
+      data: {
+        ...orphanData,
+        sponsorshipId: sponsorships?.[0]?.id ?? null,
+      },
     };
   }
 
@@ -243,5 +256,4 @@ export class OrphanService {
       throw error;
     }
   }
-
 }

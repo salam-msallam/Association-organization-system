@@ -272,6 +272,7 @@ describe('AuthService', () => {
       success: true,
       message: 'auth.LOGIN_SUCCESS',
       accessToken: 'staff-token',
+      userType: UserType.ADMIN,
       roles: [
         {
           id: 2,
@@ -296,6 +297,20 @@ describe('AuthService', () => {
         },
       ],
     });
+  });
+
+  it('returns EMPLOYEE as the user type when an employee logs in', async () => {
+    jwtService.sign.mockReturnValueOnce('employee-token');
+
+    const result = await service.login({
+      id: 9,
+      email: 'employee@test.com',
+      userType: UserType.EMPLOYEE,
+      roles: [],
+    });
+
+    expect(result.userType).toBe(UserType.EMPLOYEE);
+    expect(result.accessToken).toBe('employee-token');
   });
 
   it('normalizes client login before querying by phone components', async () => {

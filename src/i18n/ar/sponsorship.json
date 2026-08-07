@@ -6,6 +6,7 @@
   "REQUEST_CREATED": "طلب الكفالة قيد المراجعة من قبل الموظف.",
   "FETCH_SUCCESS": "تم جلب كفالاتك بنجاح.",
   "INVALID_STATUS": "حالة الكفالة غير صالحة.",
+  "INVALID_PAGINATION": "يجب أن تكون قيم page و limit أعداداً صحيحة موجبة.",
   "NOT_FOUND": "لم يتم العثور على الكفالة.",
   "ALREADY_CANCELLED": "الكفالة ملغاة بالفعل.",
   "CANCELLATION_NOT_ALLOWED": "لا يمكن إلغاء كفالة مرفوضة.",

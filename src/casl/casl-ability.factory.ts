@@ -21,6 +21,7 @@ export type Subjects =
   | 'Role'
   | 'RequestAid'
   | 'Sponsorship'
+  | 'AnnualReport'
   | 'all';
 
 export type AppAbility = MongoAbility<[Action, Subjects]>;
@@ -40,6 +41,7 @@ export class CaslAbilityFactory {
       can('read', 'Beneficiary');
       can('read', 'RequestAid');
       can('manage', 'Sponsorship');
+      can('manage', 'AnnualReport');
     }
 
     const userPermissions: string[] = user.permissions || [];
@@ -67,6 +69,7 @@ export class CaslAbilityFactory {
       roles: 'Role',
       aid_requests: 'RequestAid',
       sponsorships: 'Sponsorship',
+      annual_reports: 'AnnualReport',
     };
     return maps[subject] || null;
   }

@@ -62,17 +62,23 @@ export class AdminSponsorshipController {
   @CheckAbilities({ action: 'read', subject: 'Sponsorship' })
   @ApiOperation({ summary: 'List sponsorship requests for authorized staff' })
   @ApiQuery({ name: 'status', required: false, enum: Status })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiOkResponse({ type: AdminSponsorshipListResponseDto })
-  @ApiBadRequestResponse({ description: 'The status filter is invalid.' })
+  @ApiBadRequestResponse({
+    description: 'The status filter or pagination values are invalid.',
+  })
   @ApiUnauthorizedResponse({ description: 'Authentication is required.' })
   @ApiForbiddenResponse({
     description: 'Staff access and read:sponsorships permission are required.',
   })
   findAll(
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @I18nLang() lang = 'ar',
   ): Promise<AdminSponsorshipListResponseDto> {
-    return this.sponsorshipService.findAllForStaff(status, lang);
+    return this.sponsorshipService.findAllForStaff(status, lang, page, limit);
   }
 
   @Get(':id')

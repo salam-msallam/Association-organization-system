@@ -1,0 +1,12 @@
+{
+  "BOTH_IMAGES_REQUIRED": "Annual report images in both Arabic and English are required.",
+  "ORPHAN_UPDATE_REQUIRED": "The orphan information must be updated before saving the annual report.",
+  "IMAGE_REQUIRED": "The annual report image is required.",
+  "SPONSORSHIP_NOT_FOUND": "The sponsorship was not found.",
+  "SPONSORSHIP_NOT_ACCEPTED": "The sponsorship must be accepted before sending an annual report.",
+  "ORPHAN_NOT_ASSIGNED": "No orphan is assigned to this sponsorship.",
+  "EMPLOYEE_NOT_FOUND": "The current employee record was not found.",
+  "FIRST_PAYMENT_REQUIRED": "The first sponsorship payment is required before sending an annual report.",
+  "REPORT_NOT_DUE": "The next annual report is not due yet. Its due date is {dueDate}.",
+  "CREATE_SUCCESS": "The annual report was saved successfully."
+}

@@ -55,10 +55,9 @@ export class OrphanController {
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'create', subject: 'Orphan' })
   @UseInterceptors(
-    FileFieldsInterceptor(
-      [{ name: 'FamilyStatement', maxCount: 1 }],
-      { storage: createUploadStorage('./uploads/orphans') },
-    ),
+    FileFieldsInterceptor([{ name: 'FamilyStatement', maxCount: 1 }], {
+      storage: createUploadStorage('./uploads/orphans'),
+    }),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: CreateOrphanDto })
@@ -88,7 +87,9 @@ export class OrphanController {
   @Get()
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'read', subject: 'Orphan' })
-  @ApiOperation({ summary: 'Get paginated orphan records with optional support status filter' })
+  @ApiOperation({
+    summary: 'Get paginated orphan records with optional support status filter',
+  })
   @ApiResponse({ status: 200, description: 'Orphans fetched successfully.' })
   findAll(
     @Query('page') page?: string,
@@ -112,14 +113,25 @@ export class OrphanController {
       }
     }
 
-    return this.orphanService.findAll(pageNumber, limitNumber, supportedFilter, lang);
+    return this.orphanService.findAll(
+      pageNumber,
+      limitNumber,
+      supportedFilter,
+      lang,
+    );
   }
 
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'read', subject: 'Orphan' })
-  @ApiOperation({ summary: 'Get orphan record by id' })
-  @ApiResponse({ status: 200, description: 'Orphan fetched successfully.' })
+  @ApiOperation({
+    summary: 'Get orphan record by id with its active sponsorship ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Orphan fetched successfully. sponsorshipId is null when the orphan has no accepted sponsorship.',
+  })
   findOne(@Param('id') id: string, @I18nLang() lang: string) {
     return this.orphanService.findOne(+id, lang);
   }
@@ -128,10 +140,9 @@ export class OrphanController {
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'update', subject: 'Orphan' })
   @UseInterceptors(
-    FileFieldsInterceptor(
-      [{ name: 'FamilyStatement', maxCount: 1 }],
-      { storage: createUploadStorage('./uploads/orphans') },
-    ),
+    FileFieldsInterceptor([{ name: 'FamilyStatement', maxCount: 1 }], {
+      storage: createUploadStorage('./uploads/orphans'),
+    }),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: UpdateOrphanDto })

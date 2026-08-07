@@ -47,7 +47,16 @@ export class AuthController {
   @ApiOperation({ summary: 'تسجيل دخول الأدمن والموظفين' })
   @ApiResponse({
     status: 200,
-    description: 'تم تسجيل الدخول بنجاح وعاد التوكن.',
+    description: 'تم تسجيل الدخول بنجاح وإرجاع التوكن ونوع المستخدم والأدوار.',
+    schema: {
+      example: {
+        success: true,
+        message: 'تم تسجيل الدخول بنجاح.',
+        accessToken: 'jwt-token',
+        userType: 'EMPLOYEE',
+        roles: [],
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'البيانات المدخلة خاطئة.' })
   async login(@Body() loginDto: LoginDto, @I18nLang() lang: string) {

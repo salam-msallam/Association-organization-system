@@ -48,6 +48,16 @@ describe('CaslAbilityFactory beneficiary review permission', () => {
     expect(ability.can('status', 'Sponsorship')).toBe(true);
   });
 
+  it('maps annual report creation permission for authorized staff', () => {
+    const ability = factory.createForUser({
+      id: 5,
+      userType: UserType.EMPLOYEE,
+      permissions: ['create:annual_reports'],
+    });
+
+    expect(ability.can('create', 'AnnualReport')).toBe(true);
+  });
+
   it('protects the beneficiary status endpoint with the review permission', () => {
     const requiredAbility = Reflect.getMetadata(
       CHECK_ABILITY,

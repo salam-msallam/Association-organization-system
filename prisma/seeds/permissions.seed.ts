@@ -17,6 +17,7 @@ const permissionsData = [
   { name: 'read:aid_requests' },
   { name: 'read:sponsorships' },
   { name: 'status:sponsorships' },
+  { name: 'create:annual_reports' },
   { name: 'read:roles' },
   { name: 'create:roles' },
   { name: 'update:roles' },

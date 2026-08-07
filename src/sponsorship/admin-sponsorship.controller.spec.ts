@@ -27,14 +27,16 @@ describe('AdminSponsorshipController', () => {
     ).toEqual([JwtAuthGuard, StaffOnlyGuard, AbilitiesGuard]);
   });
 
-  it('passes the optional status filter to the service', async () => {
+  it('passes the optional status filter and pagination to the service', async () => {
     sponsorshipService.findAllForStaff.mockResolvedValue({ data: [] });
 
-    await controller.findAll('PENDING', 'en');
+    await controller.findAll('PENDING', '2', '5', 'en');
 
     expect(sponsorshipService.findAllForStaff).toHaveBeenCalledWith(
       'PENDING',
       'en',
+      '2',
+      '5',
     );
   });
 

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CancellationSource, Gender, Status } from '@prisma/client';
 
 class AdminSponsorshipDonorDto {
-  @ApiProperty({ example: 7 })
+  @ApiProperty({ example: 3, description: 'Donor record ID' })
   id!: number;
 
   @ApiProperty({ example: 'Sara' })
@@ -10,6 +10,12 @@ class AdminSponsorshipDonorDto {
 
   @ApiProperty({ example: 'Ali' })
   lastName!: string;
+
+  @ApiProperty({ example: 'sara@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: '934206455' })
+  number!: string;
 }
 
 class AdminSponsorshipOrphanDto {
@@ -111,6 +117,26 @@ export class AdminSponsorshipItemDto {
   orphan!: AdminSponsorshipOrphanDto | null;
 }
 
+export class AdminSponsorshipListMetaDto {
+  @ApiProperty({ example: 25 })
+  totalCount!: number;
+
+  @ApiProperty({ example: 1 })
+  page!: number;
+
+  @ApiProperty({ example: 10 })
+  limit!: number;
+
+  @ApiProperty({ example: 3 })
+  totalPages!: number;
+
+  @ApiProperty({ example: true })
+  hasNextPage!: boolean;
+
+  @ApiProperty({ example: false })
+  hasPreviousPage!: boolean;
+}
+
 export class AdminSponsorshipListResponseDto {
   @ApiProperty({ example: true })
   success!: boolean;
@@ -120,6 +146,9 @@ export class AdminSponsorshipListResponseDto {
 
   @ApiProperty({ type: [AdminSponsorshipItemDto] })
   data!: AdminSponsorshipItemDto[];
+
+  @ApiProperty({ type: AdminSponsorshipListMetaDto })
+  meta!: AdminSponsorshipListMetaDto;
 }
 
 class AdminSponsorshipDetailItemDto extends AdminSponsorshipItemDto {

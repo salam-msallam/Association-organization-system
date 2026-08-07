@@ -6,6 +6,7 @@
   "REQUEST_CREATED": "Your sponsorship request is pending employee review.",
   "FETCH_SUCCESS": "Your sponsorships were fetched successfully.",
   "INVALID_STATUS": "The sponsorship status is invalid.",
+  "INVALID_PAGINATION": "page and limit must be positive integers.",
   "NOT_FOUND": "The sponsorship was not found.",
   "ALREADY_CANCELLED": "The sponsorship is already cancelled.",
   "CANCELLATION_NOT_ALLOWED": "A rejected sponsorship cannot be cancelled.",
