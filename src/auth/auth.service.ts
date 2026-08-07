@@ -109,6 +109,13 @@ export class AuthService {
     };
   }
 
+  logout(lang = 'ar'): { success: boolean; message: string } {
+    return {
+      success: true,
+      message: this.i18n.t('auth.LOGOUT_SUCCESS', { lang }),
+    };
+  }
+
 
 
   private getRegistrationCacheKey(countryCode: string, number: string): string {
