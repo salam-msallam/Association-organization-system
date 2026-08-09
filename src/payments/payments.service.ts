@@ -23,12 +23,14 @@ import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payme
 import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
 import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
+import { WalletBalanceResponseDto } from './dto/wallet-balance-response.dto';
 import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
 import { WalletSponsorshipDonationResponseDto } from './dto/wallet-sponsorship-donation-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
 const WALLET_REFERENCE_TYPE = 'WALLET';
 const SPONSORSHIP_REFERENCE_TYPE = 'SPONSORSHIP';
+const WALLET_CURRENCY = 'USD';
 const STRIPE_API_VERSION: Stripe.LatestApiVersion = '2026-06-24.dahlia';
 const BLOCKING_SPONSORSHIP_STATUSES = [Status.PENDING, Status.ACCEPTED];
 
@@ -158,6 +160,31 @@ export class PaymentsService {
       },
       lang,
     });
+  }
+
+  async getWalletBalance(
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<WalletBalanceResponseDto> {
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    const wallet = await this.prisma.wallet.upsert({
+      where: { donorId: donor.userId },
+      create: {
+        donorId: donor.userId,
+        runningBalance: new Prisma.Decimal(0),
+      },
+      update: {},
+      select: { runningBalance: true },
+    });
+
+    return {
+      success: true,
+      data: {
+        balance: new Prisma.Decimal(wallet.runningBalance).toFixed(2),
+        currency: WALLET_CURRENCY,
+      },
+    };
   }
 
   async donateWalletToAidRequest(

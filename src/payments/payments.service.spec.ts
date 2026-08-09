@@ -452,6 +452,52 @@ describe('PaymentsService', () => {
     );
   });
 
+  it('returns the authenticated donor wallet running balance in USD', async () => {
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    prisma.wallet.upsert.mockResolvedValue({
+      runningBalance: new Prisma.Decimal('250'),
+    });
+
+    const result = await service.getWalletBalance(
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(prisma.wallet.upsert).toHaveBeenCalledWith({
+      where: { donorId: 7 },
+      create: {
+        donorId: 7,
+        runningBalance: new Prisma.Decimal(0),
+      },
+      update: {},
+      select: { runningBalance: true },
+    });
+    expect(result).toEqual({
+      success: true,
+      data: {
+        balance: '250.00',
+        currency: 'USD',
+      },
+    });
+  });
+
+  it('creates a zero-balance wallet when retrieving balance for a donor without a wallet', async () => {
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    prisma.wallet.upsert.mockResolvedValue({
+      runningBalance: new Prisma.Decimal(0),
+    });
+
+    await expect(
+      service.getWalletBalance({ id: 7, type: UserType.DONOR }, 'en'),
+    ).resolves.toEqual({
+      success: true,
+      data: {
+        balance: '0.00',
+        currency: 'USD',
+      },
+    });
+  });
+
   it('donates to an accepted aid request from the donor wallet without Stripe or Transaction', async () => {
     const tx = mockValidWalletDonationSetup();
 

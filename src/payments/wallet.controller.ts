@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseIntPipe,
   Post,
@@ -27,6 +28,7 @@ import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-pa
 import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
 import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
+import { WalletBalanceResponseDto } from './dto/wallet-balance-response.dto';
 import { WalletSponsorshipDonationResponseDto } from './dto/wallet-sponsorship-donation-response.dto';
 import { PaymentsService } from './payments.service';
 
@@ -48,6 +50,26 @@ interface AuthenticatedWalletRequest extends Request {
 @Controller('wallet')
 export class WalletController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Get('balance')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Get the authenticated donor wallet balance',
+    description:
+      'Returns the current USD running balance for the wallet owned by the authenticated donor.',
+  })
+  @ApiOkResponse({ type: WalletBalanceResponseDto })
+  @ApiForbiddenResponse({
+    description: 'The authenticated user is not a donor.',
+  })
+  @ApiUnauthorizedResponse({ description: 'JWT token is missing or invalid.' })
+  getWalletBalance(
+    @Req() req: AuthenticatedWalletRequest,
+    @I18nLang() lang: string,
+  ): Promise<WalletBalanceResponseDto> {
+    return this.paymentsService.getWalletBalance(req.user, lang);
+  }
 
   @Post('top-up/payment-intent')
   @UseGuards(JwtAuthGuard)

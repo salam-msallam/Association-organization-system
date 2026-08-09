@@ -13,6 +13,7 @@ describe('PaymentsController', () => {
       createWalletTopUpPaymentIntent: jest.fn(),
       donateWalletToAidRequest: jest.fn(),
       donateWalletToSponsorship: jest.fn(),
+      getWalletBalance: jest.fn(),
       handleStripeWebhook: jest.fn(),
     };
     controller = new PaymentsController(paymentsService);
@@ -90,6 +91,7 @@ describe('WalletController', () => {
       createWalletTopUpPaymentIntent: jest.fn(),
       donateWalletToAidRequest: jest.fn(),
       donateWalletToSponsorship: jest.fn(),
+      getWalletBalance: jest.fn(),
     };
     controller = new WalletController(paymentsService);
   });
@@ -105,6 +107,31 @@ describe('WalletController', () => {
         WalletController.prototype.createWalletTopUpPaymentIntent,
       ),
     ).toEqual([JwtAuthGuard]);
+  });
+
+  it('protects wallet balance retrieval with JwtAuthGuard', () => {
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        WalletController.prototype.getWalletBalance,
+      ),
+    ).toEqual([JwtAuthGuard]);
+  });
+
+  it('passes the donor JWT payload when retrieving wallet balance', async () => {
+    paymentsService.getWalletBalance.mockResolvedValue({
+      success: true,
+      data: { balance: '250.00', currency: 'USD' },
+    });
+
+    const req = { user: { id: 7, type: 'DONOR' } } as any;
+
+    await controller.getWalletBalance(req, 'en');
+
+    expect(paymentsService.getWalletBalance).toHaveBeenCalledWith(
+      req.user,
+      'en',
+    );
   });
 
   it('passes the donor JWT payload to the service', async () => {
