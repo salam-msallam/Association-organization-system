@@ -18,5 +18,9 @@
   "ORPHAN_NOT_AVAILABLE": "The selected orphan was not found or is already sponsored.",
   "REVIEW_STATE_CHANGED": "The sponsorship request changed while it was being reviewed. Please try again.",
   "ACCEPT_SUCCESS": "The sponsorship request was accepted successfully.",
-  "REJECT_SUCCESS": "The sponsorship request was rejected successfully."
+  "REJECT_SUCCESS": "The sponsorship request was rejected successfully.",
+  "SPONSORSHIP_FUND_SUMMARY_FETCH_SUCCESS": "Sponsorship fund summary fetched successfully.",
+  "SPONSORSHIP_FUND_COVERAGES_FETCH_SUCCESS": "Sponsorship fund coverages fetched successfully.",
+  "SPONSORSHIP_FUND_SUPPORTS_FETCH_SUCCESS": "Sponsorship fund supports fetched successfully.",
+  "INVALID_SPONSORSHIP_FUND_COVERAGE_STATUS": "The sponsorship fund coverage status is invalid."
 }

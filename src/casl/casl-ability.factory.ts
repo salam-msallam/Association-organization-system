@@ -21,6 +21,7 @@ export type Subjects =
   | 'Role'
   | 'RequestAid'
   | 'Sponsorship'
+  | 'SponsorshipFund'
   | 'AnnualReport'
   | 'all';
 
@@ -41,6 +42,7 @@ export class CaslAbilityFactory {
       can('read', 'Beneficiary');
       can('read', 'RequestAid');
       can('manage', 'Sponsorship');
+      can('read', 'SponsorshipFund');
       can('manage', 'AnnualReport');
     }
 
@@ -69,6 +71,7 @@ export class CaslAbilityFactory {
       roles: 'Role',
       aid_requests: 'RequestAid',
       sponsorships: 'Sponsorship',
+      sponsorship_fund: 'SponsorshipFund',
       annual_reports: 'AnnualReport',
     };
     return maps[subject] || null;

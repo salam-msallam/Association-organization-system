@@ -18,5 +18,9 @@
   "ORPHAN_NOT_AVAILABLE": "اليتيم المحدد غير موجود أو مكفول مسبقاً.",
   "REVIEW_STATE_CHANGED": "تغير طلب الكفالة أثناء مراجعته، يرجى المحاولة مجدداً.",
   "ACCEPT_SUCCESS": "تم قبول طلب الكفالة بنجاح.",
-  "REJECT_SUCCESS": "تم رفض طلب الكفالة بنجاح."
+  "REJECT_SUCCESS": "تم رفض طلب الكفالة بنجاح.",
+  "SPONSORSHIP_FUND_SUMMARY_FETCH_SUCCESS": "تم جلب ملخص صندوق استمرارية الكفالة بنجاح.",
+  "SPONSORSHIP_FUND_COVERAGES_FETCH_SUCCESS": "تم جلب حالات دعم صندوق استمرارية الكفالة بنجاح.",
+  "SPONSORSHIP_FUND_SUPPORTS_FETCH_SUCCESS": "تم جلب سجل مصروفات صندوق استمرارية الكفالة بنجاح.",
+  "INVALID_SPONSORSHIP_FUND_COVERAGE_STATUS": "حالة دعم صندوق استمرارية الكفالة غير صالحة."
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import {
   OrphanEmergencyCoverageReason,
@@ -9,6 +9,7 @@ import {
   TransactionType,
   WalletTransactionDirection,
 } from '@prisma/client';
+import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   getSponsorshipPaymentContext,
@@ -17,6 +18,7 @@ import {
 
 const EMERGENCY_SUPPORT_MONTHS_LIMIT = 2;
 const EMERGENCY_SUPPORT_RATE = new Prisma.Decimal('0.5');
+const COVERAGE_STATUSES = Object.values(OrphanEmergencyCoverageStatus);
 
 type FundPrisma = PrismaService | Prisma.TransactionClient;
 
@@ -30,11 +32,173 @@ type CoverageSponsorship = {
 export class SponsorshipFundService {
   private readonly logger = new Logger(SponsorshipFundService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly i18n?: I18nService,
+  ) {}
 
   async getSponsorshipFundBalance(
     prisma: FundPrisma = this.prisma,
   ): Promise<Prisma.Decimal> {
+    const totals = await this.getSponsorshipFundTotals(prisma);
+
+    return totals.totalDonations.minus(totals.totalDistributed);
+  }
+
+  async getAdminSummary(lang = 'ar') {
+    const [
+      currentBalance,
+      totals,
+      activeCoverages,
+      supportedOrphans,
+    ] = await Promise.all([
+      this.getSponsorshipFundBalance(),
+      this.getSponsorshipFundTotals(),
+      this.prisma.orphanEmergencyCoverage.count({
+        where: { status: OrphanEmergencyCoverageStatus.ACTIVE },
+      }),
+      this.prisma.orphanEmergencyCoverage.findMany({
+        distinct: ['orphanId'],
+        select: { orphanId: true },
+      }),
+    ]);
+
+    return {
+      success: true,
+      message: this.t('SPONSORSHIP_FUND_SUMMARY_FETCH_SUCCESS', lang),
+      data: {
+        currentBalance: currentBalance.toFixed(2),
+        totalDonations: totals.totalDonations.toFixed(2),
+        totalDistributed: totals.totalDistributed.toFixed(2),
+        activeCoverages,
+        totalSupportedOrphans: supportedOrphans.length,
+      },
+    };
+  }
+
+  async findAdminCoverages(
+    status?: string,
+    pageInput?: string,
+    limitInput?: string,
+    lang = 'ar',
+  ) {
+    const normalizedStatus = this.normalizeCoverageStatus(status, lang);
+    const { page, limit, skip } = this.getPagination(pageInput, limitInput, lang);
+    const where: Prisma.OrphanEmergencyCoverageWhereInput = normalizedStatus
+      ? { status: normalizedStatus }
+      : {};
+
+    const [coverages, totalCount] = await Promise.all([
+      this.prisma.orphanEmergencyCoverage.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { id: 'desc' },
+        select: {
+          id: true,
+          orphanId: true,
+          sponsorshipId: true,
+          originalAmount: true,
+          monthlySupport: true,
+          supportedMonths: true,
+          status: true,
+          reason: true,
+          startDate: true,
+          endDate: true,
+          createdAt: true,
+          updatedAt: true,
+          orphan: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              fatherName: true,
+              motherName: true,
+              birthOfDate: true,
+              gender: true,
+            },
+          },
+        },
+      }),
+      this.prisma.orphanEmergencyCoverage.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      message: this.t('SPONSORSHIP_FUND_COVERAGES_FETCH_SUCCESS', lang),
+      data: coverages.map((coverage) => ({
+        id: coverage.id,
+        orphanId: coverage.orphanId,
+        sponsorshipId: coverage.sponsorshipId,
+        originalAmount: coverage.originalAmount.toFixed(2),
+        monthlySupport: coverage.monthlySupport.toFixed(2),
+        supportedMonths: coverage.supportedMonths,
+        status: coverage.status,
+        reason: coverage.reason,
+        startDate: coverage.startDate,
+        endDate: coverage.endDate,
+        createdAt: coverage.createdAt,
+        updatedAt: coverage.updatedAt,
+        orphan: coverage.orphan,
+      })),
+      meta: this.getPaginationMeta(totalCount, page, limit),
+    };
+  }
+
+  async findAdminSupports(
+    pageInput?: string,
+    limitInput?: string,
+    lang = 'ar',
+  ) {
+    const { page, limit, skip } = this.getPagination(pageInput, limitInput, lang);
+
+    const [supports, totalCount] = await Promise.all([
+      this.prisma.sponsorshipFundSupport.findMany({
+        skip,
+        take: limit,
+        orderBy: { id: 'desc' },
+        select: {
+          id: true,
+          coverageId: true,
+          amount: true,
+          balanceAfter: true,
+          createdAt: true,
+          coverage: {
+            select: {
+              orphan: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  fatherName: true,
+                  motherName: true,
+                  birthOfDate: true,
+                  gender: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.sponsorshipFundSupport.count(),
+    ]);
+
+    return {
+      success: true,
+      message: this.t('SPONSORSHIP_FUND_SUPPORTS_FETCH_SUCCESS', lang),
+      data: supports.map((support) => ({
+        id: support.id,
+        coverageId: support.coverageId,
+        amount: support.amount.toFixed(2),
+        balanceAfter: support.balanceAfter.toFixed(2),
+        createdAt: support.createdAt,
+        orphan: support.coverage.orphan,
+      })),
+      meta: this.getPaginationMeta(totalCount, page, limit),
+    };
+  }
+
+  private async getSponsorshipFundTotals(prisma: FundPrisma = this.prisma) {
     const [stripeDonations, walletDonations, fundSupports] =
       await Promise.all([
         prisma.transaction.aggregate({
@@ -56,9 +220,14 @@ export class SponsorshipFundService {
         }),
       ]);
 
-    return new Prisma.Decimal(stripeDonations._sum.amount ?? 0)
-      .plus(walletDonations._sum.amount ?? 0)
-      .minus(fundSupports._sum.amount ?? 0);
+    const totalDonations = new Prisma.Decimal(stripeDonations._sum.amount ?? 0)
+      .plus(walletDonations._sum.amount ?? 0);
+    const totalDistributed = new Prisma.Decimal(fundSupports._sum.amount ?? 0);
+
+    return {
+      totalDonations,
+      totalDistributed,
+    };
   }
 
   async createEmergencyCoverageIfEligible(
@@ -168,6 +337,96 @@ export class SponsorshipFundService {
     }
 
     return processedCount;
+  }
+
+  private normalizeCoverageStatus(
+    status: string | undefined,
+    lang: string,
+  ): OrphanEmergencyCoverageStatus | undefined {
+    if (!status) return undefined;
+
+    const normalizedStatus = status.trim().toUpperCase();
+
+    if (
+      !COVERAGE_STATUSES.includes(
+        normalizedStatus as OrphanEmergencyCoverageStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        this.t('INVALID_SPONSORSHIP_FUND_COVERAGE_STATUS', lang),
+      );
+    }
+
+    return normalizedStatus as OrphanEmergencyCoverageStatus;
+  }
+
+  private getPagination(
+    pageInput: string | undefined,
+    limitInput: string | undefined,
+    lang: string,
+  ) {
+    const page = this.parsePositiveInteger(pageInput, 1, lang);
+    const limit = this.parsePositiveInteger(limitInput, 10, lang);
+
+    return {
+      page,
+      limit,
+      skip: (page - 1) * limit,
+    };
+  }
+
+  private parsePositiveInteger(
+    value: string | undefined,
+    defaultValue: number,
+    lang: string,
+  ): number {
+    if (value === undefined || value === null || value === '') {
+      return defaultValue;
+    }
+
+    const normalizedValue = String(value).trim();
+    const parsed = Number(normalizedValue);
+
+    if (
+      !/^\d+$/.test(normalizedValue) ||
+      !Number.isSafeInteger(parsed) ||
+      parsed < 1
+    ) {
+      throw new BadRequestException(this.t('INVALID_PAGINATION', lang));
+    }
+
+    return parsed;
+  }
+
+  private getPaginationMeta(totalCount: number, page: number, limit: number) {
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      totalCount,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
+  }
+
+  private t(key: string, lang: string): string {
+    const fallbackMessages: Record<string, string> = {
+      SPONSORSHIP_FUND_SUMMARY_FETCH_SUCCESS:
+        'Sponsorship fund summary fetched successfully.',
+      SPONSORSHIP_FUND_COVERAGES_FETCH_SUCCESS:
+        'Sponsorship fund coverages fetched successfully.',
+      SPONSORSHIP_FUND_SUPPORTS_FETCH_SUCCESS:
+        'Sponsorship fund supports fetched successfully.',
+      INVALID_SPONSORSHIP_FUND_COVERAGE_STATUS:
+        'The sponsorship fund coverage status is invalid.',
+      INVALID_PAGINATION: 'page and limit must be positive integers.',
+    };
+
+    return String(
+      this.i18n?.t(`sponsorship.${key}`, { lang }) ?? fallbackMessages[key] ?? key,
+    );
   }
 
   private async processOneMonthlyEmergencyCoverage(

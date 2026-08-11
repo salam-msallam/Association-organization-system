@@ -132,6 +132,7 @@ export async function seedRoles(
         deleteMany: {},
         create: permissionLinks(permissions, [
           'read:sponsorships',
+          'read:sponsorship_fund',
           'status:sponsorships',
           'read:orphans',
           'update:orphans',
@@ -148,6 +149,7 @@ export async function seedRoles(
       permissions: {
         create: permissionLinks(permissions, [
           'read:sponsorships',
+          'read:sponsorship_fund',
           'status:sponsorships',
           'read:orphans',
           'update:orphans',
