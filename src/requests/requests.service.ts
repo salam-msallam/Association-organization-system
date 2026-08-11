@@ -95,12 +95,10 @@ export class RequestAidService {
   }
 
   async getCompletedPublicAidRequests(
-    categoryId?: number,
     lang = 'ar',
   ): Promise<PublicAidRequestListItemDto[]> {
     return this.findPublicAidRequestListItems(
       {
-        categoryId,
         onlyCompleted: true,
       },
       lang,

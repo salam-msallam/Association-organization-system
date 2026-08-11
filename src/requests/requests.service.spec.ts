@@ -181,7 +181,7 @@ describe('RequestAidService admin APIs', () => {
     );
   });
 
-  it('lists only completed accepted public aid requests by category', async () => {
+  it('lists all completed accepted public aid requests regardless of category', async () => {
     prisma.requestAid.findMany.mockResolvedValue([
       {
         id: 5,
@@ -195,12 +195,11 @@ describe('RequestAidService admin APIs', () => {
       },
     ]);
 
-    const result = await service.getCompletedPublicAidRequests(4, 'en');
+    const result = await service.getCompletedPublicAidRequests('en');
 
     expect(prisma.requestAid.findMany).toHaveBeenCalledWith({
       where: {
         status: Status.ACCEPTED,
-        categoryId: 4,
         currentPayment: {
           equals: prisma.requestAid.fields.cost,
         },

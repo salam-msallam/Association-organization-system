@@ -132,37 +132,25 @@ describe('PublicDonorAidRequestsController', () => {
     expect(requestAidService.getPublicAidRequests).not.toHaveBeenCalled();
   });
 
-  it('passes an optional positive categoryId to the completed public list service', async () => {
+  it('lists completed public requests without forwarding categoryId', async () => {
     requestAidService.getCompletedPublicAidRequests.mockResolvedValue([]);
 
-    await expect(controller.findCompleted('3', 'en')).resolves.toEqual([]);
+    await expect(controller.findCompleted('en')).resolves.toEqual([]);
 
     expect(
       requestAidService.getCompletedPublicAidRequests,
-    ).toHaveBeenCalledWith(3, 'en');
+    ).toHaveBeenCalledWith('en');
   });
 
-  it('passes undefined categoryId for completed requests when the query is omitted', async () => {
+  it('uses Arabic language for completed requests when omitted', async () => {
     requestAidService.getCompletedPublicAidRequests.mockResolvedValue([]);
 
-    await controller.findCompleted(undefined, 'ar');
+    await controller.findCompleted();
 
     expect(
       requestAidService.getCompletedPublicAidRequests,
-    ).toHaveBeenCalledWith(undefined, 'ar');
+    ).toHaveBeenCalledWith('ar');
   });
-
-  it.each(['abc', '0', '-1', '1.5'])(
-    'rejects invalid completed categoryId %s',
-    (categoryId) => {
-      expect(() => controller.findCompleted(categoryId, 'en')).toThrow(
-        BadRequestException,
-      );
-      expect(
-        requestAidService.getCompletedPublicAidRequests,
-      ).not.toHaveBeenCalled();
-    },
-  );
 
   it('passes the request id and language to the public detail service', async () => {
     requestAidService.getPublicAidRequestById.mockResolvedValue({
