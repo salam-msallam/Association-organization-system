@@ -582,14 +582,18 @@ export class RequestAidService {
         subCategory: {
           select: { id: true, name: true },
         },
+        aidDetails: {
+          select: { typeAid: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return requests.map((request) => ({
+    return requests.map(({ aidDetails, ...request }) => ({
       ...request,
       title: this.localizeJsonText(request.title, lang),
       rejectionReason: this.localizeJsonText(request.rejectionReason, lang),
+      typeAid: aidDetails?.typeAid ?? null,
       cost: request.cost.toString(),
       currentPayment: request.currentPayment.toString(),
       category: {

@@ -992,6 +992,9 @@ describe('RequestAidService admin APIs', () => {
             id: 7,
             name: { ar: 'جراحة', en: 'Surgery' },
           },
+          aidDetails: {
+            typeAid: TypeAid.SURGERY,
+          },
         },
       ]);
 
@@ -1009,6 +1012,7 @@ describe('RequestAidService admin APIs', () => {
           title: lang === 'ar' ? 'طلب عملية جراحية' : 'Surgery request',
           status: Status.REJECTED,
           rejectionReason,
+          typeAid: TypeAid.SURGERY,
           cost: '100',
           currentPayment: '0',
           category: { id: 2, name: categoryName },
