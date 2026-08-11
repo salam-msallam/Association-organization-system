@@ -7,9 +7,12 @@ import {
 import {
   CancellationSource,
   OrphanEmergencyCoverageReason,
+  Gender,
   Prisma,
   Status,
+  TransactionType,
   UserType,
+  WalletTransactionDirection,
 } from '@prisma/client';
 import { SponsorshipService } from './sponsorship.service';
 
@@ -53,10 +56,12 @@ describe('SponsorshipService', () => {
       },
       sponsorship: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         count: jest.fn(),
         findUnique: jest.fn(),
       },
       walletTransaction: {
+        findFirst: jest.fn(),
         findMany: jest.fn(),
       },
       $transaction: jest.fn((callback: (client: any) => unknown) =>
@@ -279,6 +284,104 @@ describe('SponsorshipService', () => {
       expect.objectContaining({ where: { donorId: 3 } }),
     );
     expect(result.data).toEqual([]);
+  });
+
+  it('returns a localized orphan summary after the first sponsorship payment', async () => {
+    const birthOfDate = new Date('2015-04-12T00:00:00.000Z');
+    prisma.donor.findUnique.mockResolvedValue({ id: 3 });
+    prisma.sponsorship.findFirst.mockResolvedValue({
+      id: 8,
+      orphan: {
+        id: 4,
+        firstName: 'Ahmad',
+        lastName: 'Hassan',
+        birthOfDate,
+        gender: Gender.MALE,
+        class: { ar: 'الصف الرابع', en: 'Fourth grade' },
+        talent: { ar: 'الرسم', en: 'Drawing' },
+        Diseases: { ar: 'لا توجد أمراض', en: 'No diseases' },
+      },
+    });
+    prisma.walletTransaction.findFirst.mockResolvedValue({ id: 101 });
+
+    const result = await service.findOrphanSummary(
+      8,
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(prisma.sponsorship.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 8,
+        donorId: 3,
+        status: Status.ACCEPTED,
+      },
+      select: expect.any(Object),
+    });
+    expect(prisma.walletTransaction.findFirst).toHaveBeenCalledWith({
+      where: {
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: 'SPONSORSHIP',
+        referenceId: 8,
+      },
+      select: { id: true },
+    });
+    expect(result).toEqual({
+      success: true,
+      message: 'sponsorship.ORPHAN_SUMMARY_FETCH_SUCCESS',
+      data: {
+        sponsorshipId: 8,
+        orphan: {
+          id: 4,
+          firstName: 'Ahmad',
+          lastName: 'Hassan',
+          birthOfDate,
+          gender: Gender.MALE,
+          class: 'Fourth grade',
+          talent: 'Drawing',
+          diseases: 'No diseases',
+        },
+      },
+    });
+  });
+
+  it('does not expose the orphan summary before the first payment', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ id: 3 });
+    prisma.sponsorship.findFirst.mockResolvedValue({
+      id: 8,
+      orphan: {
+        id: 4,
+        firstName: 'Ahmad',
+        lastName: 'Hassan',
+        birthOfDate: new Date('2015-04-12T00:00:00.000Z'),
+        gender: Gender.MALE,
+        class: { ar: 'الصف الرابع', en: 'Fourth grade' },
+        talent: { ar: 'الرسم', en: 'Drawing' },
+        Diseases: { ar: 'لا توجد أمراض', en: 'No diseases' },
+      },
+    });
+    prisma.walletTransaction.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.findOrphanSummary(8, { id: 7, type: UserType.DONOR }, 'ar'),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(i18n.t).toHaveBeenCalledWith(
+      'sponsorship.ORPHAN_SUMMARY_PAYMENT_REQUIRED',
+      { lang: 'ar', args: undefined },
+    );
+  });
+
+  it('does not expose an orphan summary from another donor sponsorship', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ id: 3 });
+    prisma.sponsorship.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.findOrphanSummary(99, { id: 7, type: UserType.DONOR }, 'en'),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(prisma.walletTransaction.findFirst).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid status filter with a localized error', async () => {

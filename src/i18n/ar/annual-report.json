@@ -1,4 +1,10 @@
 {
+  "DONOR_FETCH_SUCCESS": "تم جلب التقارير السنوية بنجاح.",
+  "ONLY_DONORS_CAN_VIEW": "يمكن للمتبرعين فقط عرض التقارير السنوية.",
+  "DONOR_ACCOUNT_NOT_FOUND": "لم يتم العثور على حساب المتبرع الحالي.",
+  "DONOR_REPORTS_PAYMENT_REQUIRED": "تصبح التقارير السنوية متاحة بعد دفع الدفعة الأولى.",
+  "AUTHENTICATION_REQUIRED": "تسجيل الدخول مطلوب.",
+  "REPORT_IMAGE_MISSING": "صورة التقرير المطلوبة غير متوفرة.",
   "BOTH_IMAGES_REQUIRED": "يجب إرفاق صورة التقرير باللغتين العربية والإنجليزية.",
   "ORPHAN_UPDATE_REQUIRED": "يجب تحديث معلومات اليتيم قبل حفظ التقرير السنوي.",
   "IMAGE_REQUIRED": "صورة التقرير السنوي مطلوبة.",

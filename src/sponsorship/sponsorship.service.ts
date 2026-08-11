@@ -249,6 +249,87 @@ export class SponsorshipService {
     };
   }
 
+  async findOrphanSummary(
+    sponsorshipId: number,
+    user: SponsorshipUserPayload,
+    lang = 'ar',
+  ) {
+    const donorUserId = this.getAuthenticatedDonorUserId(user, lang);
+    const donor = await this.prisma.donor.findUnique({
+      where: { userId: donorUserId },
+      select: { id: true },
+    });
+
+    if (!donor) {
+      throw new ForbiddenException(this.t('DONOR_ACCOUNT_NOT_FOUND', lang));
+    }
+
+    const sponsorship = await this.prisma.sponsorship.findFirst({
+      where: {
+        id: sponsorshipId,
+        donorId: donor.id,
+        status: Status.ACCEPTED,
+      },
+      select: {
+        id: true,
+        orphan: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            birthOfDate: true,
+            gender: true,
+            class: true,
+            talent: true,
+            Diseases: true,
+          },
+        },
+      },
+    });
+
+    if (!sponsorship) {
+      throw new NotFoundException(this.t('NOT_FOUND', lang));
+    }
+
+    if (!sponsorship.orphan) {
+      throw new NotFoundException(this.t('ORPHAN_NOT_ASSIGNED', lang));
+    }
+
+    const firstPayment = await this.prisma.walletTransaction.findFirst({
+      where: {
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: SPONSORSHIP_REFERENCE_TYPE,
+        referenceId: sponsorship.id,
+      },
+      select: { id: true },
+    });
+
+    if (!firstPayment) {
+      throw new ForbiddenException(
+        this.t('ORPHAN_SUMMARY_PAYMENT_REQUIRED', lang),
+      );
+    }
+
+    return {
+      success: true,
+      message: this.t('ORPHAN_SUMMARY_FETCH_SUCCESS', lang),
+      data: {
+        sponsorshipId: sponsorship.id,
+        orphan: {
+          id: sponsorship.orphan.id,
+          firstName: sponsorship.orphan.firstName,
+          lastName: sponsorship.orphan.lastName,
+          birthOfDate: sponsorship.orphan.birthOfDate,
+          gender: sponsorship.orphan.gender,
+          class: this.localizeJsonValue(sponsorship.orphan.class, lang),
+          talent: this.localizeJsonValue(sponsorship.orphan.talent, lang),
+          diseases: this.localizeJsonValue(sponsorship.orphan.Diseases, lang),
+        },
+      },
+    };
+  }
+
   async findAllForStaff(
     status?: string,
     lang = 'ar',

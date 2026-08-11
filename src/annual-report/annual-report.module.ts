@@ -4,10 +4,11 @@ import { CaslModule } from '../casl/casl.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AnnualReportController } from './annual-report.controller';
 import { AnnualReportService } from './annual-report.service';
+import { DonorAnnualReportController } from './donor-annual-report.controller';
 
 @Module({
   imports: [AuthModule, CaslModule, PrismaModule],
-  controllers: [AnnualReportController],
+  controllers: [AnnualReportController, DonorAnnualReportController],
   providers: [AnnualReportService],
 })
 export class AnnualReportModule {}
