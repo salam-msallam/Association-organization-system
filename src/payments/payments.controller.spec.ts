@@ -1,6 +1,7 @@
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PaymentsController } from './payments.controller';
+import { SponsorshipFundController } from './sponsorship-fund.controller';
 import { WalletController } from './wallet.controller';
 
 describe('PaymentsController', () => {
@@ -198,6 +199,84 @@ describe('WalletController', () => {
 
     expect(paymentsService.donateWalletToSponsorship).toHaveBeenCalledWith(
       5,
+      req.user,
+      'ar',
+    );
+  });
+});
+
+describe('SponsorshipFundController', () => {
+  let paymentsService: any;
+  let controller: SponsorshipFundController;
+
+  beforeEach(() => {
+    paymentsService = {
+      createSponsorshipFundPaymentIntent: jest.fn(),
+      donateWalletToSponsorshipFund: jest.fn(),
+    };
+    controller = new SponsorshipFundController(paymentsService);
+  });
+
+  it('uses the requested sponsorship fund route prefix', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, SponsorshipFundController)).toBe(
+      'api/donor/sponsorship-fund',
+    );
+  });
+
+  it('protects sponsorship fund Stripe payment intent creation with JwtAuthGuard', () => {
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        SponsorshipFundController.prototype.createPaymentIntent,
+      ),
+    ).toEqual([JwtAuthGuard]);
+  });
+
+  it('protects sponsorship fund wallet donations with JwtAuthGuard', () => {
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        SponsorshipFundController.prototype.donateFromWallet,
+      ),
+    ).toEqual([JwtAuthGuard]);
+  });
+
+  it('passes amount, donor JWT payload, and language for Stripe fund donations', async () => {
+    paymentsService.createSponsorshipFundPaymentIntent.mockResolvedValue({
+      transactionId: 88,
+      clientSecret: 'pi_fund_secret_abc',
+      amount: '50.00',
+      currency: 'usd',
+    });
+
+    const req = { user: { id: 7, type: 'DONOR' } } as any;
+    const dto = { amount: 50 };
+
+    await controller.createPaymentIntent(dto, req, 'en');
+
+    expect(
+      paymentsService.createSponsorshipFundPaymentIntent,
+    ).toHaveBeenCalledWith(dto, req.user, 'en');
+  });
+
+  it('passes amount, donor JWT payload, and language for wallet fund donations', async () => {
+    paymentsService.donateWalletToSponsorshipFund.mockResolvedValue({
+      success: true,
+      data: {
+        walletTransactionId: 130,
+        donatedAmount: '50.00',
+        balanceAfter: '50.00',
+        currency: 'USD',
+      },
+    });
+
+    const req = { user: { id: 7, type: 'DONOR' } } as any;
+    const dto = { amount: '50.00' };
+
+    await controller.donateFromWallet(dto, req, 'ar');
+
+    expect(paymentsService.donateWalletToSponsorshipFund).toHaveBeenCalledWith(
+      dto,
       req.user,
       'ar',
     );

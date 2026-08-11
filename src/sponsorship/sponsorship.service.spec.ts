@@ -4,13 +4,20 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CancellationSource, Prisma, Status, UserType } from '@prisma/client';
+import {
+  CancellationSource,
+  OrphanEmergencyCoverageReason,
+  Prisma,
+  Status,
+  UserType,
+} from '@prisma/client';
 import { SponsorshipService } from './sponsorship.service';
 
 describe('SponsorshipService', () => {
   let prisma: any;
   let tx: any;
   let i18n: any;
+  let sponsorshipFundService: any;
   let service: SponsorshipService;
 
   beforeEach(() => {
@@ -64,7 +71,11 @@ describe('SponsorshipService', () => {
           : key;
       }),
     };
-    service = new SponsorshipService(prisma, i18n);
+    sponsorshipFundService = {
+      createEmergencyCoverageIfEligible: jest.fn(),
+      stopActiveCoveragesForOrphan: jest.fn(),
+    };
+    service = new SponsorshipService(prisma, i18n, sponsorshipFundService);
   });
 
   afterEach(() => {
@@ -508,6 +519,9 @@ describe('SponsorshipService', () => {
       where: { id: 3 },
       data: { isSponsor: true },
     });
+    expect(
+      sponsorshipFundService.stopActiveCoveragesForOrphan,
+    ).toHaveBeenCalledWith(tx, 3, expect.any(Date));
     expect(result.data.status).toBe(Status.ACCEPTED);
   });
 
@@ -667,6 +681,14 @@ describe('SponsorshipService', () => {
       where: { id: 3 },
       data: { isSponsor: false },
     });
+    expect(
+      sponsorshipFundService.createEmergencyCoverageIfEligible,
+    ).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 5, orphanId: 3 }),
+      OrphanEmergencyCoverageReason.SPONSOR_CANCELLED,
+      endDate,
+    );
     expect(result.data.orphanReleased).toBe(true);
     jest.useRealTimers();
   });
@@ -734,6 +756,14 @@ describe('SponsorshipService', () => {
       where: { id: 3 },
       data: { isSponsor: false },
     });
+    expect(
+      sponsorshipFundService.createEmergencyCoverageIfEligible,
+    ).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 5, orphanId: 3 }),
+      OrphanEmergencyCoverageReason.PAYMENT_INTERRUPTED,
+      now,
+    );
     expect(result).toBe(1);
   });
 

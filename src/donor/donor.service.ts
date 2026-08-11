@@ -189,6 +189,7 @@ export class DonorService {
                 in: [
                   TransactionType.AID_REQUEST_DONATION,
                   TransactionType.SPONSORSHIP_DONATION,
+                  TransactionType.GENERAL_DONATION,
                 ],
               },
             },
@@ -412,6 +413,7 @@ export class DonorService {
                 in: [
                   TransactionType.AID_REQUEST_DONATION,
                   TransactionType.SPONSORSHIP_DONATION,
+                  TransactionType.GENERAL_DONATION,
                 ],
               },
             },

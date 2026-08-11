@@ -24,6 +24,7 @@ describe('PaymentsService', () => {
     id: 3,
     userId: 7,
     stripeCustomerId: null,
+    isSponsor: false,
     user: {
       firstName: 'Sara',
       lastName: 'Ali',
@@ -113,6 +114,7 @@ describe('PaymentsService', () => {
     prisma.transaction.create.mockResolvedValue({
       id: 55,
       amount: new Prisma.Decimal(25),
+      idempotencyKey: 'payment-intent:uuid-aid',
     });
     stripe.paymentIntents.create.mockResolvedValue({
       id: 'pi_123',
@@ -160,6 +162,33 @@ describe('PaymentsService', () => {
 
   function mockValidWalletDonationSetup() {
     const tx = createWalletDonationTx();
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    return tx;
+  }
+
+  function createSponsorshipFundWalletDonationTx() {
+    return {
+      wallet: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 9,
+            runningBalance: new Prisma.Decimal(100),
+          })
+          .mockResolvedValueOnce({
+            runningBalance: new Prisma.Decimal(50),
+          }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      walletTransaction: {
+        create: jest.fn().mockResolvedValue({ id: 130 }),
+      },
+    };
+  }
+
+  function mockValidSponsorshipFundWalletDonationSetup() {
+    const tx = createSponsorshipFundWalletDonationTx();
     prisma.donor.findUnique.mockResolvedValue(donor);
     prisma.$transaction.mockImplementation((callback: any) => callback(tx));
     return tx;
@@ -214,6 +243,7 @@ describe('PaymentsService', () => {
     prisma.transaction.create.mockResolvedValue({
       id: 77,
       amount: new Prisma.Decimal(50),
+      idempotencyKey: 'payment-intent:uuid-topup',
     });
     stripe.paymentIntents.create.mockResolvedValue({
       id: 'pi_topup',
@@ -309,6 +339,7 @@ describe('PaymentsService', () => {
     expect(prisma.transaction.create).toHaveBeenCalledWith({
       data: {
         donorId: 7,
+        idempotencyKey: expect.stringMatching(/^payment-intent:/),
         amount: new Prisma.Decimal(25),
         status: TransactionStatus.PENDING,
         type: TransactionType.AID_REQUEST_DONATION,
@@ -316,7 +347,7 @@ describe('PaymentsService', () => {
         referenceId: 13,
         currency: 'usd',
       },
-      select: { id: true, amount: true },
+      select: { id: true, amount: true, idempotencyKey: true },
     });
     expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
       {
@@ -330,7 +361,7 @@ describe('PaymentsService', () => {
           requestId: '13',
         },
       },
-      { idempotencyKey: 'payment-intent:55' },
+      { idempotencyKey: 'payment-intent:uuid-aid' },
     );
     expect(prisma.transaction.create.mock.invocationCallOrder[0]).toBeLessThan(
       stripe.paymentIntents.create.mock.invocationCallOrder[0],
@@ -398,6 +429,7 @@ describe('PaymentsService', () => {
     expect(prisma.transaction.create).toHaveBeenCalledWith({
       data: {
         donorId: 7,
+        idempotencyKey: expect.stringMatching(/^payment-intent:/),
         amount: new Prisma.Decimal('50.00'),
         status: TransactionStatus.PENDING,
         type: TransactionType.WALLET_TOP_UP,
@@ -405,7 +437,7 @@ describe('PaymentsService', () => {
         referenceId: 9,
         currency: 'usd',
       },
-      select: { id: true, amount: true },
+      select: { id: true, amount: true, idempotencyKey: true },
     });
     expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
       {
@@ -420,7 +452,7 @@ describe('PaymentsService', () => {
           type: TransactionType.WALLET_TOP_UP,
         },
       },
-      { idempotencyKey: 'payment-intent:77' },
+      { idempotencyKey: 'payment-intent:uuid-topup' },
     );
     expect(prisma.transaction.update).toHaveBeenCalledWith({
       where: { id: 77 },
@@ -429,6 +461,69 @@ describe('PaymentsService', () => {
     expect(result).toEqual({
       transactionId: 77,
       clientSecret: 'pi_topup_secret_abc',
+      amount: '50.00',
+      currency: 'usd',
+    });
+  });
+
+  it('creates a sponsorship fund Stripe transaction without references', async () => {
+    prisma.donor.findUnique.mockResolvedValue(donor);
+    stripe.customers.create.mockResolvedValue({ id: 'cus_123' });
+    prisma.donor.update.mockResolvedValue({
+      ...donor,
+      stripeCustomerId: 'cus_123',
+    });
+    prisma.transaction.create.mockResolvedValue({
+      id: 88,
+      amount: new Prisma.Decimal(50),
+      idempotencyKey: 'payment-intent:uuid-fund',
+    });
+    stripe.paymentIntents.create.mockResolvedValue({
+      id: 'pi_fund',
+      client_secret: 'pi_fund_secret_abc',
+    });
+    prisma.transaction.update.mockResolvedValue({});
+
+    const result = await service.createSponsorshipFundPaymentIntent(
+      { amount: 50 },
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(prisma.transaction.create).toHaveBeenCalledWith({
+      data: {
+        donorId: 7,
+        idempotencyKey: expect.stringMatching(/^payment-intent:/),
+        amount: new Prisma.Decimal(50),
+        status: TransactionStatus.PENDING,
+        type: TransactionType.GENERAL_DONATION,
+        referenceType: null,
+        referenceId: null,
+        currency: 'usd',
+      },
+      select: { id: true, amount: true, idempotencyKey: true },
+    });
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      {
+        amount: 5000,
+        currency: 'usd',
+        customer: 'cus_123',
+        automatic_payment_methods: { enabled: true },
+        metadata: {
+          transactionId: '88',
+          donorId: '7',
+          type: TransactionType.GENERAL_DONATION,
+        },
+      },
+      { idempotencyKey: 'payment-intent:uuid-fund' },
+    );
+    expect(prisma.transaction.update).toHaveBeenCalledWith({
+      where: { id: 88 },
+      data: { stripePaymentIntentId: 'pi_fund' },
+    });
+    expect(result).toEqual({
+      transactionId: 88,
+      clientSecret: 'pi_fund_secret_abc',
       amount: '50.00',
       currency: 'usd',
     });
@@ -842,6 +937,123 @@ describe('PaymentsService', () => {
     expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
 
+  it('donates to the sponsorship fund from wallet without creating a Transaction', async () => {
+    const tx = mockValidSponsorshipFundWalletDonationSetup();
+
+    const result = await service.donateWalletToSponsorshipFund(
+      { amount: '50.00' },
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(tx.wallet.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 9,
+        runningBalance: { gte: new Prisma.Decimal('50.00') },
+      },
+      data: {
+        runningBalance: { decrement: new Prisma.Decimal('50.00') },
+      },
+    });
+    expect(tx.walletTransaction.create).toHaveBeenCalledWith({
+      data: {
+        walletId: 9,
+        transactionId: null,
+        amount: new Prisma.Decimal('50.00'),
+        type: TransactionType.GENERAL_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: null,
+        referenceId: null,
+        balanceAfter: new Prisma.Decimal(50),
+      },
+      select: { id: true },
+    });
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: true,
+      message: 'payments.SPONSORSHIP_FUND_DONATION_SUCCESS:en',
+      data: {
+        walletTransactionId: 130,
+        donatedAmount: '50.00',
+        balanceAfter: '50.00',
+        currency: 'USD',
+      },
+    });
+  });
+
+  it('rejects sponsorship fund wallet donations from sponsors', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ ...donor, isSponsor: true });
+
+    await expect(
+      service.donateWalletToSponsorshipFund(
+        { amount: '50.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '1', '1.999', 'abc'])(
+    'rejects invalid sponsorship fund wallet amount %s',
+    async (amount) => {
+      await expect(
+        service.donateWalletToSponsorshipFund(
+          { amount },
+          { id: 7, type: UserType.DONOR },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    },
+  );
+
+  it('rejects sponsorship fund wallet donations when the wallet is missing', async () => {
+    const tx = mockValidSponsorshipFundWalletDonationSetup();
+    tx.wallet.findUnique.mockReset().mockResolvedValueOnce(null);
+
+    await expect(
+      service.donateWalletToSponsorshipFund(
+        { amount: '50.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects sponsorship fund wallet donations with insufficient balance', async () => {
+    const tx = mockValidSponsorshipFundWalletDonationSetup();
+    tx.wallet.findUnique.mockReset().mockResolvedValueOnce({
+      id: 9,
+      runningBalance: new Prisma.Decimal(25),
+    });
+
+    await expect(
+      service.donateWalletToSponsorshipFund(
+        { amount: '50.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects concurrent sponsorship fund wallet donations when balance changed', async () => {
+    const tx = mockValidSponsorshipFundWalletDonationSetup();
+    tx.wallet.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.donateWalletToSponsorshipFund(
+        { amount: '50.00' },
+        { id: 7, type: UserType.DONOR },
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
   it('increments aid request payment only once for repeated succeeded webhooks', async () => {
     const tx = {
       transaction: {
@@ -895,6 +1107,50 @@ describe('PaymentsService', () => {
       where: { id: 13 },
       data: { currentPayment: { increment: new Prisma.Decimal(25) } },
     });
+  });
+
+  it('marks sponsorship fund Stripe donations successful without side effects', async () => {
+    const tx = {
+      transaction: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 88,
+          donorId: 7,
+          amount: new Prisma.Decimal(50),
+          status: TransactionStatus.PENDING,
+          type: TransactionType.GENERAL_DONATION,
+          referenceType: null,
+          referenceId: null,
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      requestAid: {
+        update: jest.fn(),
+      },
+      wallet: {
+        update: jest.fn(),
+      },
+      walletTransaction: {
+        create: jest.fn(),
+      },
+    };
+    prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    stripe.webhooks.constructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_fund' } },
+    });
+
+    await service.handleStripeWebhook(Buffer.from('{}'), 'sig');
+
+    expect(tx.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 88,
+        status: { not: TransactionStatus.SUCCESSFUL },
+      },
+      data: { status: TransactionStatus.SUCCESSFUL },
+    });
+    expect(tx.requestAid.update).not.toHaveBeenCalled();
+    expect(tx.wallet.update).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
 
   it.each(['payment_intent.payment_failed', 'payment_intent.canceled'])(
