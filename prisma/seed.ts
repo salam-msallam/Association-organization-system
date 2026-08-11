@@ -12,6 +12,7 @@ import { ensureSeedMediaFiles } from './seeds/media.seed';
 import { seedPermissions } from './seeds/permissions.seed';
 import { seedRequestAids } from './seeds/request-aids.seed';
 import { seedRoles } from './seeds/roles.seed';
+import { seedSponsorshipEmergencyCoverage } from './seeds/sponsorship-emergency-coverage.seed';
 import { seedSubCategories } from './seeds/subcategories.seed';
 import { seedAdminUser } from './seeds/users.seed';
 
@@ -38,6 +39,7 @@ async function main() {
     categories,
     beneficiaries.acceptedBeneficiaries,
   );
+  const emergencyCoverageSeed = await seedSponsorshipEmergencyCoverage(prisma);
 
   console.log('\nSeeded beneficiary test accounts:');
   console.table(beneficiaries.accounts);
@@ -52,6 +54,8 @@ async function main() {
   console.log(
     `All seeded donor financial history passwords are "${DONOR_FINANCIAL_HISTORY_TEST_PASSWORD}".`,
   );
+  console.log('\nSeeded sponsorship emergency coverage scenarios:');
+  console.table(emergencyCoverageSeed);
   console.log('Run this seeder with: npm run seed');
 }
 

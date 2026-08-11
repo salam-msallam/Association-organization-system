@@ -7,6 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import {
   Prisma,
   Status,
@@ -20,11 +21,14 @@ import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { getSponsorshipPaymentContext } from '../sponsorship/sponsorship-billing-period';
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
+import { CreateSponsorshipFundPaymentIntentDto } from './dto/create-sponsorship-fund-payment-intent.dto';
 import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
+import { DonateWalletToSponsorshipFundDto } from './dto/donate-wallet-to-sponsorship-fund.dto';
 import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
 import { WalletBalanceResponseDto } from './dto/wallet-balance-response.dto';
 import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
+import { WalletSponsorshipFundDonationResponseDto } from './dto/wallet-sponsorship-fund-donation-response.dto';
 import { WalletSponsorshipDonationResponseDto } from './dto/wallet-sponsorship-donation-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
@@ -44,6 +48,7 @@ type DonorWithUser = {
   id: number;
   userId: number;
   stripeCustomerId: string | null;
+  isSponsor: boolean;
   user: {
     firstName: string;
     lastName: string;
@@ -57,8 +62,8 @@ type CreateStripeBackedTransactionInput = {
   donor: DonorWithUser;
   amount: Prisma.Decimal;
   type: TransactionType;
-  referenceType: string;
-  referenceId: number;
+  referenceType?: string;
+  referenceId?: number;
   metadata: Record<string, string>;
   lang: string;
 };
@@ -157,6 +162,25 @@ export class PaymentsService {
       metadata: {
         walletId: String(wallet.id),
         type: TransactionType.WALLET_TOP_UP,
+      },
+      lang,
+    });
+  }
+
+  async createSponsorshipFundPaymentIntent(
+    dto: CreateSponsorshipFundPaymentIntentDto,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<PaymentIntentResponseDto> {
+    const amount = this.parsePaymentAmount(dto.amount, lang);
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    return this.createStripeBackedTransaction({
+      donor,
+      amount,
+      type: TransactionType.GENERAL_DONATION,
+      metadata: {
+        type: TransactionType.GENERAL_DONATION,
       },
       lang,
     });
@@ -468,6 +492,92 @@ export class PaymentsService {
     });
   }
 
+  async donateWalletToSponsorshipFund(
+    dto: DonateWalletToSponsorshipFundDto,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<WalletSponsorshipFundDonationResponseDto> {
+    const amount = this.parsePaymentAmount(dto.amount, lang, {
+      requireExactlyTwoDecimals: true,
+    });
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    if (donor.isSponsor) {
+      throw new ForbiddenException(
+        this.t('SPONSORS_CANNOT_DONATE_WALLET_TO_FUND', lang),
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findUnique({
+        where: { donorId: donor.userId },
+        select: { id: true, runningBalance: true },
+      });
+
+      if (!wallet) {
+        throw new NotFoundException(this.t('WALLET_NOT_FOUND', lang));
+      }
+
+      if (new Prisma.Decimal(wallet.runningBalance).lt(amount)) {
+        throw new BadRequestException(
+          this.t('INSUFFICIENT_WALLET_BALANCE', lang),
+        );
+      }
+
+      const walletUpdate = await tx.wallet.updateMany({
+        where: {
+          id: wallet.id,
+          runningBalance: { gte: amount },
+        },
+        data: { runningBalance: { decrement: amount } },
+      });
+
+      if (walletUpdate.count !== 1) {
+        throw new BadRequestException(
+          this.t('WALLET_FUND_DONATION_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { runningBalance: true },
+      });
+
+      if (!updatedWallet) {
+        throw new BadRequestException(
+          this.t('WALLET_FUND_DONATION_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const walletTransaction = await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          transactionId: null,
+          amount,
+          type: TransactionType.GENERAL_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: null,
+          referenceId: null,
+          balanceAfter: updatedWallet.runningBalance,
+        },
+        select: { id: true },
+      });
+
+      return {
+        success: true,
+        message: this.t('SPONSORSHIP_FUND_DONATION_SUCCESS', lang),
+        data: {
+          walletTransactionId: walletTransaction.id,
+          donatedAmount: amount.toFixed(2),
+          balanceAfter: new Prisma.Decimal(
+            updatedWallet.runningBalance,
+          ).toFixed(2),
+          currency: WALLET_CURRENCY,
+        },
+      };
+    });
+  }
+
   async handleStripeWebhook(
     rawBody: Buffer | undefined,
     signature: string | string[] | undefined,
@@ -642,15 +752,22 @@ export class PaymentsService {
     const transaction = await this.prisma.transaction.create({
       data: {
         donorId: input.donor.userId,
+        idempotencyKey: `payment-intent:${randomUUID()}`,
         amount: input.amount,
         status: TransactionStatus.PENDING,
         type: input.type,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
+        referenceType: input.referenceType ?? null,
+        referenceId: input.referenceId ?? null,
         currency,
       },
-      select: { id: true, amount: true },
+      select: { id: true, amount: true, idempotencyKey: true },
     });
+
+    if (!transaction.idempotencyKey) {
+      throw new InternalServerErrorException(
+        this.t('STRIPE_IDEMPOTENCY_KEY_MISSING', input.lang),
+      );
+    }
 
     const paymentIntent = await stripe.paymentIntents.create(
       {
@@ -665,7 +782,7 @@ export class PaymentsService {
         },
       },
       {
-        idempotencyKey: `payment-intent:${transaction.id}`,
+        idempotencyKey: transaction.idempotencyKey,
       },
     );
 

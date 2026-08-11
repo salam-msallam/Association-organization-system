@@ -185,6 +185,7 @@ async function rollbackPreviousSeedHistory(
   }
 
   if (donorUserIds.length > 0) {
+    await rollbackSponsorshipCoverage(transaction, donorIds);
     await transaction.transaction.deleteMany({
       where: { donorId: { in: donorUserIds } },
     });
@@ -200,6 +201,32 @@ async function rollbackPreviousSeedHistory(
       data: { isSponsor: false },
     });
   }
+}
+
+async function rollbackSponsorshipCoverage(
+  transaction: Prisma.TransactionClient,
+  donorIds: number[],
+): Promise<void> {
+  if (donorIds.length === 0) return;
+
+  const coverages = await transaction.orphanEmergencyCoverage.findMany({
+    where: {
+      sponsorship: {
+        donorId: { in: donorIds },
+      },
+    },
+    select: { id: true },
+  });
+  const coverageIds = coverages.map((coverage) => coverage.id);
+
+  if (coverageIds.length === 0) return;
+
+  await transaction.sponsorshipFundSupport.deleteMany({
+    where: { coverageId: { in: coverageIds } },
+  });
+  await transaction.orphanEmergencyCoverage.deleteMany({
+    where: { id: { in: coverageIds } },
+  });
 }
 
 async function rollbackAidRequestPayments(

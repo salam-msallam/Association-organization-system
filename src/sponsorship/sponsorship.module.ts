@@ -5,10 +5,11 @@ import { CaslModule } from '../casl/casl.module';
 import { SponsorshipController } from './sponsorship.controller';
 import { SponsorshipService } from './sponsorship.service';
 import { AdminSponsorshipController } from './admin-sponsorship.controller';
+import { SponsorshipFundService } from './sponsorship-fund.service';
 
 @Module({
   imports: [AuthModule, PrismaModule, CaslModule],
   controllers: [SponsorshipController, AdminSponsorshipController],
-  providers: [SponsorshipService],
+  providers: [SponsorshipService, SponsorshipFundService],
 })
 export class SponsorshipModule {}

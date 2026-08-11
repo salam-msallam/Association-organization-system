@@ -9,6 +9,7 @@ import {
 import {
   CancellationSource,
   Gender,
+  OrphanEmergencyCoverageReason,
   Prisma,
   Status,
   TransactionType,
@@ -24,6 +25,7 @@ import {
   SPONSORSHIP_TIME_ZONE,
   toSponsorshipDatabaseDate,
 } from './sponsorship-billing-period';
+import { SponsorshipFundService } from './sponsorship-fund.service';
 
 const MONTHLY_SPONSORSHIP_AMOUNT = new Prisma.Decimal(10);
 const MINIMUM_COVERAGE_MONTHS = 3;
@@ -88,6 +90,7 @@ export class SponsorshipService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly sponsorshipFundService: SponsorshipFundService,
   ) {}
 
   async createRequest(user: SponsorshipUserPayload, lang = 'ar') {
@@ -373,6 +376,12 @@ export class SponsorshipService {
           where: { id: sponsorship.donorId },
           data: { isSponsor: true },
         });
+
+        await this.sponsorshipFundService.stopActiveCoveragesForOrphan(
+          tx,
+          dto.orphanId!,
+          new Date(),
+        );
       } else {
         const sponsorshipUpdate = await tx.sponsorship.updateMany({
           where: { id: sponsorship.id, status: Status.PENDING },
@@ -453,6 +462,7 @@ export class SponsorshipService {
           donorId: true,
           status: true,
           orphanId: true,
+          amount: true,
           startDate: true,
         },
       });
@@ -499,6 +509,13 @@ export class SponsorshipService {
         orphanReleased = await this.releaseAcceptedSponsorshipRelations(
           tx,
           sponsorship,
+        );
+
+        await this.sponsorshipFundService.createEmergencyCoverageIfEligible(
+          tx,
+          sponsorship,
+          OrphanEmergencyCoverageReason.SPONSOR_CANCELLED,
+          endDate,
         );
       }
 
@@ -595,6 +612,7 @@ export class SponsorshipService {
             id: true,
             donorId: true,
             orphanId: true,
+            amount: true,
             status: true,
           },
         });
@@ -629,6 +647,12 @@ export class SponsorshipService {
         if (updateResult.count !== 1) return false;
 
         await this.releaseAcceptedSponsorshipRelations(tx, sponsorship);
+        await this.sponsorshipFundService.createEmergencyCoverageIfEligible(
+          tx,
+          sponsorship,
+          OrphanEmergencyCoverageReason.PAYMENT_INTERRUPTED,
+          now,
+        );
         return true;
       });
 
