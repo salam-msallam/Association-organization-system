@@ -13,6 +13,7 @@ import {
 } from './dto/admin-help-request-detail-response.dto';
 import { AdminHelpRequestListResponseDto } from './dto/admin-help-request-list-response.dto';
 import {
+  PublicAidRequestCategoryDto,
   PublicAidRequestDetailDto,
   PublicAidRequestListItemDto,
 } from './dto/public-aid-request-response.dto';
@@ -49,6 +50,11 @@ type PublicAidRequestRecord = {
   currentPayment: Prisma.Decimal;
   isUrgent: boolean | null;
   aidDetails: { donorImageUrl: string | null } | null;
+};
+
+type PublicAidRequestListRecord = PublicAidRequestRecord & {
+  categoryId: number;
+  category: { name: Prisma.JsonValue };
 };
 
 const AID_DETAILS_BILINGUAL_FIELDS = [
@@ -140,6 +146,8 @@ export class RequestAidService {
         cost: true,
         currentPayment: true,
         isUrgent: true,
+        categoryId: true,
+        category: { select: { name: true } },
         aidDetails: { select: { donorImageUrl: true } },
       },
     });
@@ -795,15 +803,26 @@ export class RequestAidService {
   }
 
   private mapPublicAidRequestListItem(
-    request: PublicAidRequestRecord,
+    request: PublicAidRequestListRecord,
     lang: string,
   ): PublicAidRequestListItemDto {
     return {
       id: request.id,
+      category: this.mapPublicAidRequestCategory(request, lang),
       image: request.aidDetails?.donorImageUrl ?? null,
       title: this.localizeJsonText(request.title, lang),
       ...this.mapPublicAidRequestPayment(request),
       isUrgent: request.isUrgent ?? false,
+    };
+  }
+
+  private mapPublicAidRequestCategory(
+    request: PublicAidRequestListRecord,
+    lang: string,
+  ): PublicAidRequestCategoryDto {
+    return {
+      id: request.categoryId,
+      name: this.localizeJsonText(request.category.name, lang),
     };
   }
 

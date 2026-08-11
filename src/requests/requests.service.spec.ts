@@ -66,6 +66,8 @@ describe('RequestAidService admin APIs', () => {
         cost: new Prisma.Decimal(2500),
         currentPayment: new Prisma.Decimal(1250),
         isUrgent: true,
+        categoryId: 3,
+        category: { name: { ar: 'Health AR', en: 'Health' } },
         aidDetails: {
           donorImageUrl: 'uploads/request-media/donor-surgery.png',
         },
@@ -76,6 +78,10 @@ describe('RequestAidService admin APIs', () => {
         cost: new Prisma.Decimal(100),
         currentPayment: new Prisma.Decimal(150),
         isUrgent: null,
+        categoryId: 3,
+        category: {
+          name: JSON.stringify({ ar: 'Education AR', en: 'Education' }),
+        },
         aidDetails: {
           donorImageUrl: null,
         },
@@ -93,12 +99,15 @@ describe('RequestAidService admin APIs', () => {
         cost: true,
         currentPayment: true,
         isUrgent: true,
+        categoryId: true,
+        category: { select: { name: true } },
         aidDetails: { select: { donorImageUrl: true } },
       },
     });
     expect(result).toEqual([
       {
         id: 1,
+        category: { id: 3, name: 'Health' },
         image: 'uploads/request-media/donor-surgery.png',
         title: 'Urgent surgery',
         totalCost: '2500',
@@ -109,6 +118,7 @@ describe('RequestAidService admin APIs', () => {
       },
       {
         id: 2,
+        category: { id: 3, name: 'Education' },
         image: null,
         title: 'Tuition',
         totalCost: '100',
@@ -129,6 +139,8 @@ describe('RequestAidService admin APIs', () => {
         cost: new Prisma.Decimal(100),
         currentPayment: new Prisma.Decimal(-20),
         isUrgent: false,
+        categoryId: 2,
+        category: { name: { ar: 'Food AR', en: 'Food' } },
         aidDetails: { donorImageUrl: null },
       },
     ]);
@@ -145,6 +157,7 @@ describe('RequestAidService admin APIs', () => {
       expect.objectContaining({
         title: 'سلة غذائية',
         remainingAmount: '120',
+        category: { id: 2, name: 'Food AR' },
         completionPercentage: 0,
       }),
     );
@@ -189,6 +202,8 @@ describe('RequestAidService admin APIs', () => {
         cost: new Prisma.Decimal(2500),
         currentPayment: new Prisma.Decimal(2500),
         isUrgent: true,
+        categoryId: 4,
+        category: { name: { ar: 'Health AR', en: 'Health' } },
         aidDetails: {
           donorImageUrl: 'uploads/request-media/completed-treatment.png',
         },
@@ -211,12 +226,15 @@ describe('RequestAidService admin APIs', () => {
         cost: true,
         currentPayment: true,
         isUrgent: true,
+        categoryId: true,
+        category: { select: { name: true } },
         aidDetails: { select: { donorImageUrl: true } },
       },
     });
     expect(result).toEqual([
       {
         id: 5,
+        category: { id: 4, name: 'Health' },
         image: 'uploads/request-media/completed-treatment.png',
         title: 'Completed treatment',
         totalCost: '2500',
