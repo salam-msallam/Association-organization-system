@@ -1,5 +1,13 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  Validate,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { SyrianUserPhoneNumberConstraint } from './syrian-user-phone-number.validator';
 import { Gender } from '@prisma/client'; // استيراد الـ Enum من بريزما مباشرة
 
 export class BaseRegisterDto {
@@ -25,6 +33,9 @@ export class BaseRegisterDto {
   @ApiProperty({ example: '934206455' })
   @IsString()
   @IsNotEmpty()
+  @Validate(SyrianUserPhoneNumberConstraint, {
+    message: 'validation.SYRIAN_USER_PHONE_NUMBER',
+  })
   number!: string;
 
   @ApiProperty({ example: 'syria' })

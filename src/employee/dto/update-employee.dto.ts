@@ -1,4 +1,13 @@
-import { IsEmail, IsString, IsEnum, IsOptional, IsDateString, IsArray, IsNumber } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  Matches,
+} from 'class-validator';
 import { Gender } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -7,38 +16,39 @@ export class UpdateEmployeeDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  @Transform(({ value }) => value === '' ? undefined : value) 
+  @Transform(({ value }) => (value === '' ? undefined : value))
   firstName?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  @Transform(({ value }) => value === '' ? undefined : value) 
+  @Transform(({ value }) => (value === '' ? undefined : value))
   lastName?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsEmail({}, { message: 'validation.EMAIL_MUST_BE_VALID' })
-  @Transform(({ value }) => value === '' ? undefined : value) 
+  @Transform(({ value }) => (value === '' ? undefined : value))
   email?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  @Transform(({ value }) => value === '' ? undefined : value) 
+  @Matches(/^\d{9}$/, { message: 'validation.SYRIAN_USER_PHONE_NUMBER' })
+  @Transform(({ value }) => (value === '' ? undefined : value))
   number?: string;
 
   @ApiProperty({ required: false, enum: Gender })
   @IsOptional()
   @IsEnum(Gender)
-  @Transform(({ value }) => value === '' ? undefined : value)
+  @Transform(({ value }) => (value === '' ? undefined : value))
   gender?: Gender;
 
   @ApiProperty({
     type: 'string',
-    format: 'binary', 
+    format: 'binary',
     description: 'الصورة الشخصية للموظف (اختياري)',
-    required: false
+    required: false,
   })
   @IsOptional()
   personalPhoto?: any;
@@ -46,14 +56,14 @@ export class UpdateEmployeeDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
-  @Transform(({ value }) => value === '' ? undefined : value)
+  @Transform(({ value }) => (value === '' ? undefined : value))
   dateOfBirth?: string;
 
   @ApiProperty({
     type: 'string',
     description: 'أرقام الأدوار الجديدة ممررة كمصفوفة نصية مثل [1,2] (اختياري)',
     example: '[1,2]',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsArray({ message: 'validation.ROLE_IDS_MUST_BE_ARRAY' })

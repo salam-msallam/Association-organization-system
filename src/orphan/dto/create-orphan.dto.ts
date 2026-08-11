@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Gender } from '@prisma/client';
@@ -45,8 +46,7 @@ export class CreateOrphanDto {
   class: any;
 
   @ApiProperty({
-    example:
-      '{"ar":"لا توجد أمراض","en":"No diseases"}',
+    example: '{"ar":"لا توجد أمراض","en":"No diseases"}',
   })
   @IsNotEmpty()
   Diseases: any;
@@ -61,9 +61,12 @@ export class CreateOrphanDto {
   @IsNotEmpty()
   guardianName!: string;
 
-  @ApiProperty({ example: '+963933123456' })
+  @ApiProperty({ example: '0934123456' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^09\d{8}$/, {
+    message: 'validation.ORPHAN_GUARANTEED_PHONE_NUMBER',
+  })
   guaranteedPhone!: string;
 
   @ApiProperty({ example: 130 })
@@ -77,15 +80,13 @@ export class CreateOrphanDto {
   shoesSize!: number;
 
   @ApiProperty({
-    example:
-      '{"ar":"دمشق","en":"Damascus"}',
+    example: '{"ar":"دمشق","en":"Damascus"}',
   })
   @IsNotEmpty()
   currentAddress: any;
 
   @ApiProperty({
-    example:
-      '{"ar":"حمص","en":"Homs"}',
+    example: '{"ar":"حمص","en":"Homs"}',
   })
   @IsNotEmpty()
   previousAddress: any;

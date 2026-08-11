@@ -20,5 +20,8 @@
     "PASSWORD_REQUIRED": "Password is required.",
     "PASSWORD_MIN_LENGTH": "Password must be at least 6 characters.",
     "ARABIC_TEXT_REQUIRED": "The Arabic field must contain Arabic text only and cannot be blank.",
-    "ENGLISH_TEXT_REQUIRED": "The English field must contain English text only and cannot be blank."
+    "ENGLISH_TEXT_REQUIRED": "The English field must contain English text only and cannot be blank.",
+    "SYRIAN_USER_PHONE_NUMBER": "For country code +963, phone number must contain exactly 9 digits.",
+    "ORPHAN_GUARANTEED_PHONE_NUMBER": "Orphan guaranteed phone must start with 09 and contain exactly 10 digits.",
+    "BENEFICIARY_COUNTRY_CODE_MUST_BE_SYRIA": "Beneficiary country code must be +963."
 }

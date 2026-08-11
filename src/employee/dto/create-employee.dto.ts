@@ -1,4 +1,13 @@
-import { IsEmail, IsString, IsEnum, IsNotEmpty, IsDateString, IsArray, IsNumber } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsEnum,
+  IsNotEmpty,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  Matches,
+} from 'class-validator';
 import { Gender } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -18,6 +27,7 @@ export class CreateEmployeeDto {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/^\d{9}$/, { message: 'validation.SYRIAN_USER_PHONE_NUMBER' })
   number: string;
 
   @IsEnum(Gender)
@@ -25,7 +35,7 @@ export class CreateEmployeeDto {
 
   @ApiProperty({
     type: 'string',
-    format: 'binary', 
+    format: 'binary',
     description: 'الصورة الشخصية للموظف',
   })
   personalPhoto: any;
@@ -34,9 +44,9 @@ export class CreateEmployeeDto {
   dateOfBirth: string;
 
   @ApiProperty({
-    type: 'string', 
+    type: 'string',
     description: 'أرقام الأدوار ممررة كمصفوفة نصية مثل [1,2]',
-    example: '[1,2]'
+    example: '[1,2]',
   })
   @IsArray({ message: 'validation.ROLE_IDS_MUST_BE_ARRAY' })
   @IsNumber({}, { each: true, message: 'validation.ROLE_ID_MUST_BE_NUMBER' })
