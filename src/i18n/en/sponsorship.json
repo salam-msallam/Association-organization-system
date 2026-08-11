@@ -1,4 +1,7 @@
 {
+  "ORPHAN_SUMMARY_FETCH_SUCCESS": "The orphan summary was fetched successfully.",
+  "ORPHAN_SUMMARY_PAYMENT_REQUIRED": "The orphan information becomes available after the first payment.",
+  "ORPHAN_NOT_ASSIGNED": "No orphan is assigned to this sponsorship.",
   "AUTHENTICATION_REQUIRED": "Authentication is required.",
   "ONLY_DONORS_CAN_APPLY": "Only donors can create sponsorship requests.",
   "DONOR_ACCOUNT_NOT_FOUND": "The authenticated donor account was not found.",

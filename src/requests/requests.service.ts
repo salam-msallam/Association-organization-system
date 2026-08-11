@@ -570,6 +570,7 @@ export class RequestAidService {
         id: true,
         categoryId: true,
         subCategoryId: true,
+        title: true,
         status: true,
         rejectionReason: true,
         cost: true,
@@ -589,6 +590,7 @@ export class RequestAidService {
 
     return requests.map((request) => ({
       ...request,
+      title: this.localizeJsonText(request.title, lang),
       rejectionReason: this.localizeJsonText(request.rejectionReason, lang),
       cost: request.cost.toString(),
       currentPayment: request.currentPayment.toString(),

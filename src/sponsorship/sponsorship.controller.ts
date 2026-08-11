@@ -17,6 +17,7 @@ import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiHeader,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -31,6 +32,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateSponsorshipResponseDto } from './dto/create-sponsorship-response.dto';
 import { CancelSponsorshipResponseDto } from './dto/cancel-sponsorship-response.dto';
 import { SponsorshipListResponseDto } from './dto/sponsorship-list-response.dto';
+import { OrphanSummaryResponseDto } from './dto/orphan-summary-response.dto';
 import { SponsorshipService } from './sponsorship.service';
 
 interface AuthenticatedSponsorshipRequest extends Request {
@@ -101,6 +103,37 @@ export class SponsorshipController {
     @I18nLang() lang = 'ar',
   ) {
     return this.sponsorshipService.findMine(req.user, status, lang);
+  }
+
+  @Get(':sponsorshipId/orphan-summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Get the sponsored orphan summary after the first payment',
+    description:
+      'This is a separate endpoint and does not change the sponsorship list response. It returns a limited localized summary only to the donor who owns the accepted and paid sponsorship.',
+  })
+  @ApiParam({ name: 'sponsorshipId', type: Number, example: 7 })
+  @ApiOkResponse({ type: OrphanSummaryResponseDto })
+  @ApiForbiddenResponse({
+    description:
+      'The authenticated user is not a donor or the first sponsorship payment has not been made.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'The accepted sponsorship was not found, is not owned by the donor, or has no assigned orphan.',
+  })
+  @ApiUnauthorizedResponse({ description: 'JWT token is missing or invalid.' })
+  findOrphanSummary(
+    @Param('sponsorshipId', ParseIntPipe) sponsorshipId: number,
+    @Req() req: AuthenticatedSponsorshipRequest,
+    @I18nLang() lang = 'ar',
+  ): Promise<OrphanSummaryResponseDto> {
+    return this.sponsorshipService.findOrphanSummary(
+      sponsorshipId,
+      req.user,
+      lang,
+    );
   }
 
   @Patch(':id/cancel')

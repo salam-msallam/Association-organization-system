@@ -1,11 +1,14 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   Status,
   TransactionType,
+  UserType,
   WalletTransactionDirection,
 } from '@prisma/client';
 import { DateTime } from 'luxon';
@@ -15,12 +18,19 @@ import { toPublicUploadPath } from '../interceptors/upload-storage.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { SPONSORSHIP_TIME_ZONE } from '../sponsorship/sponsorship-billing-period';
 import { CreateAnnualReportResponseDto } from './dto/create-annual-report-response.dto';
+import { DonorAnnualReportsResponseDto } from './dto/donor-annual-reports-response.dto';
 
 const SPONSORSHIP_REFERENCE_TYPE = 'SPONSORSHIP';
 
 interface AnnualReportFiles {
   reportImageAr?: Express.Multer.File[];
   reportImageEn?: Express.Multer.File[];
+}
+
+interface AnnualReportDonorPayload {
+  id?: number;
+  type?: string;
+  userType?: string;
 }
 
 @Injectable()
@@ -180,6 +190,111 @@ export class AnnualReportService {
       await this.removeUploadedFiles(uploadedFiles);
       throw error;
     }
+  }
+
+  async findForDonor(
+    sponsorshipId: number,
+    user: AnnualReportDonorPayload,
+    lang = 'ar',
+  ): Promise<DonorAnnualReportsResponseDto> {
+    if (!user?.id) {
+      throw new UnauthorizedException(this.t('AUTHENTICATION_REQUIRED', lang));
+    }
+
+    const userType = user.type ?? user.userType;
+    if (userType !== UserType.DONOR) {
+      throw new ForbiddenException(this.t('ONLY_DONORS_CAN_VIEW', lang));
+    }
+
+    const donor = await this.prisma.donor.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+
+    if (!donor) {
+      throw new ForbiddenException(this.t('DONOR_ACCOUNT_NOT_FOUND', lang));
+    }
+
+    const sponsorship = await this.prisma.sponsorship.findFirst({
+      where: {
+        id: sponsorshipId,
+        donorId: donor.id,
+      },
+      select: { id: true },
+    });
+
+    if (!sponsorship) {
+      throw new NotFoundException(this.t('SPONSORSHIP_NOT_FOUND', lang));
+    }
+
+    const firstPayment = await this.prisma.walletTransaction.findFirst({
+      where: {
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: SPONSORSHIP_REFERENCE_TYPE,
+        referenceId: sponsorship.id,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    });
+
+    if (!firstPayment) {
+      throw new ForbiddenException(
+        this.t('DONOR_REPORTS_PAYMENT_REQUIRED', lang),
+      );
+    }
+
+    const reports = await this.prisma.annualReport.findMany({
+      where: { sponsorshipId: sponsorship.id },
+      orderBy: { reportNumber: 'desc' },
+      select: {
+        id: true,
+        reportNumber: true,
+        mediaUrl: true,
+        createdAt: true,
+      },
+    });
+    const firstPaymentAt = DateTime.fromJSDate(firstPayment.createdAt, {
+      zone: 'utc',
+    }).setZone(SPONSORSHIP_TIME_ZONE);
+
+    return {
+      success: true,
+      message: this.t('DONOR_FETCH_SUCCESS', lang),
+      data: reports.map((report) => ({
+        id: report.id,
+        reportNumber: report.reportNumber,
+        reportYear: firstPaymentAt.plus({ years: report.reportNumber }).year,
+        imageUrl: this.getLocalizedMediaUrl(report.mediaUrl, lang),
+        createdAt: report.createdAt,
+      })),
+    };
+  }
+
+  private getLocalizedMediaUrl(value: unknown, lang: string): string {
+    let mediaUrl = value;
+
+    if (typeof mediaUrl === 'string') {
+      const rawMediaUrl = mediaUrl;
+      try {
+        mediaUrl = JSON.parse(mediaUrl) as unknown;
+      } catch {
+        return rawMediaUrl;
+      }
+    }
+
+    if (mediaUrl && typeof mediaUrl === 'object' && !Array.isArray(mediaUrl)) {
+      const localized = mediaUrl as Record<string, unknown>;
+      const selectedLanguage = lang === 'en' ? 'en' : 'ar';
+      const selected =
+        localized[selectedLanguage] ?? localized.ar ?? localized.en;
+
+      if (typeof selected === 'string') {
+        return selected;
+      }
+    }
+
+    throw new BadRequestException(this.t('REPORT_IMAGE_MISSING', lang));
   }
 
   private async removeUploadedFiles(

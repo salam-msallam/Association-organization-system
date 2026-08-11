@@ -971,6 +971,10 @@ describe('RequestAidService admin APIs', () => {
           id: 13,
           categoryId: 2,
           subCategoryId: 7,
+          title: {
+            ar: 'طلب عملية جراحية',
+            en: 'Surgery request',
+          },
           status: Status.REJECTED,
           rejectionReason: {
             ar: 'الوثائق ناقصة',
@@ -1003,6 +1007,7 @@ describe('RequestAidService admin APIs', () => {
       expect(result).toEqual([
         expect.objectContaining({
           id: 13,
+          title: lang === 'ar' ? 'طلب عملية جراحية' : 'Surgery request',
           status: Status.REJECTED,
           rejectionReason,
           cost: '100',

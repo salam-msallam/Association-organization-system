@@ -1,4 +1,7 @@
 {
+  "ORPHAN_SUMMARY_FETCH_SUCCESS": "تم جلب معلومات اليتيم المختصرة بنجاح.",
+  "ORPHAN_SUMMARY_PAYMENT_REQUIRED": "معلومات اليتيم تصبح متاحة بعد دفع الدفعة الأولى.",
+  "ORPHAN_NOT_ASSIGNED": "لا يوجد يتيم مرتبط بهذه الكفالة.",
   "AUTHENTICATION_REQUIRED": "تسجيل الدخول مطلوب.",
   "ONLY_DONORS_CAN_APPLY": "يمكن للمتبرعين فقط إنشاء طلبات الكفالة.",
   "DONOR_ACCOUNT_NOT_FOUND": "لم يتم العثور على حساب المتبرع الحالي.",

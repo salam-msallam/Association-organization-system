@@ -1,7 +1,12 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Status,
   TransactionType,
+  UserType,
   WalletTransactionDirection,
 } from '@prisma/client';
 import { AnnualReportService } from './annual-report.service';
@@ -66,6 +71,18 @@ describe('AnnualReportService', () => {
       },
     };
     prisma = {
+      donor: {
+        findUnique: jest.fn(),
+      },
+      sponsorship: {
+        findFirst: jest.fn(),
+      },
+      walletTransaction: {
+        findFirst: jest.fn(),
+      },
+      annualReport: {
+        findMany: jest.fn(),
+      },
       $transaction: jest.fn((callback: (client: any) => unknown) =>
         callback(tx),
       ),
@@ -213,5 +230,97 @@ describe('AnnualReportService', () => {
       orderBy: { createdAt: 'asc' },
       select: { createdAt: true },
     });
+  });
+
+  it('returns localized donor reports with a year calculated from the first payment', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ id: 3 });
+    prisma.sponsorship.findFirst.mockResolvedValue({ id: 5 });
+    prisma.walletTransaction.findFirst.mockResolvedValue({
+      createdAt: new Date('2025-05-27T10:00:00.000Z'),
+    });
+    prisma.annualReport.findMany.mockResolvedValue([
+      {
+        id: 12,
+        reportNumber: 2,
+        mediaUrl: {
+          ar: 'uploads/annual-reports/report-ar-2.jpg',
+          en: 'uploads/annual-reports/report-en-2.jpg',
+        },
+        createdAt: new Date('2027-06-01T10:00:00.000Z'),
+      },
+      {
+        id: 8,
+        reportNumber: 1,
+        mediaUrl: {
+          ar: 'uploads/annual-reports/report-ar-1.jpg',
+          en: 'uploads/annual-reports/report-en-1.jpg',
+        },
+        createdAt: new Date('2026-06-01T10:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.findForDonor(
+      5,
+      { id: 20, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(prisma.sponsorship.findFirst).toHaveBeenCalledWith({
+      where: { id: 5, donorId: 3 },
+      select: { id: true },
+    });
+    expect(prisma.annualReport.findMany).toHaveBeenCalledWith({
+      where: { sponsorshipId: 5 },
+      orderBy: { reportNumber: 'desc' },
+      select: {
+        id: true,
+        reportNumber: true,
+        mediaUrl: true,
+        createdAt: true,
+      },
+    });
+    expect(result).toEqual({
+      success: true,
+      message: 'annual-report.DONOR_FETCH_SUCCESS:en',
+      data: [
+        {
+          id: 12,
+          reportNumber: 2,
+          reportYear: 2027,
+          imageUrl: 'uploads/annual-reports/report-en-2.jpg',
+          createdAt: new Date('2027-06-01T10:00:00.000Z'),
+        },
+        {
+          id: 8,
+          reportNumber: 1,
+          reportYear: 2026,
+          imageUrl: 'uploads/annual-reports/report-en-1.jpg',
+          createdAt: new Date('2026-06-01T10:00:00.000Z'),
+        },
+      ],
+    });
+  });
+
+  it('does not return reports for a sponsorship owned by another donor', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ id: 3 });
+    prisma.sponsorship.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.findForDonor(99, { id: 20, type: UserType.DONOR }, 'ar'),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(prisma.annualReport.findMany).not.toHaveBeenCalled();
+  });
+
+  it('requires the first sponsorship payment before returning reports', async () => {
+    prisma.donor.findUnique.mockResolvedValue({ id: 3 });
+    prisma.sponsorship.findFirst.mockResolvedValue({ id: 5 });
+    prisma.walletTransaction.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.findForDonor(5, { id: 20, type: UserType.DONOR }, 'ar'),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(prisma.annualReport.findMany).not.toHaveBeenCalled();
   });
 });
