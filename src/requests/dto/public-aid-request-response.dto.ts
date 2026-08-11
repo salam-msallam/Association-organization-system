@@ -1,8 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class PublicAidRequestCategoryDto {
+  @ApiProperty({ example: 4 })
+  id!: number;
+
+  @ApiProperty({ example: 'Health', nullable: true })
+  name!: string | null;
+}
+
 export class PublicAidRequestListItemDto {
   @ApiProperty({ example: 13 })
   id!: number;
+
+  @ApiProperty({ type: PublicAidRequestCategoryDto })
+  category!: PublicAidRequestCategoryDto;
 
   @ApiProperty({
     example: 'uploads/request-media/example.png',
