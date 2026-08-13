@@ -141,7 +141,8 @@ export class AuthController {
   @Post('forgot-password/request-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Request password reset OTP for donor or accepted beneficiary',
+    summary:
+      'Request password reset OTP for donors, accepted beneficiaries, employees, or admins',
   })
   @ApiBody({ type: ForgotPasswordRequestOtpDto })
   @ApiResponse({
@@ -167,7 +168,8 @@ export class AuthController {
   @Post('forgot-password/reset')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Reset donor or beneficiary password using OTP code',
+    summary:
+      'Reset password for donors, accepted beneficiaries, employees, or admins using OTP code',
   })
   @ApiBody({ type: ForgotPasswordResetDto })
   @ApiResponse({ status: 200, description: 'Password was reset successfully.' })

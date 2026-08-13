@@ -10,13 +10,13 @@ import { RegisterBeneficiaryDto } from './dto/register-beneficiary.dto';
 import { RegisterDonorDto } from './dto/register-donor.dto';
 import {
   PendingRegistrationCache,
-  UserType,
+  UserType as RegistrationUserType,
 } from './interfaces/pending-registration.interface';
 import { OtpService } from './otp.service';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { WhatsappService } from './whatsapp.service';
 import { UsersService } from '../users/users.service';
-import { Status } from '@prisma/client';
+import { Status, UserType as PrismaUserType } from '@prisma/client';
 import { LoginClientDto } from './dto/login_client.dto';
 import { ForgotPasswordRequestOtpDto } from './dto/forgot-password-request-otp.dto';
 import { ForgotPasswordResetDto } from './dto/forgot-password-reset.dto';
@@ -74,6 +74,15 @@ export class AuthService {
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      throw new UnauthorizedException(
+        this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }),
+      );
+    }
+
+    if (
+      user.userType !== PrismaUserType.ADMIN &&
+      user.userType !== PrismaUserType.EMPLOYEE
+    ) {
       throw new UnauthorizedException(
         this.i18n.t('auth.INVALID_EMAIL_OR_PASSWORD', { lang }),
       );
@@ -147,7 +156,7 @@ export class AuthService {
   }
 
   private async storePendingRegistration(
-    type: UserType,
+    type: RegistrationUserType,
     dto: RegisterDonorDto | RegisterBeneficiaryDto,
     lang: string,
   ): Promise<string> {
@@ -229,6 +238,7 @@ export class AuthService {
       include: {
         beneficiary: true,
         donor: true,
+        employee: true,
       },
     });
 
@@ -236,7 +246,7 @@ export class AuthService {
       throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
     }
 
-    if (user.userType === 'DONOR') {
+    if (user.userType === PrismaUserType.DONOR) {
       if (!user.donor) {
         throw new NotFoundException(
           this.i18n.t('auth.USER_NOT_FOUND', { lang }),
@@ -246,7 +256,7 @@ export class AuthService {
       return { user, fullPhoneNumber: normalizedPhone.e164 };
     }
 
-    if (user.userType === 'BENEFICIARY') {
+    if (user.userType === PrismaUserType.BENEFICIARY) {
       if (!user.beneficiary) {
         throw new NotFoundException(
           this.i18n.t('auth.USER_NOT_FOUND', { lang }),
@@ -259,6 +269,20 @@ export class AuthService {
         );
       }
 
+      return { user, fullPhoneNumber: normalizedPhone.e164 };
+    }
+
+    if (user.userType === PrismaUserType.EMPLOYEE) {
+      if (!user.employee) {
+        throw new NotFoundException(
+          this.i18n.t('auth.USER_NOT_FOUND', { lang }),
+        );
+      }
+
+      return { user, fullPhoneNumber: normalizedPhone.e164 };
+    }
+
+    if (user.userType === PrismaUserType.ADMIN) {
       return { user, fullPhoneNumber: normalizedPhone.e164 };
     }
 
