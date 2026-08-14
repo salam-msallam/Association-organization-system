@@ -61,6 +61,11 @@ describe('RequestAidService admin APIs', () => {
         notificationId: 1,
         pushSent: true,
       }),
+      createAndSendToPermission: jest.fn().mockResolvedValue({
+        recipientCount: 1,
+        notificationCount: 1,
+        pushSentCount: 1,
+      }),
     };
     service = new RequestAidService(prisma, i18n, notificationsService);
   });
@@ -934,6 +939,113 @@ describe('RequestAidService admin APIs', () => {
       { lang: 'ar' },
     );
     expect(prisma.requestAid.update).not.toHaveBeenCalled();
+  });
+
+  it('notifies authorized staff after creating an assistance request', async () => {
+    const requestAidCreate = jest.fn().mockResolvedValue({ id: 31 });
+    const aidDetailsCreate = jest.fn().mockResolvedValue({ id: 50 });
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.category = {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 2,
+        name: { ar: 'صحي', en: 'Health' },
+      }),
+    };
+    prisma.$transaction.mockImplementation((callback) =>
+      callback({
+        requestAid: { create: requestAidCreate },
+        aidDetails: { create: aidDetailsCreate },
+      }),
+    );
+
+    const result = await service.createRequestAid(
+      19,
+      2,
+      null,
+      {
+        firstName: 'Sara',
+        lastName: 'Ahmad',
+        beneficiaryFatherName: 'Mohammad',
+        socialStatus: SocialStatus.MARRIED,
+        address: { ar: 'دمشق', en: 'Damascus' },
+        age: 35,
+        isUnemployed: false,
+        gender: Gender.FEMALE,
+        number: '0991000000',
+        details: { ar: 'تفاصيل', en: 'Details' },
+        cost: 100,
+      },
+      {
+        typeAid: TypeAid.SURGERY,
+        mediaUrls: ['uploads/request-media/report.png'],
+      },
+      'Health',
+    );
+
+    expect(result).toEqual({ message: 'تم تقديم طلب المساعدة بنجاح' });
+    expect(notificationsService.createAndSendToPermission).toHaveBeenCalledWith(
+      'status:aid_requests',
+      {
+        title: {
+          ar: 'طلب إعانة جديد بانتظار المراجعة',
+          en: 'New assistance request awaiting review',
+        },
+        message: {
+          ar: 'تم إنشاء طلب إعانة جديد ويحتاج إلى مراجعة بياناته.',
+          en: 'A new assistance request has been created and requires review.',
+        },
+        targetType: 'AID_REQUEST_REVIEW',
+        targetId: 31,
+      },
+    );
+    expect(aidDetailsCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      notificationsService.createAndSendToPermission.mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('keeps the created assistance request when staff notification fails', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.category = {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 2,
+        name: { ar: 'صحي', en: 'Health' },
+      }),
+    };
+    prisma.$transaction.mockImplementation((callback) =>
+      callback({
+        requestAid: {
+          create: jest.fn().mockResolvedValue({ id: 31 }),
+        },
+        aidDetails: { create: jest.fn() },
+      }),
+    );
+    notificationsService.createAndSendToPermission.mockRejectedValue(
+      new Error('notification database error'),
+    );
+
+    await expect(
+      service.createRequestAid(
+        19,
+        2,
+        null,
+        {
+          firstName: 'Sara',
+          lastName: 'Ahmad',
+          beneficiaryFatherName: 'Mohammad',
+          socialStatus: SocialStatus.MARRIED,
+          address: { ar: 'دمشق', en: 'Damascus' },
+          age: 35,
+          isUnemployed: false,
+          gender: Gender.FEMALE,
+          number: '0991000000',
+          details: { ar: 'تفاصيل', en: 'Details' },
+          cost: 100,
+        },
+        { typeAid: TypeAid.SURGERY },
+        'Health',
+      ),
+    ).resolves.toEqual({ message: 'تم تقديم طلب المساعدة بنجاح' });
   });
 
   it('resets review metadata when a beneficiary edits a non-cancelled request', async () => {

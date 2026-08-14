@@ -6,30 +6,29 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../prisma/prisma.module';
 import { employeeJwtStrategy } from '../auth/dto/employee_jwt.strategy';
 import { CacheModule } from '@nestjs/cache-manager';
-import { OtpService } from './otp.service'; 
+import { OtpService } from './otp.service';
 import { WhatsappService } from './whatsapp.service';
 import { HttpModule } from '@nestjs/axios';
 import { UsersService } from 'src/users/users.service';
 import { ClientJwtStrategy } from './ClientJwtStrategy';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    PrismaModule, 
+    PrismaModule,
     PassportModule,
     HttpModule,
+    NotificationsModule,
     CacheModule.register({
       ttl: 600000, // 10 minutes
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }), // 3. تسجيل الباسبورت
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '7d' },   //   secret: 'SUPER_SECRET_KEY_123', 
-
+      signOptions: { expiresIn: '7d' }, //   secret: 'SUPER_SECRET_KEY_123',
     }),
   ],
-  controllers: [
-    AuthController, 
-  ],
+  controllers: [AuthController],
   providers: [
     AuthService,
     OtpService,
@@ -38,13 +37,14 @@ import { ClientJwtStrategy } from './ClientJwtStrategy';
     ClientJwtStrategy,
     UsersService,
     JwtModule,
-],
+  ],
   exports: [
     AuthService,
-     OtpService,WhatsappService,
-     employeeJwtStrategy,
-     ClientJwtStrategy,
-     JwtModule,
-    ], 
+    OtpService,
+    WhatsappService,
+    employeeJwtStrategy,
+    ClientJwtStrategy,
+    JwtModule,
+  ],
 })
 export class AuthModule {}

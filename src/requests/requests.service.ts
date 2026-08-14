@@ -593,7 +593,7 @@ export class RequestAidService {
       subCategoryRequiredFieldsMap,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const requestAid = await tx.requestAid.create({
         data: {
           beneficiaryId: beneficiary.id,
@@ -626,8 +626,39 @@ export class RequestAidService {
 
       return {
         message: 'تم تقديم طلب المساعدة بنجاح',
+        requestId: requestAid.id,
       };
     });
+
+    await this.notifyStaffAboutPendingAidRequest(result.requestId);
+
+    return { message: result.message };
+  }
+
+  private async notifyStaffAboutPendingAidRequest(
+    requestId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSendToPermission(
+        'status:aid_requests',
+        {
+          title: {
+            ar: 'طلب إعانة جديد بانتظار المراجعة',
+            en: 'New assistance request awaiting review',
+          },
+          message: {
+            ar: 'تم إنشاء طلب إعانة جديد ويحتاج إلى مراجعة بياناته.',
+            en: 'A new assistance request has been created and requires review.',
+          },
+          targetType: 'AID_REQUEST_REVIEW',
+          targetId: requestId,
+        },
+      );
+    } catch {
+      this.logger.warn(
+        `Failed to notify staff about pending aid request ${requestId}`,
+      );
+    }
   }
 
   async getMyRequests(userId: number, status?: string, lang = 'ar') {

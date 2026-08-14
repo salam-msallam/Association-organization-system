@@ -23,6 +23,7 @@ describe('AuthService', () => {
   let i18n: any;
   let usersService: any;
   let jwtService: any;
+  let notificationsService: any;
 
   const pendingBeneficiaryData = {
     firstName: 'Salam',
@@ -103,6 +104,13 @@ describe('AuthService', () => {
       sign: jest.fn(),
       signAsync: jest.fn(),
     };
+    notificationsService = {
+      createAndSendToPermission: jest.fn().mockResolvedValue({
+        recipientCount: 1,
+        notificationCount: 1,
+        pushSentCount: 1,
+      }),
+    };
 
     service = new AuthService(
       cacheManager,
@@ -112,6 +120,7 @@ describe('AuthService', () => {
       i18n,
       usersService,
       jwtService,
+      notificationsService,
     );
   });
 
@@ -387,6 +396,21 @@ describe('AuthService', () => {
       '1234',
     );
     expect(cacheManager.del).toHaveBeenCalledWith('registration:+963934206455');
+    expect(notificationsService.createAndSendToPermission).toHaveBeenCalledWith(
+      'status:beneficiaries',
+      {
+        title: {
+          ar: 'مستفيد جديد بانتظار المراجعة',
+          en: 'New beneficiary awaiting review',
+        },
+        message: {
+          ar: 'تم تسجيل حساب مستفيد جديد ويحتاج إلى مراجعة بياناته.',
+          en: 'A new beneficiary account has been registered and requires review.',
+        },
+        targetType: 'BENEFICIARY_REVIEW',
+        targetId: 123,
+      },
+    );
   });
 
   it('stores the optional Firebase registration identifier on the new user', async () => {

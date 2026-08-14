@@ -765,6 +765,49 @@ describe('PaymentsService', () => {
         paidAt: now,
       },
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم دفع دفعة الكفالة بنجاح',
+        en: 'Sponsorship payment successful',
+      },
+      message: {
+        ar: 'تم تسجيل دفعة كفالتك لشهر 2026-07 بقيمة 10.00 دولار أمريكي بنجاح.',
+        en: 'Your sponsorship payment of USD 10.00 for 2026-07 was recorded successfully.',
+      },
+      targetType: 'SPONSORSHIP_PAYMENT',
+      targetId: 115,
+      additionalData: {
+        sponsorshipId: '5',
+        coveredMonth: '2026-07',
+        paidAmount: '10.00',
+      },
+    });
+    expect(
+      tx.walletTransaction.create.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      notificationsService.createAndSend.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps a successful sponsorship payment when notification creation fails', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-10T09:00:00.000Z'));
+    mockValidSponsorshipPaymentSetup();
+    notificationsService.createAndSend.mockRejectedValue(
+      new Error('notification database error'),
+    );
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ walletTransactionId: 115 }),
+      }),
+    );
   });
 
   it('treats a first payment on or after day 20 as next-month coverage', async () => {

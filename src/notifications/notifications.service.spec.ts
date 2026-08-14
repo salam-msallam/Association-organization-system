@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { UserType } from '@prisma/client';
 import type { I18nService } from 'nestjs-i18n';
 import type { FirebaseService } from '../firebase/firebase.service';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -34,6 +35,7 @@ describe('NotificationsService', () => {
   let findUser: FindUserMock;
   let createNotification: CreateNotificationMock;
   let clearRegistration: UpdateManyMock;
+  let findRecipients: jest.Mock;
   let send: SendMock;
 
   beforeEach(() => {
@@ -47,6 +49,7 @@ describe('NotificationsService', () => {
     createNotification = jest.fn<(args: unknown) => Promise<{ id: number }>>();
     clearRegistration =
       jest.fn<(args: unknown) => Promise<{ count: number }>>();
+    findRecipients = jest.fn();
     send = jest.fn<(message: unknown) => Promise<string>>();
 
     const tx: TransactionMock = {
@@ -64,7 +67,10 @@ describe('NotificationsService', () => {
         (callback: (client: TransactionMock) => Promise<unknown>) =>
           callback(tx),
       ),
-      user: { updateMany: clearRegistration },
+      user: {
+        updateMany: clearRegistration,
+        findMany: findRecipients,
+      },
     } as unknown as PrismaService;
     const i18n = {
       t: jest.fn((key: string) => key),
@@ -143,6 +149,7 @@ describe('NotificationsService', () => {
         message: { ar: 'تم قبول طلبك', en: 'Your request was accepted' },
         targetType: 'REQUEST_AID',
         targetId: 20,
+        additionalData: { sponsorshipId: '5' },
       }),
     ).resolves.toEqual({ notificationId: 31, pushSent: true });
 
@@ -153,6 +160,7 @@ describe('NotificationsService', () => {
         body: 'تم قبول طلبك',
       },
       data: {
+        sponsorshipId: '5',
         notificationId: '31',
         titleAr: 'تم القبول',
         titleEn: 'Accepted',
@@ -211,5 +219,87 @@ describe('NotificationsService', () => {
         },
       }),
     );
+  });
+
+  it('creates one notification for every employee with a permission', async () => {
+    findRecipients.mockResolvedValue([{ id: 10 }, { id: 11 }]);
+    findUser.mockResolvedValue({ notificationRegistrationId: null });
+    createNotification.mockResolvedValue({ id: 40 });
+
+    await expect(
+      service.createAndSendToPermission('status:beneficiaries', {
+        title: { ar: 'مستفيد جديد', en: 'New beneficiary' },
+        message: { ar: 'بانتظار المراجعة', en: 'Awaiting review' },
+        targetType: 'BENEFICIARY_REVIEW',
+        targetId: 25,
+      }),
+    ).resolves.toEqual({
+      recipientCount: 2,
+      notificationCount: 2,
+      pushSentCount: 0,
+    });
+
+    expect(findRecipients).toHaveBeenCalledWith({
+      where: {
+        userType: UserType.EMPLOYEE,
+        roles: {
+          some: {
+            role: {
+              permissions: {
+                some: {
+                  permission: { name: 'status:beneficiaries' },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    expect(createNotification).toHaveBeenCalledTimes(2);
+    expect(createNotification.mock.calls).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            data: expect.objectContaining({ userId: 10 }),
+          }),
+        ],
+        [
+          expect.objectContaining({
+            data: expect.objectContaining({ userId: 11 }),
+          }),
+        ],
+      ]),
+    );
+  });
+
+  it('excludes employees already notified for the current due period', async () => {
+    const dueAt = new Date('2027-08-01T09:00:00.000Z');
+    findRecipients.mockResolvedValue([]);
+
+    await service.createAndSendToPermission(
+      'create:annual_reports',
+      {
+        title: { ar: 'تقرير مستحق', en: 'Report due' },
+        message: { ar: 'يرجى رفع التقرير', en: 'Please upload the report' },
+        targetType: 'ANNUAL_REPORT_DUE',
+        targetId: 5,
+      },
+      'ar',
+      { excludeNotifiedSince: dueAt },
+    );
+
+    expect(findRecipients).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        notifications: {
+          none: {
+            targetType: 'ANNUAL_REPORT_DUE',
+            targetId: 5,
+            createdAt: { gte: dueAt },
+          },
+        },
+      }),
+      select: { id: true },
+    });
   });
 });

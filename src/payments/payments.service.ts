@@ -370,7 +370,7 @@ export class PaymentsService {
     const now = new Date();
     const paymentContext = getSponsorshipPaymentContext(now);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
         SELECT id
         FROM Sponsorship
@@ -500,6 +500,16 @@ export class PaymentsService {
         },
       };
     });
+
+    await this.notifySponsorshipPaymentSucceeded(
+      donor.userId,
+      result.data.walletTransactionId,
+      result.data.sponsorshipId,
+      result.data.coveredMonth,
+      result.data.paidAmount,
+    );
+
+    return result;
   }
 
   async donateWalletToSponsorshipFund(
@@ -1011,6 +1021,39 @@ export class PaymentsService {
     } catch {
       this.logger.warn(
         `Failed to create the fully funded notification for aid request ${requestId}`,
+      );
+    }
+  }
+
+  private async notifySponsorshipPaymentSucceeded(
+    donorUserId: number,
+    walletTransactionId: number,
+    sponsorshipId: number,
+    coveredMonth: string,
+    paidAmount: string,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: donorUserId,
+        title: {
+          ar: 'تم دفع دفعة الكفالة بنجاح',
+          en: 'Sponsorship payment successful',
+        },
+        message: {
+          ar: `تم تسجيل دفعة كفالتك لشهر ${coveredMonth} بقيمة ${paidAmount} دولار أمريكي بنجاح.`,
+          en: `Your sponsorship payment of USD ${paidAmount} for ${coveredMonth} was recorded successfully.`,
+        },
+        targetType: 'SPONSORSHIP_PAYMENT',
+        targetId: walletTransactionId,
+        additionalData: {
+          sponsorshipId: String(sponsorshipId),
+          coveredMonth,
+          paidAmount,
+        },
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the sponsorship payment notification for wallet transaction ${walletTransactionId}`,
       );
     }
   }

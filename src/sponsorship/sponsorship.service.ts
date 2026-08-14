@@ -113,7 +113,7 @@ export class SponsorshipService {
       throw new ForbiddenException(this.t('DONOR_ACCOUNT_NOT_FOUND', lang));
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
         SELECT id
         FROM Wallet
@@ -179,6 +179,36 @@ export class SponsorshipService {
         },
       };
     });
+
+    await this.notifyStaffAboutPendingSponsorship(result.data.id);
+
+    return result;
+  }
+
+  private async notifyStaffAboutPendingSponsorship(
+    sponsorshipId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSendToPermission(
+        'status:sponsorships',
+        {
+          title: {
+            ar: 'طلب كفالة جديد بانتظار المراجعة',
+            en: 'New sponsorship request awaiting review',
+          },
+          message: {
+            ar: 'تم تقديم طلب كفالة جديد ويحتاج إلى المراجعة.',
+            en: 'A new sponsorship request has been submitted and requires review.',
+          },
+          targetType: 'SPONSORSHIP_REVIEW',
+          targetId: sponsorshipId,
+        },
+      );
+    } catch {
+      this.logger.warn(
+        `Failed to notify staff about pending sponsorship ${sponsorshipId}`,
+      );
+    }
   }
 
   async findMine(user: SponsorshipUserPayload, status?: string, lang = 'ar') {
@@ -660,7 +690,7 @@ export class SponsorshipService {
       throw new ForbiddenException(this.t('DONOR_ACCOUNT_NOT_FOUND', lang));
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const sponsorship = await tx.sponsorship.findFirst({
         where: { id: sponsorshipId, donorId: donor.id },
         select: {
@@ -739,14 +769,49 @@ export class SponsorshipService {
       });
 
       return {
-        success: true,
-        message: this.t('CANCEL_SUCCESS', lang),
-        data: {
-          ...cancelledSponsorship,
-          orphanReleased,
+        response: {
+          success: true,
+          message: this.t('CANCEL_SUCCESS', lang),
+          data: {
+            ...cancelledSponsorship,
+            orphanReleased,
+          },
         },
+        wasAccepted,
       };
     });
+
+    if (result.wasAccepted) {
+      await this.notifyStaffAboutAcceptedSponsorshipCancellation(sponsorshipId);
+    }
+
+    return result.response;
+  }
+
+  private async notifyStaffAboutAcceptedSponsorshipCancellation(
+    sponsorshipId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSendToPermission(
+        'status:sponsorships',
+        {
+          title: {
+            ar: 'إلغاء كفالة من قبل المتبرع',
+            en: 'Accepted sponsorship cancelled by donor',
+          },
+          message: {
+            ar: 'قام المتبرع بإلغاء كفالته يرجى مراجعة تفاصيل الكفالة.',
+            en: 'A donor cancelled an accepted sponsorship. Please review the sponsorship details.',
+          },
+          targetType: 'ACCEPTED_SPONSORSHIP_CANCELLED',
+          targetId: sponsorshipId,
+        },
+      );
+    } catch {
+      this.logger.warn(
+        `Failed to notify staff about donor cancellation of accepted sponsorship ${sponsorshipId}`,
+      );
+    }
   }
 
   @Cron('5 0 * * *', { timeZone: SPONSORSHIP_TIME_ZONE })
@@ -869,6 +934,9 @@ export class SponsorshipService {
           cancelled.donorUserId,
           sponsorshipId,
         );
+        await this.notifyStaffAboutAutomaticSponsorshipCancellation(
+          sponsorshipId,
+        );
       }
     }
 
@@ -896,6 +964,32 @@ export class SponsorshipService {
     } catch {
       this.logger.warn(
         `Failed to create the automatic cancellation notification for sponsorship ${sponsorshipId}`,
+      );
+    }
+  }
+
+  private async notifyStaffAboutAutomaticSponsorshipCancellation(
+    sponsorshipId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSendToPermission(
+        'status:sponsorships',
+        {
+          title: {
+            ar: 'إلغاء كفالة تلقائياً بسبب عدم الدفع',
+            en: 'Sponsorship automatically cancelled for non-payment',
+          },
+          message: {
+            ar: 'تم إلغاء كفالة تلقائياً بسبب عدم دفع المبلغ المستحق، يرجى مراجعة تفاصيل الكفالة.',
+            en: 'A sponsorship was automatically cancelled because the required payment was not made. Please review its details.',
+          },
+          targetType: 'AUTOMATIC_SPONSORSHIP_CANCELLED',
+          targetId: sponsorshipId,
+        },
+      );
+    } catch {
+      this.logger.warn(
+        `Failed to notify staff about automatic cancellation of sponsorship ${sponsorshipId}`,
       );
     }
   }

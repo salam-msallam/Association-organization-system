@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { FirebaseService } from '../firebase/firebase.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,11 +19,22 @@ export interface CreateNotificationInput {
   message: BilingualNotificationText;
   targetType?: string;
   targetId?: number;
+  additionalData?: Record<string, string>;
 }
 
 export interface CreateNotificationResult {
   notificationId: number;
   pushSent: boolean;
+}
+
+export interface SendNotificationToPermissionResult {
+  recipientCount: number;
+  notificationCount: number;
+  pushSentCount: number;
+}
+
+export interface SendNotificationToPermissionOptions {
+  excludeNotifiedSince?: Date;
 }
 
 @Injectable()
@@ -125,6 +137,7 @@ export class NotificationsService {
           body: input.message[pushLanguage],
         },
         data: {
+          ...input.additionalData,
           notificationId: String(result.notificationId),
           titleAr: input.title.ar,
           titleEn: input.title.en,
@@ -153,6 +166,76 @@ export class NotificationsService {
 
       return { notificationId: result.notificationId, pushSent: false };
     }
+  }
+
+  async createAndSendToPermission(
+    permissionName: string,
+    input: Omit<CreateNotificationInput, 'userId'>,
+    lang = 'ar',
+    options: SendNotificationToPermissionOptions = {},
+  ): Promise<SendNotificationToPermissionResult> {
+    const excludePreviouslyNotified =
+      options.excludeNotifiedSince &&
+      input.targetType &&
+      input.targetId !== undefined
+        ? {
+            notifications: {
+              none: {
+                targetType: input.targetType,
+                targetId: input.targetId,
+                createdAt: { gte: options.excludeNotifiedSince },
+              },
+            },
+          }
+        : {};
+
+    const recipients = await this.prisma.user.findMany({
+      where: {
+        userType: UserType.EMPLOYEE,
+        roles: {
+          some: {
+            role: {
+              permissions: {
+                some: {
+                  permission: { name: permissionName },
+                },
+              },
+            },
+          },
+        },
+        ...excludePreviouslyNotified,
+      },
+      select: { id: true },
+    });
+
+    const results = await Promise.allSettled(
+      recipients.map(({ id }) =>
+        this.createAndSend(
+          {
+            ...input,
+            userId: id,
+          },
+          lang,
+        ),
+      ),
+    );
+    const successfulResults = results.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    const failedCount = results.length - successfulResults.length;
+
+    if (failedCount > 0) {
+      this.logger.warn(
+        `Failed to create ${failedCount} notification(s) for permission ${permissionName}`,
+      );
+    }
+
+    return {
+      recipientCount: recipients.length,
+      notificationCount: successfulResults.length,
+      pushSentCount: successfulResults.filter(({ pushSent }) => pushSent)
+        .length,
+    };
   }
 
   private getFirebaseErrorCode(error: unknown): string | undefined {
