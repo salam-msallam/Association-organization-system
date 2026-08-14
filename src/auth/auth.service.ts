@@ -24,6 +24,7 @@ import {
   normalizeFullPhoneNumber,
   normalizePhoneComponents,
 } from './phone-number.util';
+import { normalizeNotificationLanguage } from '../notifications/notification-language.util';
 
 import {
   BadRequestException,
@@ -127,8 +128,6 @@ export class AuthService {
       message: this.i18n.t('auth.LOGOUT_SUCCESS', { lang }),
     };
   }
-
-
 
   private getRegistrationCacheKey(countryCode: string, number: string): string {
     return `registration:${countryCode}${number}`;
@@ -536,6 +535,8 @@ export class AuthService {
             gender: pendingData.gender,
             password: hashedPassword,
             userType: pendingRegistration.type,
+            notificationRegistrationId: dto.registrationId,
+            notificationLanguage: normalizeNotificationLanguage(lang),
           },
         });
 
@@ -658,3 +659,70 @@ export class AuthService {
     };
   }
 }
+// تمام، منبسّط التصميم وما منعمل جدول `NotificationDevice`.
+
+// بما أن كل مستخدم عندك سيستخدم جهة واحدة غالباً:
+
+// - المتبرع والمستفيد: تطبيق Flutter.
+// - الموظف والإدارة: Dashboard React.
+
+// سنضيف معرّف Firebase مباشرة داخل جدول `User`:
+
+// ```prisma
+// enum NotificationPlatform {
+//   ANDROID
+//   IOS
+//   WEB
+// }
+
+// model User {
+//   // الحقول الموجودة...
+
+//   notificationRegistrationId String?               @unique @db.VarChar(512)
+//   notificationPlatform       NotificationPlatform?
+//   notifications              Notification[]
+// }
+// ```
+
+// ويصبح جدول الإشعارات مربوطاً بالمستخدم:
+
+// ```prisma
+// model Notification {
+//   id         Int       @id @default(autoincrement())
+//   userId     Int
+//   title      Json
+//   message    Json
+//   targetType String?
+//   targetId   Int?
+//   isRead     Boolean   @default(false)
+//   readAt     DateTime?
+//   createdAt  DateTime  @default(now())
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@index([userId, isRead, createdAt])
+// }
+// ```
+
+// طريقة العمل:
+
+// ```text
+// Flutter أو React يحصل على registrationId من Firebase
+//                        ↓
+// يرسله إلى NestJS
+//                        ↓
+// NestJS يخزّنه ضمن User
+//                        ↓
+// عند إنشاء إشعار، NestJS يرسله لهذا المعرّف
+// ```
+
+// لكن لازم تكوني عارفة نتيجة هذا القرار: إذا سجّل المستخدم دخوله من جهاز جديد، المعرّف الجديد سيستبدل القديم، وبالتالي تصل الإشعارات إلى آخر جهاز سجّل فقط. وهذا مناسب حسب طلبك.
+
+// الخطوة الثانية المعدّلة ستكون:
+
+// 1. إضافة حقول Firebase إلى `User`.
+// 2. ربط `Notification` مع `User`.
+// 3. إنشاء migration.
+// 4. نوقف ونراجع تصميم قاعدة البيانات قبل إنشاء أي API.
+
+// لن أنفّذها الآن حتى تطلبي البدء بالخطوة الثانية.

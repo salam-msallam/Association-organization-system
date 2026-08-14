@@ -7,9 +7,10 @@ import { SponsorshipService } from './sponsorship.service';
 import { AdminSponsorshipController } from './admin-sponsorship.controller';
 import { SponsorshipFundService } from './sponsorship-fund.service';
 import { AdminSponsorshipFundController } from './admin-sponsorship-fund.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AuthModule, PrismaModule, CaslModule],
+  imports: [AuthModule, PrismaModule, CaslModule, NotificationsModule],
   controllers: [
     SponsorshipController,
     AdminSponsorshipController,

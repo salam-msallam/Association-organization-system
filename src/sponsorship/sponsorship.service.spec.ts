@@ -21,6 +21,7 @@ describe('SponsorshipService', () => {
   let tx: any;
   let i18n: any;
   let sponsorshipFundService: any;
+  let notificationsService: any;
   let service: SponsorshipService;
 
   beforeEach(() => {
@@ -80,7 +81,18 @@ describe('SponsorshipService', () => {
       createEmergencyCoverageIfEligible: jest.fn(),
       stopActiveCoveragesForOrphan: jest.fn(),
     };
-    service = new SponsorshipService(prisma, i18n, sponsorshipFundService);
+    notificationsService = {
+      createAndSend: jest.fn().mockResolvedValue({
+        notificationId: 1,
+        pushSent: true,
+      }),
+    };
+    service = new SponsorshipService(
+      prisma,
+      i18n,
+      sponsorshipFundService,
+      notificationsService,
+    );
   });
 
   afterEach(() => {
@@ -625,6 +637,19 @@ describe('SponsorshipService', () => {
     expect(
       sponsorshipFundService.stopActiveCoveragesForOrphan,
     ).toHaveBeenCalledWith(tx, 3, expect.any(Date));
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم قبول طلب الكفالة',
+        en: 'Your sponsorship request has been accepted',
+      },
+      message: {
+        ar: 'تم قبول طلب الكفالة الخاص بك، ويمكنك الآن متابعة تفاصيل الكفالة.',
+        en: 'Your sponsorship request has been accepted. You can now view the sponsorship details.',
+      },
+      targetType: 'SPONSORSHIP',
+      targetId: 5,
+    });
     expect(result.data.status).toBe(Status.ACCEPTED);
   });
 
@@ -688,6 +713,19 @@ describe('SponsorshipService', () => {
       },
     });
     expect(tx.orphan.updateMany).not.toHaveBeenCalled();
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم رفض طلب الكفالة',
+        en: 'Your sponsorship request has been rejected',
+      },
+      message: {
+        ar: 'تم رفض طلب الكفالة الخاص بك. لأن: سبب الرفض',
+        en: 'Your sponsorship request has been rejected. because Rejection reason',
+      },
+      targetType: 'SPONSORSHIP',
+      targetId: 5,
+    });
   });
 
   it('cancels a pending request and stores the exact end time', async () => {
@@ -834,6 +872,7 @@ describe('SponsorshipService', () => {
     tx.sponsorship.findFirst.mockResolvedValue({
       id: 5,
       donorId: 3,
+      donor: { userId: 7 },
       orphanId: 3,
       status: Status.ACCEPTED,
     });
@@ -867,6 +906,19 @@ describe('SponsorshipService', () => {
       OrphanEmergencyCoverageReason.PAYMENT_INTERRUPTED,
       now,
     );
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم إلغاء الكفالة تلقائياً',
+        en: 'Your sponsorship has been automatically cancelled',
+      },
+      message: {
+        ar: 'تم إلغاء كفالتك تلقائياً بسبب عدم دفع المبلغ المستحق.',
+        en: 'Your sponsorship was automatically cancelled because the required payment was not made.',
+      },
+      targetType: 'SPONSORSHIP',
+      targetId: 5,
+    });
     expect(result).toBe(1);
   });
 
@@ -879,6 +931,7 @@ describe('SponsorshipService', () => {
     );
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(notificationsService.createAndSend).not.toHaveBeenCalled();
     expect(result).toBe(0);
   });
 });

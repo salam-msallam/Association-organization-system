@@ -1,4 +1,19 @@
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import type { TransformFnParams } from 'class-transformer';
+import {
+  IsAscii,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  MaxLength,
+} from 'class-validator';
+
+function trimRegistrationId(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
 
 export class VerifyOtpDto {
   @IsNotEmpty()
@@ -15,4 +30,20 @@ export class VerifyOtpDto {
   @IsString()
   @Length(4)
   code!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Firebase registration identifier for the current Flutter installation',
+    example: 'firebase-registration-id',
+    maxLength: 512,
+  })
+  @Transform(({ value }: TransformFnParams) =>
+    trimRegistrationId(value as unknown),
+  )
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @IsAscii()
+  @MaxLength(512)
+  registrationId?: string;
 }

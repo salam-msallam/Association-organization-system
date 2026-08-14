@@ -18,6 +18,7 @@ import {
 } from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { I18nService } from 'nestjs-i18n';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSponsorshipDto } from './dto/review-sponsorship.dto';
 import {
@@ -97,6 +98,7 @@ export class SponsorshipService {
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
     private readonly sponsorshipFundService: SponsorshipFundService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createRequest(user: SponsorshipUserPayload, lang = 'ar') {
@@ -447,7 +449,7 @@ export class SponsorshipService {
     dto: ReviewSponsorshipDto,
     lang = 'ar',
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
         SELECT id
         FROM Sponsorship
@@ -562,14 +564,84 @@ export class SponsorshipService {
       }
 
       return {
-        success: true,
-        message: this.t(
-          dto.status === Status.ACCEPTED ? 'ACCEPT_SUCCESS' : 'REJECT_SUCCESS',
-          lang,
-        ),
-        data: this.toAdminSponsorshipResponse(reviewed, lang),
+        response: {
+          success: true,
+          message: this.t(
+            dto.status === Status.ACCEPTED
+              ? 'ACCEPT_SUCCESS'
+              : 'REJECT_SUCCESS',
+            lang,
+          ),
+          data: this.toAdminSponsorshipResponse(reviewed, lang),
+        },
+        donorUserId: reviewed.donor.userId,
       };
     });
+
+    if (dto.status === Status.ACCEPTED) {
+      await this.notifySponsorshipAccepted(result.donorUserId, sponsorshipId);
+    }
+
+    if (dto.status === Status.REJECTED) {
+      await this.notifySponsorshipRejected(
+        result.donorUserId,
+        sponsorshipId,
+        dto.rejectionReason!,
+      );
+    }
+
+    return result.response;
+  }
+
+  private async notifySponsorshipAccepted(
+    donorUserId: number,
+    sponsorshipId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: donorUserId,
+        title: {
+          ar: 'تم قبول طلب الكفالة',
+          en: 'Your sponsorship request has been accepted',
+        },
+        message: {
+          ar: 'تم قبول طلب الكفالة الخاص بك، ويمكنك الآن متابعة تفاصيل الكفالة.',
+          en: 'Your sponsorship request has been accepted. You can now view the sponsorship details.',
+        },
+        targetType: 'SPONSORSHIP',
+        targetId: sponsorshipId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the sponsorship acceptance notification for sponsorship ${sponsorshipId}`,
+      );
+    }
+  }
+
+  private async notifySponsorshipRejected(
+    donorUserId: number,
+    sponsorshipId: number,
+    rejectionReason: { ar: string; en: string },
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: donorUserId,
+        title: {
+          ar: 'تم رفض طلب الكفالة',
+          en: 'Your sponsorship request has been rejected',
+        },
+        message: {
+          ar: `تم رفض طلب الكفالة الخاص بك. لأن: ${rejectionReason.ar}`,
+          en: `Your sponsorship request has been rejected. because ${rejectionReason.en}`,
+        },
+        targetType: 'SPONSORSHIP',
+        targetId: sponsorshipId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the sponsorship rejection notification for sponsorship ${sponsorshipId}`,
+      );
+    }
   }
 
   async cancel(
@@ -745,13 +817,14 @@ export class SponsorshipService {
           select: {
             id: true,
             donorId: true,
+            donor: { select: { userId: true } },
             orphanId: true,
             amount: true,
             status: true,
           },
         });
 
-        if (!sponsorship) return false;
+        if (!sponsorship) return null;
 
         const payment = await tx.walletTransaction.findFirst({
           where: {
@@ -767,7 +840,7 @@ export class SponsorshipService {
           select: { id: true },
         });
 
-        if (payment) return false;
+        if (payment) return null;
 
         const updateResult = await tx.sponsorship.updateMany({
           where: { id: sponsorship.id, status: Status.ACCEPTED },
@@ -778,7 +851,7 @@ export class SponsorshipService {
           },
         });
 
-        if (updateResult.count !== 1) return false;
+        if (updateResult.count !== 1) return null;
 
         await this.releaseAcceptedSponsorshipRelations(tx, sponsorship);
         await this.sponsorshipFundService.createEmergencyCoverageIfEligible(
@@ -787,13 +860,44 @@ export class SponsorshipService {
           OrphanEmergencyCoverageReason.PAYMENT_INTERRUPTED,
           now,
         );
-        return true;
+        return { donorUserId: sponsorship.donor.userId };
       });
 
-      if (cancelled) cancelledCount += 1;
+      if (cancelled) {
+        cancelledCount += 1;
+        await this.notifyAutomaticSponsorshipCancellation(
+          cancelled.donorUserId,
+          sponsorshipId,
+        );
+      }
     }
 
     return cancelledCount;
+  }
+
+  private async notifyAutomaticSponsorshipCancellation(
+    donorUserId: number,
+    sponsorshipId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: donorUserId,
+        title: {
+          ar: 'تم إلغاء الكفالة تلقائياً',
+          en: 'Your sponsorship has been automatically cancelled',
+        },
+        message: {
+          ar: 'تم إلغاء كفالتك تلقائياً بسبب عدم دفع المبلغ المستحق.',
+          en: 'Your sponsorship was automatically cancelled because the required payment was not made.',
+        },
+        targetType: 'SPONSORSHIP',
+        targetId: sponsorshipId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the automatic cancellation notification for sponsorship ${sponsorshipId}`,
+      );
+    }
   }
 
   private async releaseAcceptedSponsorshipRelations(

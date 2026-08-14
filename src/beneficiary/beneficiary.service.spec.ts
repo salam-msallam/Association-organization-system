@@ -1,11 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import {
-  Gender,
-  Prisma,
-  SocialStatus,
-  Status,
-  UserType,
-} from '@prisma/client';
+import { Gender, Prisma, SocialStatus, Status, UserType } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { BeneficiaryService } from './beneficiary.service';
@@ -15,6 +9,7 @@ describe('BeneficiaryService', () => {
   let service: BeneficiaryService;
   let prisma: any;
   let i18n: any;
+  let notificationsService: any;
 
   beforeEach(() => {
     prisma = {
@@ -32,7 +27,14 @@ describe('BeneficiaryService', () => {
       t: jest.fn((key, options) => `${key}:${options?.lang ?? 'ar'}`),
     };
 
-    service = new BeneficiaryService(prisma, i18n);
+    notificationsService = {
+      createAndSend: jest.fn().mockResolvedValue({
+        notificationId: 1,
+        pushSent: true,
+      }),
+    };
+
+    service = new BeneficiaryService(prisma, i18n, notificationsService);
   });
 
   it('lists beneficiaries with default pagination', async () => {
@@ -246,6 +248,19 @@ describe('BeneficiaryService', () => {
         rejectionReason: Prisma.JsonNull,
       },
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم قبول حسابك',
+        en: 'Your account has been accepted',
+      },
+      message: {
+        ar: 'تم قبول حسابك كمستفيد، يمكنك الآن تسجيل الدخول.',
+        en: 'Your beneficiary account has been accepted. You can now sign in.',
+      },
+      targetType: 'BENEFICIARY_ACCOUNT',
+      targetId: 7,
+    });
     expect(result).toEqual({
       success: true,
       message: 'beneficiary.STATUS_UPDATE_SUCCESS:en',
@@ -291,6 +306,37 @@ describe('BeneficiaryService', () => {
       status: Status.REJECTED,
       rejectionReason,
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم رفض حسابك',
+        en: 'Your account has been rejected',
+      },
+      message: {
+        ar: `تم رفض حسابك كمستفيد. السبب: ${rejectionReason.ar}`,
+        en: `Your beneficiary account has been rejected. Reason: ${rejectionReason.en}`,
+      },
+      targetType: 'BENEFICIARY_ACCOUNT',
+      targetId: 7,
+    });
+  });
+
+  it('keeps the account accepted when creating its notification fails', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      beneficiary: { status: Status.PENDING },
+    });
+    prisma.beneficiary.updateMany.mockResolvedValue({ count: 1 });
+    notificationsService.createAndSend.mockRejectedValue(
+      new Error('Notification storage failed'),
+    );
+
+    await expect(
+      service.reviewStatus(7, { status: Status.ACCEPTED }, 'en'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: Status.ACCEPTED }),
+      }),
+    );
   });
 
   it('requires a rejection reason when rejecting a beneficiary', async () => {
@@ -314,10 +360,9 @@ describe('BeneficiaryService', () => {
       ),
     ).rejects.toThrow(BadRequestException);
 
-    expect(i18n.t).toHaveBeenCalledWith(
-      'beneficiary.INVALID_REVIEW_STATUS',
-      { lang: 'en' },
-    );
+    expect(i18n.t).toHaveBeenCalledWith('beneficiary.INVALID_REVIEW_STATUS', {
+      lang: 'en',
+    });
   });
 
   it.each([Status.ACCEPTED, Status.REJECTED])(
