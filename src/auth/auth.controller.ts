@@ -197,6 +197,8 @@ export class AuthController {
       },
     },
   })
+  // @Get('login')
+  // @ApiOperation({summary:'logged out successfully.'})
   @ApiUnauthorizedResponse({ description: 'JWT token is missing or invalid.' })
   async logout(@I18nLang() lang: string) {
     return this.authService.logout(lang);

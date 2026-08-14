@@ -8,24 +8,27 @@ datasource db {
 }
 
 model User {
-  id          Int      @id @default(autoincrement())
-  firstName   String
-  lastName    String
-  email       String   @unique
-  password    String
-  number      String   @db.VarChar(20)
-  countryName String   @default("syria") @db.VarChar(10)
-  countryCode String   @default("+963")
-  gender      Gender
-  userType    UserType
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                         Int      @id @default(autoincrement())
+  firstName                  String
+  lastName                   String
+  email                      String   @unique
+  password                   String
+  number                     String   @db.VarChar(20)
+  countryName                String   @default("syria") @db.VarChar(10)
+  countryCode                String   @default("+963")
+  gender                     Gender
+  userType                   UserType
+  notificationRegistrationId String?  @unique @db.VarChar(512)
+  notificationLanguage       String   @default("ar") @db.VarChar(2)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
-  roles       UserRole[]
-  otps        Otp[]
-  donor       Donor?
-  employee    Employee?
-  beneficiary Beneficiary?
+  roles         UserRole[]
+  otps          Otp[]
+  donor         Donor?
+  employee      Employee?
+  beneficiary   Beneficiary?
+  notifications Notification[]
 
   @@unique([countryCode, number])
 }
@@ -195,7 +198,7 @@ model Sponsorship {
   cancellationSource CancellationSource?
   createdAt          DateTime            @default(now())
 
-  annualReports AnnualReport[]
+  annualReports      AnnualReport[]
   emergencyCoverages OrphanEmergencyCoverage[]
 }
 
@@ -419,12 +422,16 @@ model SponsorshipFundSupport {
 }
 
 model Notification {
-  id          Int      @id @default(autoincrement())
-  user_id     Int
-  title       Json
-  message     Json
-  target_type String?
-  target_id   Int?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  title      Json
+  message    Json
+  targetType String?  @map("target_type")
+  targetId   Int?     @map("target_id")
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
 }

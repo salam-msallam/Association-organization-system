@@ -389,6 +389,25 @@ describe('AuthService', () => {
     expect(cacheManager.del).toHaveBeenCalledWith('registration:+963934206455');
   });
 
+  it('stores the optional Firebase registration identifier on the new user', async () => {
+    await service.verifyRegistrationOtp(
+      {
+        countryCode: '+963',
+        number: '0934206455',
+        code: '1234',
+        registrationId: 'firebase-registration-id',
+      },
+      'en',
+    );
+
+    expect(userCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        notificationRegistrationId: 'firebase-registration-id',
+        notificationLanguage: 'en',
+      }),
+    });
+  });
+
   it('rejects invalid OTP verification phone before OTP lookup', async () => {
     await expect(
       service.verifyRegistrationOtp(

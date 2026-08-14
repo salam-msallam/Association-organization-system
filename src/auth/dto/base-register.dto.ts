@@ -1,6 +1,6 @@
 import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Gender } from '@prisma/client'; // استيراد الـ Enum من بريزما مباشرة
+import { Gender } from '@prisma/client'; 
 
 export class BaseRegisterDto {
   @ApiProperty({ example: 'salam' })

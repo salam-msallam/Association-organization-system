@@ -1,19 +1,24 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, Status, UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewBeneficiaryDto } from './dto/review-beneficiary.dto';
 import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.dto';
 
 @Injectable()
 export class BeneficiaryService {
+  private readonly logger = new Logger(BeneficiaryService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findAll(status: string | undefined, page = 1, limit = 10, lang = 'ar') {
@@ -150,10 +155,7 @@ export class BeneficiaryService {
       );
     }
 
-    if (
-      dto.status !== Status.ACCEPTED &&
-      dto.status !== Status.REJECTED
-    ) {
+    if (dto.status !== Status.ACCEPTED && dto.status !== Status.REJECTED) {
       throw new BadRequestException(
         this.i18n.t('beneficiary.INVALID_REVIEW_STATUS', { lang }),
       );
@@ -212,6 +214,14 @@ export class BeneficiaryService {
       );
     }
 
+    if (dto.status === Status.ACCEPTED) {
+      await this.notifyAccountAccepted(userId);
+    }
+
+    if (dto.status === Status.REJECTED) {
+      await this.notifyAccountRejected(userId, dto.rejectionReason!);
+    }
+
     return {
       success: true,
       message: this.i18n.t('beneficiary.STATUS_UPDATE_SUCCESS', { lang }),
@@ -219,11 +229,56 @@ export class BeneficiaryService {
         id: userId,
         status: dto.status,
         rejectionReason:
-          dto.status === Status.REJECTED
-            ? dto.rejectionReason!
-            : null,
+          dto.status === Status.REJECTED ? dto.rejectionReason! : null,
       },
     };
+  }
+
+  private async notifyAccountAccepted(userId: number): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId,
+        title: {
+          ar: 'تم قبول حسابك',
+          en: 'Your account has been accepted',
+        },
+        message: {
+          ar: 'تم قبول حسابك كمستفيد، يمكنك الآن تسجيل الدخول.',
+          en: 'Your beneficiary account has been accepted. You can now sign in.',
+        },
+        targetType: 'BENEFICIARY_ACCOUNT',
+        targetId: userId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the beneficiary acceptance notification for user ${userId}`,
+      );
+    }
+  }
+
+  private async notifyAccountRejected(
+    userId: number,
+    rejectionReason: { ar: string; en: string },
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId,
+        title: {
+          ar: 'تم رفض حسابك',
+          en: 'Your account has been rejected',
+        },
+        message: {
+          ar: `تم رفض حسابك كمستفيد. لأن: ${rejectionReason.ar}`,
+          en: `Your beneficiary account has been rejected. because ${rejectionReason.en}`,
+        },
+        targetType: 'BENEFICIARY_ACCOUNT',
+        targetId: userId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the beneficiary rejection notification for user ${userId}`,
+      );
+    }
   }
 
   private normalizeStatus(

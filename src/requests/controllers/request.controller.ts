@@ -20,8 +20,10 @@ import {
   ApiExtraModels,
   ApiForbiddenResponse,
   ApiHeader,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiTags,
   getSchemaPath,
@@ -31,6 +33,7 @@ import { Request } from 'express';
 import { I18nLang } from 'nestjs-i18n';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { UpdateRequestAidDto } from '../dto/update-request-aid.dto';
+import { BeneficiaryAidRequestDetailResponseDto } from '../dto/beneficiary-aid-request-detail-response.dto';
 import { RequestAidService } from '../requests.service';
 import {
   RequestMediaUploadInterceptor,
@@ -81,6 +84,40 @@ export class RequestsController {
     @I18nLang() lang = 'ar',
   ) {
     return this.requestAidService.getMyRequests(req.user.id, status, lang);
+  }
+
+  @Get(':id')
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary:
+      'Get one assistance request owned by the authenticated beneficiary',
+    description:
+      'Returns the full request only when it belongs to the authenticated beneficiary.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    example: 13,
+    description: 'Assistance request ID',
+  })
+  @ApiOkResponse({
+    description: 'Assistance request fetched successfully.',
+    type: BeneficiaryAidRequestDetailResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'The request ID is invalid.' })
+  @ApiForbiddenResponse({
+    description: 'The authenticated account is not a beneficiary.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'The request does not exist or does not belong to the authenticated beneficiary.',
+  })
+  getMyRequestById(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @I18nLang() lang = 'ar',
+  ) {
+    return this.requestAidService.getMyRequestById(req.user.id, id, lang);
   }
 
   @Delete('cancel/:id')

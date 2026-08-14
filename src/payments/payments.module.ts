@@ -5,10 +5,15 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { SponsorshipFundController } from './sponsorship-fund.controller';
 import { WalletController } from './wallet.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
-  controllers: [PaymentsController, WalletController, SponsorshipFundController],
+  imports: [AuthModule, PrismaModule, NotificationsModule],
+  controllers: [
+    PaymentsController,
+    WalletController,
+    SponsorshipFundController,
+  ],
   providers: [PaymentsService],
 })
 export class PaymentsModule {}

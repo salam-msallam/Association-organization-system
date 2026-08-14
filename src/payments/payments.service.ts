@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import {
 } from '@prisma/client';
 import Stripe from 'stripe';
 import { I18nService } from 'nestjs-i18n';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { getSponsorshipPaymentContext } from '../sponsorship/sponsorship-billing-period';
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
@@ -78,12 +80,14 @@ type SponsorshipReader = {
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private stripe?: Stripe;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly i18n: I18nService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createAidRequestPaymentIntent(
@@ -222,7 +226,7 @@ export class PaymentsService {
     });
     const donor = await this.getAuthenticatedDonor(user, lang);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.assertNoBlockingSponsorship(tx, donor.id, lang);
 
       const aidRequest = await tx.requestAid.findFirst({
@@ -349,6 +353,12 @@ export class PaymentsService {
           .toFixed(2),
       };
     });
+
+    if (new Prisma.Decimal(result.remainingAmount).lte(0)) {
+      await this.notifyAidRequestFullyFunded(requestId);
+    }
+
+    return result;
   }
 
   async donateWalletToSponsorship(
@@ -879,7 +889,7 @@ export class PaymentsService {
   private async handlePaymentIntentSucceeded(
     paymentIntent: Stripe.PaymentIntent,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    const fullyFundedRequestId = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.transaction.findUnique({
         where: { stripePaymentIntentId: paymentIntent.id },
         select: {
@@ -894,7 +904,7 @@ export class PaymentsService {
       });
 
       if (!transaction) {
-        return;
+        return null;
       }
 
       const updateResult = await tx.transaction.updateMany({
@@ -906,18 +916,31 @@ export class PaymentsService {
       });
 
       if (updateResult.count === 0) {
-        return;
+        return null;
       }
+
+      let completedAidRequestId: number | null = null;
 
       if (
         transaction.type === TransactionType.AID_REQUEST_DONATION &&
         transaction.referenceType === REQUEST_AID_REFERENCE_TYPE &&
         transaction.referenceId
       ) {
-        await tx.requestAid.update({
+        const updatedAidRequest = await tx.requestAid.update({
           where: { id: transaction.referenceId },
           data: { currentPayment: { increment: transaction.amount } },
+          select: { id: true, cost: true, currentPayment: true },
         });
+
+        const cost = new Prisma.Decimal(updatedAidRequest.cost);
+        const currentPayment = new Prisma.Decimal(
+          updatedAidRequest.currentPayment,
+        );
+        const previousPayment = currentPayment.minus(transaction.amount);
+
+        if (previousPayment.lt(cost) && currentPayment.gte(cost)) {
+          completedAidRequestId = updatedAidRequest.id;
+        }
       }
 
       if (
@@ -949,7 +972,47 @@ export class PaymentsService {
           },
         });
       }
+
+      return completedAidRequestId;
     });
+
+    if (fullyFundedRequestId) {
+      await this.notifyAidRequestFullyFunded(fullyFundedRequestId);
+    }
+  }
+
+  private async notifyAidRequestFullyFunded(requestId: number): Promise<void> {
+    try {
+      const request = await this.prisma.requestAid.findUnique({
+        where: { id: requestId },
+        select: { beneficiary: { select: { userId: true } } },
+      });
+
+      if (!request) {
+        this.logger.warn(
+          `Cannot create the fully funded notification for missing aid request ${requestId}`,
+        );
+        return;
+      }
+
+      await this.notificationsService.createAndSend({
+        userId: request.beneficiary.userId,
+        title: {
+          ar: 'تم تمويل طلب الإعانة بالكامل',
+          en: 'Your assistance request has been fully funded',
+        },
+        message: {
+          ar: 'اكتمل تمويل طلب الإعانة الخاص بك بالكامل.',
+          en: 'Your assistance request has now received full funding.',
+        },
+        targetType: 'REQUEST_AID',
+        targetId: requestId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the fully funded notification for aid request ${requestId}`,
+      );
+    }
   }
 
   private async handlePaymentIntentFailed(
