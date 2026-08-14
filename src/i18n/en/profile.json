@@ -1,3 +1,12 @@
 {
-  "PROFILE_NOT_AVAILABLE": "This account is not linked to an available profile."
+  "PROFILE_NOT_AVAILABLE": "This account is not linked to an available profile.",
+  "EMAIL_ALREADY_USED": "Email is already used by another user.",
+  "PROTECTED_FIELDS_NOT_ALLOWED": "These profile fields cannot be updated: {fields}.",
+  "PROFILE_FIELDS_NOT_ALLOWED": "These fields cannot be updated for this account type: {fields}.",
+  "PERSONAL_PHOTO_UPLOAD_REQUIRED": "personalPhoto must be uploaded as a file.",
+  "PERSONAL_PHOTO_IMAGES_ONLY": "Only image uploads are allowed.",
+  "CURRENT_PASSWORD_INVALID": "The current password is incorrect.",
+  "PASSWORD_CONFIRMATION_MISMATCH": "The new password and confirmation do not match.",
+  "NEW_PASSWORD_MUST_BE_DIFFERENT": "The new password must be different from the current password.",
+  "PASSWORD_UPDATE_SUCCESS": "Password updated successfully."
 }

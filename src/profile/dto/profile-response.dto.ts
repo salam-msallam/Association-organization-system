@@ -63,6 +63,12 @@ export class BeneficiaryProfileResponseDto {
   @ApiProperty({})
   fullName!: string;
 
+  @ApiProperty({ example: 'beneficiary@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: '+963' })
+  countryCode!: string;
+
   @ApiProperty({})
   age!: number | null;
 
@@ -88,6 +94,15 @@ export class BeneficiaryProfileResponseDto {
 export class DonorProfileResponseDto {
   @ApiProperty({ example: 'Ahmad Ali' })
   fullName!: string;
+
+  @ApiProperty({ example: 'ahmad@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: '+963' })
+  countryCode!: string;
+
+  @ApiProperty({ example: '934206455' })
+  number!: string;
 
   @ApiProperty({ enum: Gender, example: Gender.MALE })
   gender!: Gender;

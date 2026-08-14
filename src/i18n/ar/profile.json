@@ -1,3 +1,12 @@
 {
-  "PROFILE_NOT_AVAILABLE": "هذا الحساب غير مرتبط بملف بروفايل متاح."
+  "PROFILE_NOT_AVAILABLE": "هذا الحساب غير مرتبط بملف بروفايل متاح.",
+  "EMAIL_ALREADY_USED": "البريد الإلكتروني مستخدم بالفعل من قبل مستخدم آخر.",
+  "PROTECTED_FIELDS_NOT_ALLOWED": "لا يمكن تحديث حقول الملف الشخصي التالية: {fields}.",
+  "PROFILE_FIELDS_NOT_ALLOWED": "لا يمكن تحديث هذه الحقول لهذا النوع من الحساب: {fields}.",
+  "PERSONAL_PHOTO_UPLOAD_REQUIRED": "يجب رفع personalPhoto كملف.",
+  "PERSONAL_PHOTO_IMAGES_ONLY": "يسمح برفع الصور فقط.",
+  "CURRENT_PASSWORD_INVALID": "كلمة المرور الحالية غير صحيحة.",
+  "PASSWORD_CONFIRMATION_MISMATCH": "كلمة المرور الجديدة وتأكيدها غير متطابقين.",
+  "NEW_PASSWORD_MUST_BE_DIFFERENT": "يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور الحالية.",
+  "PASSWORD_UPDATE_SUCCESS": "تم تحديث كلمة المرور بنجاح."
 }
