@@ -40,6 +40,21 @@ export interface RequestAidBaseFields {
   cost: number;
 }
 
+export interface EmployeeRequestAidFields {
+  beneficiaryFatherName: string;
+  details: BilingualText;
+  cost: number;
+  title: BilingualText;
+  description: BilingualText;
+  isUrgent: boolean;
+}
+
+interface RequestAidSnapshotFields extends RequestAidBaseFields {
+  title: BilingualText | null;
+  description: BilingualText | null;
+  isUrgent: boolean | null;
+}
+
 export type AidDetailsFields = Record<string, any>;
 
 type PublicAidRequestRecord = {
@@ -349,7 +364,7 @@ export class RequestAidService {
 
   async reviewHelpRequestStatus(
     id: string | number,
-    employeeUserId: number,
+    _employeeUserId: number,
     dto: ReviewHelpRequestDto,
     uploadedDonorImageUrl?: string,
     lang = 'ar',
@@ -395,10 +410,6 @@ export class RequestAidService {
       );
     }
 
-    const employee = await this.prisma.employee.findUnique({
-      where: { userId: employeeUserId },
-      select: { id: true },
-    });
     const reviewedAt = new Date();
     const donorImageUrl = uploadedDonorImageUrl ?? dto.donorImageUrl;
 
@@ -411,7 +422,6 @@ export class RequestAidService {
             isUrgent: dto.isUrgent,
             rejectionReason: Prisma.JsonNull,
             reviewedAt,
-            employeeId: employee?.id ?? null,
           }
         : {
             status,
@@ -422,7 +432,6 @@ export class RequestAidService {
               dto.rejectionReason as BilingualText,
             ),
             reviewedAt,
-            employeeId: employee?.id ?? null,
           };
 
     const updatedRequest = await this.prisma.$transaction(async (tx) => {
@@ -489,67 +498,141 @@ export class RequestAidService {
     expectedCategoryName: string,
     subCategoryRequiredFieldsMap?: Record<number, string[]>,
   ): Promise<{ message: string }> {
-    const beneficiary = await this.prisma.beneficiary.findUnique({
-      where: { userId },
-    });
-
-    if (!beneficiary) {
-      throw new ForbiddenException(
-        'هذا الحساب غير مرتبط بملف مستفيد، لا يمكن تقديم طلب مساعدة.',
-      );
-    }
-
-    await this.validateCategorySelection(
-      categoryId,
-      subCategoryId,
-      expectedCategoryName,
-    );
-
-    this.validateSubCategoryRequiredFields(
-      subCategoryId,
-      aidDetailsFields,
-      subCategoryRequiredFieldsMap,
-    );
-
-    const sanitizedAidDetailsFields = this.stripFieldsNotAllowedForSubCategory(
-      subCategoryId,
-      aidDetailsFields,
-      subCategoryRequiredFieldsMap,
-    );
-
     return this.prisma.$transaction(async (tx) => {
-      const requestAid = await tx.requestAid.create({
-        data: {
-          beneficiaryId: beneficiary.id,
-          categoryId,
-          subCategoryId: subCategoryId ?? undefined,
-
-          firstName: baseFields.firstName,
-          lastName: baseFields.lastName,
-          beneficiaryFatherName: baseFields.beneficiaryFatherName,
-          socialStatus: baseFields.socialStatus,
-          age: baseFields.age,
-          isUnemployed: baseFields.isUnemployed,
-          gender: baseFields.gender,
-          number: baseFields.number,
-          cost: baseFields.cost,
-
-          address: this.toInputJson(baseFields.address),
-          title: Prisma.JsonNull,
-          details: this.toInputJson(baseFields.details),
-          description: Prisma.JsonNull,
-        },
+      const beneficiary = await tx.beneficiary.findUnique({
+        where: { userId },
       });
 
-      await tx.aidDetails.create({
-        data: {
-          requestId: requestAid.id,
-          ...this.normalizeBilingualFields(sanitizedAidDetailsFields),
+      if (!beneficiary) {
+        throw new ForbiddenException(
+          'هذا الحساب غير مرتبط بملف مستفيد، لا يمكن تقديم طلب مساعدة.',
+        );
+      }
+
+      await this.createRequestAidRecord(
+        tx,
+        beneficiary.id,
+        categoryId,
+        subCategoryId,
+        {
+          ...baseFields,
+          title: null,
+          description: null,
+          isUrgent: null,
         },
-      });
+        aidDetailsFields,
+        expectedCategoryName,
+        subCategoryRequiredFieldsMap,
+        {
+          status: Status.PENDING,
+          employeeId: null,
+          reviewedAt: null,
+        },
+      );
 
       return {
         message: 'تم تقديم طلب المساعدة بنجاح',
+      };
+    });
+  }
+
+  async createEmployeeRequestAid(
+    employeeUserId: number,
+    beneficiaryId: number,
+    categoryId: number,
+    subCategoryId: number | null,
+    baseFields: EmployeeRequestAidFields,
+    aidDetailsFields: AidDetailsFields,
+    expectedCategoryName: string,
+    donorImageUrl: string,
+    subCategoryRequiredFieldsMap: Record<number, string[]> | undefined,
+    lang = 'ar',
+  ): Promise<{ message: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      const [employee, beneficiary] = await Promise.all([
+        tx.employee.findUnique({
+          where: { userId: employeeUserId },
+          select: { id: true },
+        }),
+        tx.beneficiary.findUnique({
+          where: { id: beneficiaryId },
+          include: { user: true },
+        }),
+      ]);
+
+      if (!employee) {
+        throw new ForbiddenException(
+          this.i18n.t('help-requests.EMPLOYEE_PROFILE_REQUIRED', { lang }),
+        );
+      }
+
+      if (!beneficiary) {
+        throw new NotFoundException(
+          this.i18n.t('help-requests.BENEFICIARY_NOT_FOUND', { lang }),
+        );
+      }
+
+      if (beneficiary.status !== Status.ACCEPTED) {
+        throw new BadRequestException(
+          this.i18n.t('help-requests.BENEFICIARY_MUST_BE_ACCEPTED', {
+            lang,
+          }),
+        );
+      }
+
+      const missingFields = this.findMissingBeneficiarySnapshotFields(
+        beneficiary,
+      );
+
+      if (missingFields.length > 0) {
+        throw new BadRequestException({
+          message: this.i18n.t(
+            'help-requests.BENEFICIARY_PROFILE_INCOMPLETE',
+            { lang },
+          ),
+          missingFields,
+        });
+      }
+
+      const snapshot: RequestAidSnapshotFields = {
+        firstName: beneficiary.user.firstName.trim(),
+        lastName: beneficiary.user.lastName.trim(),
+        beneficiaryFatherName: baseFields.beneficiaryFatherName.trim(),
+        socialStatus: beneficiary.socialStatus,
+        address: this.parseStoredBilingualText(beneficiary.address)!,
+        age: this.calculateAge(beneficiary.dateOfBirth!),
+        isUnemployed: beneficiary.isUnemployed,
+        gender: beneficiary.user.gender,
+        number: beneficiary.user.number.trim(),
+        details: baseFields.details,
+        cost: baseFields.cost,
+        title: baseFields.title,
+        description: baseFields.description,
+        isUrgent: baseFields.isUrgent,
+      };
+
+      await this.createRequestAidRecord(
+        tx,
+        beneficiary.id,
+        categoryId,
+        subCategoryId,
+        snapshot,
+        {
+          ...aidDetailsFields,
+          donorImageUrl,
+        },
+        expectedCategoryName,
+        subCategoryRequiredFieldsMap,
+        {
+          status: Status.ACCEPTED,
+          employeeId: employee.id,
+          reviewedAt: new Date(),
+        },
+        lang,
+      );
+
+      return {
+        message: this.i18n.t('help-requests.CREATE_SUCCESS', { lang }),
       };
     });
   }
@@ -783,7 +866,6 @@ export class RequestAidService {
           rejectionReason: Prisma.JsonNull,
           isUrgent: null,
           reviewedAt: null,
-          employeeId: null,
         },
       });
 
@@ -944,31 +1026,196 @@ export class RequestAidService {
     return typeof translated === 'string' ? translated : null;
   }
 
+  private async createRequestAidRecord(
+    tx: Prisma.TransactionClient,
+    beneficiaryId: number,
+    categoryId: number,
+    subCategoryId: number | null,
+    snapshot: RequestAidSnapshotFields,
+    aidDetailsFields: AidDetailsFields,
+    expectedCategoryName: string,
+    subCategoryRequiredFieldsMap: Record<number, string[]> | undefined,
+    metadata: {
+      status: Status;
+      employeeId: number | null;
+      reviewedAt: Date | null;
+    },
+    lang?: string,
+  ): Promise<void> {
+    await this.validateCategorySelection(
+      tx,
+      categoryId,
+      subCategoryId,
+      expectedCategoryName,
+      lang,
+    );
+
+    this.validateSubCategoryRequiredFields(
+      subCategoryId,
+      aidDetailsFields,
+      subCategoryRequiredFieldsMap,
+      lang,
+    );
+
+    const sanitizedAidDetailsFields = this.stripFieldsNotAllowedForSubCategory(
+      subCategoryId,
+      aidDetailsFields,
+      subCategoryRequiredFieldsMap,
+    );
+
+    const requestAid = await tx.requestAid.create({
+      data: {
+        beneficiaryId,
+        employeeId: metadata.employeeId,
+        categoryId,
+        subCategoryId,
+        firstName: snapshot.firstName,
+        lastName: snapshot.lastName,
+        beneficiaryFatherName: snapshot.beneficiaryFatherName,
+        socialStatus: snapshot.socialStatus,
+        address: this.toInputJson(snapshot.address),
+        age: snapshot.age,
+        isUnemployed: snapshot.isUnemployed,
+        gender: snapshot.gender,
+        number: snapshot.number,
+        title: snapshot.title
+          ? this.toInputJson(snapshot.title)
+          : Prisma.JsonNull,
+        details: this.toInputJson(snapshot.details),
+        description: snapshot.description
+          ? this.toInputJson(snapshot.description)
+          : Prisma.JsonNull,
+        cost: snapshot.cost,
+        status: metadata.status,
+        rejectionReason:
+          metadata.status === Status.ACCEPTED ? Prisma.JsonNull : undefined,
+        isUrgent: snapshot.isUrgent,
+        reviewedAt: metadata.reviewedAt,
+      },
+    });
+
+    await tx.aidDetails.create({
+      data: {
+        requestId: requestAid.id,
+        ...this.normalizeBilingualFields(sanitizedAidDetailsFields),
+      },
+    });
+  }
+
+  private findMissingBeneficiarySnapshotFields(beneficiary: {
+    dateOfBirth: Date | null;
+    address: Prisma.JsonValue;
+    socialStatus: SocialStatus;
+    isUnemployed: boolean;
+    user: {
+      firstName: string;
+      lastName: string;
+      number: string;
+      gender: Gender;
+    };
+  }): string[] {
+    const missingFields: string[] = [];
+
+    if (!beneficiary.user.firstName?.trim()) missingFields.push('firstName');
+    if (!beneficiary.user.lastName?.trim()) missingFields.push('lastName');
+    if (!beneficiary.user.number?.trim()) missingFields.push('number');
+    if (!beneficiary.user.gender) missingFields.push('gender');
+    if (!beneficiary.socialStatus) missingFields.push('socialStatus');
+    if (typeof beneficiary.isUnemployed !== 'boolean') {
+      missingFields.push('isUnemployed');
+    }
+
+    if (!this.parseStoredBilingualText(beneficiary.address)) {
+      missingFields.push('address');
+    }
+
+    if (
+      !beneficiary.dateOfBirth ||
+      Number.isNaN(beneficiary.dateOfBirth.getTime()) ||
+      beneficiary.dateOfBirth.getTime() > Date.now()
+    ) {
+      missingFields.push('dateOfBirth');
+    }
+
+    return missingFields;
+  }
+
+  private parseStoredBilingualText(
+    value: Prisma.JsonValue,
+  ): BilingualText | null {
+    if (typeof value === 'string') {
+      try {
+        return this.parseStoredBilingualText(
+          JSON.parse(value) as Prisma.JsonValue,
+        );
+      } catch {
+        return null;
+      }
+    }
+
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      return null;
+    }
+
+    const record = value as Record<string, Prisma.JsonValue>;
+    const ar = typeof record.ar === 'string' ? record.ar.trim() : '';
+    const en = typeof record.en === 'string' ? record.en.trim() : '';
+
+    return ar && en ? { ar, en } : null;
+  }
+
+  private calculateAge(dateOfBirth: Date): number {
+    const today = new Date();
+    let age = today.getUTCFullYear() - dateOfBirth.getUTCFullYear();
+    const monthDifference = today.getUTCMonth() - dateOfBirth.getUTCMonth();
+
+    if (
+      monthDifference < 0 ||
+      (monthDifference === 0 &&
+        today.getUTCDate() < dateOfBirth.getUTCDate())
+    ) {
+      age -= 1;
+    }
+
+    return age;
+  }
+
   private async validateCategorySelection(
+    client: Prisma.TransactionClient,
     categoryId: number,
     subCategoryId: number | null,
     expectedCategoryName: string,
+    lang?: string,
   ): Promise<void> {
-    const category = await this.prisma.category.findUnique({
+    const category = await client.category.findUnique({
       where: { id: categoryId },
       select: { id: true, name: true },
     });
 
     if (!category) {
-      throw new NotFoundException('Category not found.');
+      throw new NotFoundException(
+        lang
+          ? this.i18n.t('help-requests.CATEGORY_NOT_FOUND', { lang })
+          : 'Category not found.',
+      );
     }
 
     const categoryName = this.extractCategoryName(category.name);
 
     if (categoryName !== expectedCategoryName) {
       throw new BadRequestException(
-        `categoryId ${categoryId} does not match the "${expectedCategoryName}" category.`,
+        lang
+          ? this.i18n.t('help-requests.CATEGORY_MISMATCH', {
+              lang,
+              args: { category: expectedCategoryName },
+            })
+          : `categoryId ${categoryId} does not match the "${expectedCategoryName}" category.`,
       );
     }
 
     if (!subCategoryId) return;
 
-    const subCategory = await this.prisma.subCategory.findFirst({
+    const subCategory = await client.subCategory.findFirst({
       where: {
         id: subCategoryId,
         categoryId,
@@ -978,7 +1225,9 @@ export class RequestAidService {
 
     if (!subCategory) {
       throw new BadRequestException(
-        'subCategoryId must belong to the selected categoryId.',
+        lang
+          ? this.i18n.t('help-requests.SUBCATEGORY_MISMATCH', { lang })
+          : 'subCategoryId must belong to the selected categoryId.',
       );
     }
   }
@@ -1081,6 +1330,7 @@ export class RequestAidService {
     subCategoryId: number | null,
     aidDetailsFields: AidDetailsFields,
     requiredFieldsMap?: Record<number, string[]>,
+    lang?: string,
   ): void {
     if (!subCategoryId || !requiredFieldsMap) return;
 
@@ -1093,6 +1343,15 @@ export class RequestAidService {
     });
 
     if (missingFields.length > 0) {
+      if (lang) {
+        throw new BadRequestException(
+          this.i18n.t('help-requests.SUBCATEGORY_REQUIRED_FIELDS', {
+            lang,
+            args: { fields: missingFields.join(', ') },
+          }),
+        );
+      }
+
       throw new BadRequestException(
         `الحقول التالية مطلوبة لهذا النوع الفرعي من الطلب: ${missingFields.join(', ')}`,
       );

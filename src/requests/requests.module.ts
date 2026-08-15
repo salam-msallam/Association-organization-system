@@ -10,6 +10,7 @@ import { RequestsController } from './controllers/request.controller';
 import { AdminHelpRequestsController } from './controllers/admin-help-requests.controller';
 import { CaslModule } from '../casl/casl.module';
 import { PublicDonorAidRequestsController } from './controllers/public-donor-aid-requests.controller';
+import { AdminBeneficiaryRequestsController } from './controllers/admin-beneficiary-requests.controller';
 
 @Module({
   imports: [PrismaModule, CaslModule],
@@ -21,6 +22,7 @@ import { PublicDonorAidRequestsController } from './controllers/public-donor-aid
     SmallProjectRequestController,
     RequestsController,
     AdminHelpRequestsController,
+    AdminBeneficiaryRequestsController,
     PublicDonorAidRequestsController,
   ],
   providers: [RequestAidService],

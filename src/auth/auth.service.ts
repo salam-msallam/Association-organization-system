@@ -16,7 +16,7 @@ import { OtpService } from './otp.service';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { WhatsappService } from './whatsapp.service';
 import { UsersService } from '../users/users.service';
-import { Status, UserType as PrismaUserType } from '@prisma/client';
+import { Prisma, Status, UserType as PrismaUserType } from '@prisma/client';
 import { LoginClientDto } from './dto/login_client.dto';
 import { ForgotPasswordRequestOtpDto } from './dto/forgot-password-request-otp.dto';
 import { ForgotPasswordResetDto } from './dto/forgot-password-reset.dto';
@@ -128,8 +128,6 @@ export class AuthService {
     };
   }
 
-
-
   private getRegistrationCacheKey(countryCode: string, number: string): string {
     return `registration:${countryCode}${number}`;
   }
@@ -204,7 +202,7 @@ export class AuthService {
   }
 
   private parseJson(value: any, fieldName: string, lang: string) {
-    if (typeof value === 'object') return value;
+    if (value !== null && typeof value === 'object') return value;
 
     try {
       return JSON.parse(value);
@@ -367,6 +365,145 @@ export class AuthService {
     return { message: this.i18n.t('auth.OTP_SENT', { lang }) };
   }
 
+  async createDashboardBeneficiary(
+    dto: RegisterBeneficiaryDto,
+    lang: string,
+  ): Promise<{ success: boolean; message: string; userId: number }> {
+    const user = await this.createBeneficiaryAccount(dto, {
+      status: Status.ACCEPTED,
+      lang,
+    });
+
+    return {
+      success: true,
+      message: this.i18n.t('auth.REGISTER_SUCCESS', { lang }),
+      userId: user.id,
+    };
+  }
+
+  private async createBeneficiaryAccount(
+    dto: RegisterBeneficiaryDto,
+    options: { status: Status; lang: string },
+  ) {
+    const normalizedDto = this.normalizeRegistrationDto(dto, options.lang);
+
+    const [existingUserByEmail, existingUserByPhone] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { email: normalizedDto.email },
+        select: { id: true },
+      }),
+      this.prisma.user.findUnique({
+        where: {
+          countryCode_number: {
+            countryCode: normalizedDto.countryCode,
+            number: normalizedDto.number,
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (existingUserByEmail) {
+      throw new BadRequestException(
+        this.i18n.t('auth.EMAIL_ALREADY_REGISTERED', {
+          lang: options.lang,
+        }),
+      );
+    }
+
+    if (existingUserByPhone) {
+      throw new BadRequestException(
+        this.i18n.t('auth.PHONE_ALREADY_REGISTERED', {
+          lang: options.lang,
+        }),
+      );
+    }
+
+    const address = this.parseJson(
+      normalizedDto.address,
+      'address',
+      options.lang,
+    ) as Prisma.InputJsonValue;
+    const hashedPassword = await bcrypt.hash(normalizedDto.password, 10);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            firstName: normalizedDto.firstName,
+            lastName: normalizedDto.lastName,
+            email: normalizedDto.email,
+            number: normalizedDto.number,
+            countryName: normalizedDto.countryName,
+            countryCode: normalizedDto.countryCode,
+            gender: normalizedDto.gender,
+            password: hashedPassword,
+            userType: PrismaUserType.BENEFICIARY,
+          },
+        });
+
+        await tx.beneficiary.create({
+          data: {
+            userId: newUser.id,
+            personalPhoto: normalizedDto.personalPhoto,
+            familyStatement: normalizedDto.familyStatement,
+            dateOfBirth: new Date(normalizedDto.dateOfBirth),
+            address,
+            status: options.status,
+            socialStatus: normalizedDto.socialStatus,
+            isUnemployed: normalizedDto.isUnemployed,
+            numberOfChildren: normalizedDto.numberOfChildren,
+            monthlyIncome: normalizedDto.monthlyIncome ?? 0,
+          },
+        });
+
+        return newUser;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const [emailConflict, phoneConflict] = await Promise.all([
+          this.prisma.user.findUnique({
+            where: { email: normalizedDto.email },
+            select: { id: true },
+          }),
+          this.prisma.user.findUnique({
+            where: {
+              countryCode_number: {
+                countryCode: normalizedDto.countryCode,
+                number: normalizedDto.number,
+              },
+            },
+            select: { id: true },
+          }),
+        ]);
+
+        if (emailConflict) {
+          throw new BadRequestException(
+            this.i18n.t('auth.EMAIL_ALREADY_REGISTERED', {
+              lang: options.lang,
+            }),
+          );
+        }
+
+        if (phoneConflict) {
+          throw new BadRequestException(
+            this.i18n.t('auth.PHONE_ALREADY_REGISTERED', {
+              lang: options.lang,
+            }),
+          );
+        }
+      }
+
+      console.error('Beneficiary creation transaction failed:', error);
+      throw new InternalServerErrorException(
+        this.i18n.t('auth.TRANSACTION_FAILED', { lang: options.lang }),
+      );
+    }
+  }
+
   async requestPasswordResetOtp(
     dto: ForgotPasswordRequestOtpDto,
     lang: string,
@@ -513,34 +650,34 @@ export class AuthService {
     }
 
     const pendingData = pendingRegistration.data;
-    const beneficiaryAddress =
-      pendingRegistration.type === 'BENEFICIARY'
-        ? this.parseJson(
-            (pendingData as RegisterBeneficiaryDto).address,
-            'address',
-            lang,
-          )
-        : undefined;
-    const hashedPassword = await bcrypt.hash(pendingData.password, 10);
 
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const newUser = await tx.user.create({
-          data: {
-            firstName: pendingData.firstName,
-            lastName: pendingData.lastName,
-            email: pendingData.email,
-            number: pendingData.number,
-            countryName: pendingData.countryName,
-            countryCode: pendingData.countryCode,
-            gender: pendingData.gender,
-            password: hashedPassword,
-            userType: pendingRegistration.type,
-          },
-        });
+      let result: { id: number };
 
-        if (pendingRegistration.type === 'DONOR') {
-          const donorData = pendingData as RegisterDonorDto;
+      if (pendingRegistration.type === 'BENEFICIARY') {
+        result = await this.createBeneficiaryAccount(
+          pendingData as RegisterBeneficiaryDto,
+          { status: Status.PENDING, lang },
+        );
+      } else {
+        const donorData = pendingData as RegisterDonorDto;
+        const hashedPassword = await bcrypt.hash(donorData.password, 10);
+
+        result = await this.prisma.$transaction(async (tx) => {
+          const newUser = await tx.user.create({
+            data: {
+              firstName: donorData.firstName,
+              lastName: donorData.lastName,
+              email: donorData.email,
+              number: donorData.number,
+              countryName: donorData.countryName,
+              countryCode: donorData.countryCode,
+              gender: donorData.gender,
+              password: hashedPassword,
+              userType: PrismaUserType.DONOR,
+            },
+          });
+
           await tx.donor.create({
             data: {
               userId: newUser.id,
@@ -548,27 +685,10 @@ export class AuthService {
               isSponsor: false,
             },
           });
-        }
 
-        if (pendingRegistration.type === 'BENEFICIARY') {
-          const beneficiaryData = pendingData as RegisterBeneficiaryDto;
-          await tx.beneficiary.create({
-            data: {
-              userId: newUser.id,
-              personalPhoto: beneficiaryData.personalPhoto,
-              familyStatement: beneficiaryData.familyStatement,
-              dateOfBirth: new Date(beneficiaryData.dateOfBirth),
-              address: beneficiaryAddress,
-              socialStatus: beneficiaryData.socialStatus,
-              isUnemployed: beneficiaryData.isUnemployed,
-              numberOfChildren: beneficiaryData.numberOfChildren,
-              monthlyIncome: beneficiaryData.monthlyIncome ?? 0,
-            },
-          });
-        }
-
-        return newUser;
-      });
+          return newUser;
+        });
+      }
 
       await this.otpService.markOtpAsUsed(fullPhoneNumber, dto.code);
       await this.cacheManager.del(cacheKey);
@@ -579,6 +699,10 @@ export class AuthService {
         userId: result.id,
       };
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
       console.error('Registration transaction failed:', error);
 
       throw new InternalServerErrorException(

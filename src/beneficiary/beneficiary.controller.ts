@@ -1,10 +1,15 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
+  Post,
   Query,
+  UploadedFiles,
   UseInterceptors,
   UseGuards,
 } from '@nestjs/common';
@@ -13,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -24,13 +30,22 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { NoFilesInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  NoFilesInterceptor,
+} from '@nestjs/platform-express';
 import { Status } from '@prisma/client';
-import { I18nLang } from 'nestjs-i18n';
+import { I18nLang, I18nService } from 'nestjs-i18n';
+import { AuthService } from '../auth/auth.service';
+import { RegisterBeneficiaryDto } from '../auth/dto/register-beneficiary.dto';
 import { CheckAbilities } from '../decorators/abilities.decorator';
 import { PreserveBilingualResponse } from '../decorators/preserve-bilingual-response.decorator';
 import { AbilitiesGuard } from '../guards/abilities.guard';
 import { StaffOnlyGuard } from '../guards/staff-only.guard';
+import {
+  createUploadStorage,
+  toPublicUploadPath,
+} from '../interceptors/upload-storage.util';
 import { BeneficiaryService } from './beneficiary.service';
 import { ReviewBeneficiaryDto } from './dto/review-beneficiary.dto';
 import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.dto';
@@ -47,7 +62,72 @@ import { ReviewBeneficiaryResponseDto } from './dto/review-beneficiary-response.
 @PreserveBilingualResponse()
 @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
 export class AdminBeneficiariesController {
-  constructor(private readonly beneficiaryService: BeneficiaryService) {}
+  constructor(
+    private readonly beneficiaryService: BeneficiaryService,
+    private readonly authService: AuthService,
+    private readonly i18n: I18nService,
+  ) {}
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth('jwt')
+  @CheckAbilities({ action: 'create', subject: 'Beneficiary' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: RegisterBeneficiaryDto })
+  @ApiOperation({
+    summary: 'Create an accepted beneficiary account from the dashboard',
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'personalPhoto', maxCount: 1 },
+        { name: 'familyStatement', maxCount: 1 },
+      ],
+      { storage: createUploadStorage('./uploads/beneficiaries') },
+    ),
+  )
+  @ApiCreatedResponse({
+    description: 'The accepted beneficiary account was created successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Registration completed successfully.',
+        userId: 12,
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Invalid registration data, missing files, or duplicate email or phone number.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required.' })
+  @ApiForbiddenResponse({
+    description:
+      'Staff access and create::beneficiaries permission are required.',
+  })
+  async create(
+    @Body() dto: RegisterBeneficiaryDto,
+    @UploadedFiles()
+    files: {
+      personalPhoto?: Array<{ path: string }>;
+      familyStatement?: Array<{ path: string }>;
+    },
+    @I18nLang() lang = 'ar',
+  ) {
+    const personalPhoto = files?.personalPhoto?.[0]?.path;
+    const familyStatement = files?.familyStatement?.[0]?.path;
+
+    if (!personalPhoto || !familyStatement) {
+      throw new BadRequestException(
+        this.i18n.t('auth.BENEFICIARY_FILES_REQUIRED', { lang }),
+      );
+    }
+
+    dto.personalPhoto = toPublicUploadPath(personalPhoto);
+    dto.familyStatement = toPublicUploadPath(familyStatement);
+
+    return this.authService.createDashboardBeneficiary(dto, lang);
+  }
 
   @Get()
   @ApiBearerAuth('jwt')
