@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { UserType } from '@prisma/client';
+import { Prisma, UserType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { FirebaseService } from '../firebase/firebase.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -35,6 +35,12 @@ export interface SendNotificationToPermissionResult {
 
 export interface SendNotificationToPermissionOptions {
   excludeNotifiedSince?: Date;
+}
+
+export interface FindNotificationsOptions {
+  page: number;
+  limit: number;
+  isRead?: boolean;
 }
 
 @Injectable()
@@ -82,6 +88,86 @@ export class NotificationsService {
       success: true,
       message: this.i18n.t('notifications.REGISTRATION_SAVED', { lang }),
     };
+  }
+
+  async findMine(userId: number, options: FindNotificationsOptions) {
+    const where: Prisma.NotificationWhereInput = {
+      userId,
+      ...(options.isRead === undefined ? {} : { isRead: options.isRead }),
+    };
+    const skip = (options.page - 1) * options.limit;
+
+    const [notifications, totalCount, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          message: true,
+          targetType: true,
+          targetId: true,
+          isRead: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: options.limit,
+      }),
+      this.prisma.notification.count({ where }),
+      this.prisma.notification.count({ where: { userId, isRead: false } }),
+    ]);
+    const totalPages = Math.ceil(totalCount / options.limit);
+
+    return {
+      data: notifications,
+      meta: {
+        totalCount,
+        page: options.page,
+        limit: options.limit,
+        totalPages,
+        hasNextPage: options.page < totalPages,
+        hasPreviousPage: options.page > 1,
+      },
+      unreadCount,
+    };
+  }
+
+  async getUnreadCount(userId: number): Promise<{ unreadCount: number }> {
+    const unreadCount = await this.prisma.notification.count({
+      where: { userId, isRead: false },
+    });
+
+    return { unreadCount };
+  }
+
+  async markAsRead(
+    userId: number,
+    notificationId: number,
+    lang = 'ar',
+  ): Promise<{ id: number; isRead: true }> {
+    const result = await this.prisma.notification.updateMany({
+      where: { id: notificationId, userId },
+      data: { isRead: true },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException(
+        this.i18n.t('notifications.NOT_FOUND', { lang }),
+      );
+    }
+
+    return { id: notificationId, isRead: true };
+  }
+
+  async markAllAsRead(
+    userId: number,
+  ): Promise<{ success: true; updatedCount: number }> {
+    const result = await this.prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true },
+    });
+
+    return { success: true, updatedCount: result.count };
   }
 
   async createAndSend(

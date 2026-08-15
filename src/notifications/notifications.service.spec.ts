@@ -36,6 +36,9 @@ describe('NotificationsService', () => {
   let createNotification: CreateNotificationMock;
   let clearRegistration: UpdateManyMock;
   let findRecipients: jest.Mock;
+  let findNotifications: jest.Mock;
+  let countNotifications: jest.Mock;
+  let updateNotifications: UpdateManyMock;
   let send: SendMock;
 
   beforeEach(() => {
@@ -50,6 +53,10 @@ describe('NotificationsService', () => {
     clearRegistration =
       jest.fn<(args: unknown) => Promise<{ count: number }>>();
     findRecipients = jest.fn();
+    findNotifications = jest.fn();
+    countNotifications = jest.fn();
+    updateNotifications =
+      jest.fn<(args: unknown) => Promise<{ count: number }>>();
     send = jest.fn<(message: unknown) => Promise<string>>();
 
     const tx: TransactionMock = {
@@ -70,6 +77,11 @@ describe('NotificationsService', () => {
       user: {
         updateMany: clearRegistration,
         findMany: findRecipients,
+      },
+      notification: {
+        findMany: findNotifications,
+        count: countNotifications,
+        updateMany: updateNotifications,
       },
     } as unknown as PrismaService;
     const i18n = {
@@ -118,6 +130,101 @@ describe('NotificationsService', () => {
     await expect(
       service.register(999, 'registration-id'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('lists only the authenticated user notifications with pagination', async () => {
+    const createdAt = new Date('2026-08-15T09:30:00.000Z');
+    findNotifications.mockResolvedValue([
+      {
+        id: 15,
+        title: { ar: 'عنوان', en: 'Title' },
+        message: { ar: 'رسالة', en: 'Message' },
+        targetType: 'AID_REQUEST_REVIEW',
+        targetId: 7,
+        isRead: false,
+        createdAt,
+      },
+    ]);
+    countNotifications.mockResolvedValueOnce(3).mockResolvedValueOnce(5);
+
+    await expect(
+      service.findMine(10, { page: 2, limit: 2, isRead: false }),
+    ).resolves.toEqual({
+      data: [expect.objectContaining({ id: 15, isRead: false, createdAt })],
+      meta: {
+        totalCount: 3,
+        page: 2,
+        limit: 2,
+        totalPages: 2,
+        hasNextPage: false,
+        hasPreviousPage: true,
+      },
+      unreadCount: 5,
+    });
+
+    expect(findNotifications).toHaveBeenCalledWith({
+      where: { userId: 10, isRead: false },
+      select: {
+        id: true,
+        title: true,
+        message: true,
+        targetType: true,
+        targetId: true,
+        isRead: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: 2,
+      take: 2,
+    });
+  });
+
+  it('returns the unread count for the authenticated user', async () => {
+    countNotifications.mockResolvedValue(4);
+
+    await expect(service.getUnreadCount(10)).resolves.toEqual({
+      unreadCount: 4,
+    });
+
+    expect(countNotifications).toHaveBeenCalledWith({
+      where: { userId: 10, isRead: false },
+    });
+  });
+
+  it('marks only an owned notification as read', async () => {
+    updateNotifications.mockResolvedValue({ count: 1 });
+
+    await expect(service.markAsRead(10, 15)).resolves.toEqual({
+      id: 15,
+      isRead: true,
+    });
+
+    expect(updateNotifications).toHaveBeenCalledWith({
+      where: { id: 15, userId: 10 },
+      data: { isRead: true },
+    });
+  });
+
+  it('does not expose another user notification when marking it as read', async () => {
+    updateNotifications.mockResolvedValue({ count: 0 });
+
+    await expect(service.markAsRead(10, 99)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('marks all unread notifications of the authenticated user as read', async () => {
+    updateNotifications.mockResolvedValue({ count: 4 });
+
+    await expect(service.markAllAsRead(10)).resolves.toEqual({
+      success: true,
+      updatedCount: 4,
+    });
+
+    expect(updateNotifications).toHaveBeenCalledWith({
+      where: { userId: 10, isRead: false },
+      data: { isRead: true },
+    });
   });
 
   it('stores the notification without sending when the user has no registration ID', async () => {

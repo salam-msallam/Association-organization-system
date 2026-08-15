@@ -1,4 +1,5 @@
 {
   "REGISTRATION_SAVED": "Notification registration saved successfully.",
-  "USER_NOT_FOUND": "The authenticated user was not found."
+  "USER_NOT_FOUND": "The authenticated user was not found.",
+  "NOT_FOUND": "The notification was not found."
 }
