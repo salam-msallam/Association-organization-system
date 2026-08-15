@@ -75,6 +75,56 @@ export function requestBodySchema(
   };
 }
 
+const adminRequestRequired = [
+  'categoryId',
+  'beneficiaryFatherName',
+  'details',
+  'cost',
+  'title',
+  'description',
+  'isUrgent',
+  'media',
+  'donorImage',
+];
+
+const adminRequestProperties = {
+  categoryId: { type: 'integer', example: 1 },
+  subCategoryId: { type: 'integer', example: 2 },
+  beneficiaryFatherName: { type: 'string', example: 'Mohammad' },
+  details: bilingualTextProperty,
+  cost: { type: 'number', example: 100 },
+  title: {
+    ...bilingualTextProperty,
+    example: '{"ar":"عنوان الطلب","en":"Request title"}',
+  },
+  description: {
+    ...bilingualTextProperty,
+    example: '{"ar":"وصف الطلب","en":"Request description"}',
+  },
+  isUrgent: { type: 'boolean', example: false },
+  media: {
+    type: 'array',
+    minItems: 1,
+    maxItems: 10,
+    items: { type: 'string', format: 'binary' },
+  },
+  donorImage: { type: 'string', format: 'binary' },
+};
+
+export function adminRequestBodySchema(
+  extraProperties: Record<string, unknown>,
+  requiredExtraFields: string[],
+) {
+  return {
+    type: 'object',
+    required: [...adminRequestRequired, ...requiredExtraFields],
+    properties: {
+      ...adminRequestProperties,
+      ...extraProperties,
+    },
+  };
+}
+
 export const typeAidProperty = {
   type: 'string',
   enum: Object.values(TypeAid),

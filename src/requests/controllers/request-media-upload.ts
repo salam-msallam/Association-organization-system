@@ -1,9 +1,32 @@
 import { BadRequestException } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+  FilesInterceptor,
+} from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { Request } from 'express';
 
 const REQUEST_MEDIA_DESTINATION = './uploads/request-media';
+
+function adminUploadTypeError(
+  req: Request,
+  isDonorImage: boolean,
+): string {
+  const requestedLanguage = String(req.headers['accept-language'] ?? 'ar');
+  const isEnglish = requestedLanguage.toLowerCase().startsWith('en');
+
+  if (isDonorImage) {
+    return isEnglish
+      ? 'donorImage must be a JPG, JPEG, PNG, or WEBP image.'
+      : 'يجب أن تكون donorImage صورة بصيغة JPG أو JPEG أو PNG أو WEBP.';
+  }
+
+  return isEnglish
+    ? 'media files must be JPG, JPEG, PNG, WEBP, or PDF.'
+    : 'يجب أن تكون ملفات media بصيغة JPG أو JPEG أو PNG أو WEBP أو PDF.';
+}
 
 const requestMediaStorage = diskStorage({
   destination: REQUEST_MEDIA_DESTINATION,
@@ -43,6 +66,35 @@ export function DonorImageUploadInterceptor() {
       callback(null, true);
     },
   });
+}
+
+export function AdminRequestMediaUploadInterceptor() {
+  return FileFieldsInterceptor(
+    [
+      { name: 'media', maxCount: 10 },
+      { name: 'donorImage', maxCount: 1 },
+    ],
+    {
+      storage: requestMediaStorage,
+      fileFilter: (req, file, callback) => {
+        const isDonorImage = file.fieldname === 'donorImage';
+        const allowedMimeType = isDonorImage
+          ? /\/(jpg|jpeg|png|webp)$/
+          : /\/(jpg|jpeg|png|webp|pdf)$/;
+
+        if (!file.mimetype.match(allowedMimeType)) {
+          return callback(
+            new BadRequestException(
+              adminUploadTypeError(req, isDonorImage),
+            ),
+            false,
+          );
+        }
+
+        callback(null, true);
+      },
+    },
+  );
 }
 
 export function toMediaUrls(files?: Express.Multer.File[]): string[] | undefined {

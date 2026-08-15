@@ -49,7 +49,9 @@ export class CaslAbilityFactory {
     const userPermissions: string[] = user.permissions || [];
 
     userPermissions.forEach((permission) => {
-      const [action, subject] = permission.split(':');
+      const [action, subject] = permission.includes('::')
+        ? permission.split('::')
+        : permission.split(':');
       const formattedSubject = this.mapSubject(subject);
 
       if (formattedSubject) {
@@ -70,6 +72,7 @@ export class CaslAbilityFactory {
       beneficiaries: 'Beneficiary',
       roles: 'Role',
       aid_requests: 'RequestAid',
+      'aid-requests': 'RequestAid',
       sponsorships: 'Sponsorship',
       sponsorship_fund: 'SponsorshipFund',
       annual_reports: 'AnnualReport',

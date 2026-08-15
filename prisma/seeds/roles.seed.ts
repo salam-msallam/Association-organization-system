@@ -68,6 +68,7 @@ export async function seedRoles(
         deleteMany: {},
         create: permissionLinks(permissions, [
           'read:beneficiaries',
+          'create::beneficiaries',
           'status:beneficiaries',
           'status:aid_requests',
           'read:aid_requests',
@@ -83,6 +84,7 @@ export async function seedRoles(
       permissions: {
         create: permissionLinks(permissions, [
           'read:beneficiaries',
+          'create::beneficiaries',
           'status:beneficiaries',
           'status:aid_requests',
           'read:aid_requests',
@@ -103,6 +105,7 @@ export async function seedRoles(
         create: permissionLinks(permissions, [
           'status:aid_requests',
           'read:aid_requests',
+          'create::aid-requests',
         ]),
       },
     },
@@ -116,6 +119,7 @@ export async function seedRoles(
         create: permissionLinks(permissions, [
           'status:aid_requests',
           'read:aid_requests',
+          'create::aid-requests',
         ]),
       },
     },

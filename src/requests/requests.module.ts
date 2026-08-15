@@ -11,6 +11,7 @@ import { AdminHelpRequestsController } from './controllers/admin-help-requests.c
 import { CaslModule } from '../casl/casl.module';
 import { PublicDonorAidRequestsController } from './controllers/public-donor-aid-requests.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AdminBeneficiaryRequestsController } from './controllers/admin-beneficiary-requests.controller';
 
 @Module({
   imports: [PrismaModule, CaslModule, NotificationsModule],
@@ -22,6 +23,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     SmallProjectRequestController,
     RequestsController,
     AdminHelpRequestsController,
+    AdminBeneficiaryRequestsController,
     PublicDonorAidRequestsController,
   ],
   providers: [RequestAidService],

@@ -1,4 +1,7 @@
 {
+    "isInt": "This field must be an integer.",
+    "min": "This field must be at least {constraints.0}.",
+    "maxLength": "This field must not exceed {constraints.0} characters.",
  "isNotEmpty": "This field is required and cannot be empty.",
     "isString": "This field must be a string.",
     "isNumber": "This field must be a number.",
