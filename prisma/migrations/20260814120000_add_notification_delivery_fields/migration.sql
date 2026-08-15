@@ -12,7 +12,7 @@ CREATE INDEX `Notification_user_id_isRead_createdAt_idx`
     ON `Notification`(`user_id`, `isRead`, `createdAt`);
 
 -- AddForeignKey
-ALTER TABLE `Notification`
-    ADD CONSTRAINT `Notification_user_id_fkey`
-    FOREIGN KEY (`user_id`) REFERENCES `User`(`id`)
-    ON DELETE CASCADE ON UPDATE CASCADE;
+-- ALTER TABLE `Notification`
+--     ADD CONSTRAINT `Notification_user_id_fkey`
+--     FOREIGN KEY (`user_id`) REFERENCES `User`(`id`)
+--     ON DELETE CASCADE ON UPDATE CASCADE;
