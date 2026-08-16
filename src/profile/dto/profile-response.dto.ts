@@ -60,14 +60,27 @@ export class EmployeeProfileResponseDto {
 }
 
 export class BeneficiaryProfileResponseDto {
-  @ApiProperty({})
+  @ApiProperty({ example: 'Salam Msallam' })
   fullName!: string;
+
+  @ApiProperty({ example: 'Salam' })
+  firstName!: string;
+
+  @ApiProperty({ example: 'Msallam' })
+  lastName!: string;
 
   @ApiProperty({ example: 'beneficiary@example.com' })
   email!: string;
 
   @ApiProperty({ example: '+963' })
   countryCode!: string;
+
+  @ApiProperty({
+    example: '1990-07-24',
+    nullable: true,
+    description: 'Date of birth in YYYY-MM-DD format.',
+  })
+  dateOfBirth!: string | null;
 
   @ApiProperty({})
   age!: number | null;

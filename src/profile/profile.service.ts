@@ -286,8 +286,11 @@ export class ProfileService {
 
     return {
       fullName: `${user.firstName} ${user.lastName}`,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       countryCode: user.countryCode,
+      dateOfBirth: this.formatDateOnly(user.beneficiary.dateOfBirth),
       age: this.calculateAge(user.beneficiary.dateOfBirth),
       socialStatus: user.beneficiary.socialStatus,
       address: user.beneficiary.address,
