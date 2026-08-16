@@ -438,6 +438,15 @@ export class AuthService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        if (options.notificationRegistrationId) {
+          await tx.user.updateMany({
+            where: {
+              notificationRegistrationId: options.notificationRegistrationId,
+            },
+            data: { notificationRegistrationId: null },
+          });
+        }
+
         const newUser = await tx.user.create({
           data: {
             firstName: normalizedDto.firstName,
@@ -681,6 +690,15 @@ export class AuthService {
         const hashedPassword = await bcrypt.hash(donorData.password, 10);
 
         result = await this.prisma.$transaction(async (tx) => {
+          if (dto.registrationId) {
+            await tx.user.updateMany({
+              where: {
+                notificationRegistrationId: dto.registrationId,
+              },
+              data: { notificationRegistrationId: null },
+            });
+          }
+
           const newUser = await tx.user.create({
             data: {
               firstName: donorData.firstName,
