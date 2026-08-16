@@ -101,6 +101,7 @@ model Employee {
 
   sponsorships  Sponsorship[]
   annualReports AnnualReport[]
+  quickAidDisbursements QuickAidDisbursement[]
 }
 
 model Donor {
@@ -130,7 +131,8 @@ model Beneficiary {
   isUnemployed     Boolean
   monthlyIncome    Decimal      @db.Decimal(10, 2)
 
-  requestAid RequestAid[]
+  requestAid             RequestAid[]
+  quickAidDisbursements QuickAidDisbursement[]
 }
 
 enum Status {
@@ -240,6 +242,7 @@ enum TransactionType {
   AID_REQUEST_DONATION
   SPONSORSHIP_DONATION
   GENERAL_DONATION
+  QUICK_AID_FUND_DONATION
   WALLET_TOP_UP
 }
 
@@ -419,6 +422,22 @@ model SponsorshipFundSupport {
   coverage OrphanEmergencyCoverage @relation(fields: [coverageId], references: [id], onDelete: Cascade)
 
   @@index([coverageId, createdAt])
+}
+
+model QuickAidDisbursement {
+  id            Int         @id @default(autoincrement())
+  beneficiaryId Int
+  employeeId    Int
+  amount        Decimal     @db.Decimal(10, 2)
+  reason        Json
+  createdAt     DateTime    @default(now())
+
+  beneficiary Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Restrict)
+  employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([beneficiaryId])
+  @@index([employeeId])
+  @@index([createdAt])
 }
 
 model Notification {

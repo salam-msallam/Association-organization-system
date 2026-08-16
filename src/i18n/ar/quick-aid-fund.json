@@ -1,0 +1,13 @@
+{
+  "SUMMARY_FETCH_SUCCESS": "تم جلب ملخص صندوق المساعدات العاجلة بنجاح.",
+  "DISBURSEMENT_CREATE_SUCCESS": "تم إنشاء عملية صرف المساعدة العاجلة بنجاح.",
+  "DISBURSEMENTS_FETCH_SUCCESS": "تم جلب عمليات صرف صندوق المساعدات العاجلة بنجاح.",
+  "EMPLOYEE_NOT_FOUND": "لم يتم العثور على سجل الموظف الحالي.",
+  "BENEFICIARY_NOT_FOUND": "لم يتم العثور على المستفيد.",
+  "BENEFICIARY_NOT_ACCEPTED": "لا يمكن صرف المساعدة العاجلة إلا لمستفيد مقبول.",
+  "INSUFFICIENT_FUND_BALANCE": "رصيد صندوق المساعدات العاجلة غير كافٍ.",
+  "DISBURSEMENT_CONCURRENT_UPDATE": "تعذر إتمام الصرف لأن رصيد الصندوق تغير. يرجى المحاولة مرة أخرى.",
+  "INVALID_PAGINATION": "يجب أن تكون قيمتا page وlimit عددين صحيحين موجبين.",
+  "AMOUNT_MUST_BE_STRING": "يجب أن يكون مبلغ الصرف نصًا عشريًا.",
+  "AMOUNT_INVALID": "يجب أن يكون مبلغ الصرف موجبًا وبمنزلتين عشريتين ضمن المجال المسموح."
+}

@@ -5,6 +5,7 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { SponsorshipFundController } from './sponsorship-fund.controller';
 import { WalletController } from './wallet.controller';
+import { QuickAidFundController } from './quick-aid-fund.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     PaymentsController,
     WalletController,
     SponsorshipFundController,
+    QuickAidFundController,
   ],
   providers: [PaymentsService],
 })

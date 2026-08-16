@@ -22,5 +22,7 @@
   "read:roles": "View Roles List",
   "create:roles": "Create New Role",
   "update:roles": "Update Role",
-  "delete:roles": "Delete Role"
+  "delete:roles": "Delete Role",
+  "read:quick_aid_fund": "View Quick Aid Fund",
+  "create:quick_aid_disbursements": "Create Quick Aid Disbursements"
 }

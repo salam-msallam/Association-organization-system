@@ -1,0 +1,13 @@
+{
+  "SUMMARY_FETCH_SUCCESS": "Quick aid fund summary fetched successfully.",
+  "DISBURSEMENT_CREATE_SUCCESS": "Quick aid disbursement created successfully.",
+  "DISBURSEMENTS_FETCH_SUCCESS": "Quick aid fund disbursements fetched successfully.",
+  "EMPLOYEE_NOT_FOUND": "The authenticated employee record was not found.",
+  "BENEFICIARY_NOT_FOUND": "The beneficiary was not found.",
+  "BENEFICIARY_NOT_ACCEPTED": "Quick aid can only be disbursed to an accepted beneficiary.",
+  "INSUFFICIENT_FUND_BALANCE": "The quick aid fund balance is insufficient.",
+  "DISBURSEMENT_CONCURRENT_UPDATE": "The disbursement could not be completed because the fund balance changed. Please try again.",
+  "INVALID_PAGINATION": "page and limit must be positive integers.",
+  "AMOUNT_MUST_BE_STRING": "Disbursement amount must be a decimal string.",
+  "AMOUNT_INVALID": "Disbursement amount must be positive, have exactly two decimal places, and fit the allowed range."
+}
