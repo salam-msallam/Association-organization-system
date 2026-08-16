@@ -64,6 +64,9 @@ describe('ProfileService', () => {
 
     expect(profile).toEqual({
       fullName: 'Salam Msallam',
+      firstName: 'Salam',
+      lastName: 'Msallam',
+      dateOfBirth: '1990-07-24',
       age: 35,
       socialStatus: SocialStatus.SINGLE,
       address: { ar: 'دمشق', en: 'Damascus' },
