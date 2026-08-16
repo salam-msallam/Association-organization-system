@@ -528,6 +528,15 @@ export class AuthService {
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
+        if (dto.registrationId) {
+          await tx.user.updateMany({
+            where: {
+              notificationRegistrationId: dto.registrationId,
+            },
+            data: { notificationRegistrationId: null },
+          });
+        }
+
         const newUser = await tx.user.create({
           data: {
             firstName: pendingData.firstName,

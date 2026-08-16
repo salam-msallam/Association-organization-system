@@ -14,6 +14,7 @@ jest.mock('../users/users.service', () => ({
 describe('AuthService', () => {
   let service: AuthService;
   let userCreate: jest.Mock;
+  let userUpdateMany: jest.Mock;
   let donorCreate: jest.Mock;
   let beneficiaryCreate: jest.Mock;
   let prisma: any;
@@ -45,6 +46,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     userCreate = jest.fn().mockResolvedValue({ id: 123 });
+    userUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
     donorCreate = jest.fn();
     beneficiaryCreate = jest.fn().mockResolvedValue({ id: 9 });
 
@@ -53,6 +55,7 @@ describe('AuthService', () => {
         callback({
           user: {
             create: userCreate,
+            updateMany: userUpdateMany,
           },
           donor: {
             create: donorCreate,
@@ -430,6 +433,28 @@ describe('AuthService', () => {
         notificationLanguage: 'en',
       }),
     });
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: {
+        notificationRegistrationId: 'firebase-registration-id',
+      },
+      data: { notificationRegistrationId: null },
+    });
+    expect(userUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      userCreate.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not clear another registration when OTP verification has no Firebase identifier', async () => {
+    await service.verifyRegistrationOtp(
+      {
+        countryCode: '+963',
+        number: '0934206455',
+        code: '1234',
+      },
+      'ar',
+    );
+
+    expect(userUpdateMany).not.toHaveBeenCalled();
   });
 
   it('rejects invalid OTP verification phone before OTP lookup', async () => {
