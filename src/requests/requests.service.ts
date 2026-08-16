@@ -2,16 +2,22 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Gender, Prisma, SocialStatus, Status } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AdminHelpRequestDetailDto,
   AdminHelpRequestDetailResponseDto,
 } from './dto/admin-help-request-detail-response.dto';
 import { AdminHelpRequestListResponseDto } from './dto/admin-help-request-list-response.dto';
+import {
+  BeneficiaryAidRequestDetailResponseDto,
+  BeneficiaryAidRequestDetailsDto,
+} from './dto/beneficiary-aid-request-detail-response.dto';
 import {
   PublicAidRequestCategoryDto,
   PublicAidRequestDetailDto,
@@ -102,9 +108,12 @@ const AID_DETAILS_FIELDS_BY_CATEGORY: Record<string, readonly string[]> = {
 
 @Injectable()
 export class RequestAidService {
+  private readonly logger = new Logger(RequestAidService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async getPublicAidRequests(
@@ -393,7 +402,11 @@ export class RequestAidService {
 
     const request = await this.prisma.requestAid.findUnique({
       where: { id: requestId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        beneficiary: { select: { userId: true } },
+      },
     });
 
     if (!request) {
@@ -477,6 +490,18 @@ export class RequestAidService {
       };
     });
 
+    if (status === Status.ACCEPTED && request.status !== Status.ACCEPTED) {
+      await this.notifyRequestAccepted(request.beneficiary.userId, requestId);
+    }
+
+    if (status === Status.REJECTED && request.status !== Status.REJECTED) {
+      await this.notifyRequestRejected(
+        request.beneficiary.userId,
+        requestId,
+        dto.rejectionReason as BilingualText,
+      );
+    }
+
     return {
       success: true,
       message: this.i18n.t('help-requests.STATUS_UPDATE_SUCCESS', {
@@ -489,6 +514,57 @@ export class RequestAidService {
     } as unknown as ReviewHelpRequestResponseDto;
   }
 
+  private async notifyRequestAccepted(
+    beneficiaryUserId: number,
+    requestId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: beneficiaryUserId,
+        title: {
+          ar: 'تم قبول طلب الإعانة',
+          en: 'Your assistance request has been accepted',
+        },
+        message: {
+          ar: 'تم قبول طلب الإعانة الخاص بك وأصبح متاحاً للمتبرعين .',
+          en: 'Your assistance request has been accepted and is now available for funding.',
+        },
+        targetType: 'REQUEST_AID',
+        targetId: requestId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the aid request acceptance notification for request ${requestId}`,
+      );
+    }
+  }
+
+  private async notifyRequestRejected(
+    beneficiaryUserId: number,
+    requestId: number,
+    rejectionReason: BilingualText,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: beneficiaryUserId,
+        title: {
+          ar: 'تم رفض طلب الإعانة',
+          en: 'Your assistance request has been rejected',
+        },
+        message: {
+          ar: `تم رفض طلب الإعانة الخاص بك. لأن: ${rejectionReason.ar}`,
+          en: `Your assistance request has been rejected. because ${rejectionReason.en}`,
+        },
+        targetType: 'REQUEST_AID',
+        targetId: requestId,
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the aid request rejection notification for request ${requestId}`,
+      );
+    }
+  }
+
   async createRequestAid(
     userId: number,
     categoryId: number,
@@ -498,7 +574,7 @@ export class RequestAidService {
     expectedCategoryName: string,
     subCategoryRequiredFieldsMap?: Record<number, string[]>,
   ): Promise<{ message: string }> {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const beneficiary = await tx.beneficiary.findUnique({
         where: { userId },
       });
@@ -509,7 +585,7 @@ export class RequestAidService {
         );
       }
 
-      await this.createRequestAidRecord(
+      const requestId = await this.createRequestAidRecord(
         tx,
         beneficiary.id,
         categoryId,
@@ -532,8 +608,13 @@ export class RequestAidService {
 
       return {
         message: 'تم تقديم طلب المساعدة بنجاح',
+        requestId,
       };
     });
+
+    await this.notifyStaffAboutPendingAidRequest(result.requestId);
+
+    return { message: result.message };
   }
 
   async createEmployeeRequestAid(
@@ -637,6 +718,32 @@ export class RequestAidService {
     });
   }
 
+  private async notifyStaffAboutPendingAidRequest(
+    requestId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSendToPermission(
+        'status:aid_requests',
+        {
+          title: {
+            ar: 'طلب إعانة جديد بانتظار المراجعة',
+            en: 'New assistance request awaiting review',
+          },
+          message: {
+            ar: 'تم إنشاء طلب إعانة جديد ويحتاج إلى مراجعة بياناته.',
+            en: 'A new assistance request has been created and requires review.',
+          },
+          targetType: 'AID_REQUEST_REVIEW',
+          targetId: requestId,
+        },
+      );
+    } catch {
+      this.logger.warn(
+        `Failed to notify staff about pending aid request ${requestId}`,
+      );
+    }
+  }
+
   async getMyRequests(userId: number, status?: string, lang = 'ar') {
     const normalizedStatus = this.normalizeStatus(status, lang);
 
@@ -698,6 +805,169 @@ export class RequestAidService {
           }
         : null,
     }));
+  }
+
+  async getMyRequestById(
+    userId: number,
+    id: string | number,
+    lang = 'ar',
+  ): Promise<BeneficiaryAidRequestDetailResponseDto> {
+    const requestId = this.parseRequestId(id, lang);
+    const beneficiary = await this.prisma.beneficiary.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!beneficiary) {
+      throw new ForbiddenException(
+        this.i18n.t('help-requests.BENEFICIARY_PROFILE_REQUIRED', { lang }),
+      );
+    }
+
+    const request = await this.prisma.requestAid.findFirst({
+      where: {
+        id: requestId,
+        beneficiaryId: beneficiary.id,
+      },
+      select: {
+        id: true,
+        categoryId: true,
+        subCategoryId: true,
+        firstName: true,
+        lastName: true,
+        beneficiaryFatherName: true,
+        socialStatus: true,
+        address: true,
+        age: true,
+        isUnemployed: true,
+        gender: true,
+        number: true,
+        title: true,
+        details: true,
+        description: true,
+        cost: true,
+        currentPayment: true,
+        status: true,
+        rejectionReason: true,
+        isUrgent: true,
+        createdAt: true,
+        reviewedAt: true,
+        updatedAt: true,
+        category: {
+          select: { id: true, name: true },
+        },
+        subCategory: {
+          select: { id: true, name: true },
+        },
+        aidDetails: {
+          select: {
+            academicAchievement: true,
+            institutionName: true,
+            year: true,
+            numberIndividuals: true,
+            projectName: true,
+            projectCategory: true,
+            numberOfPeopleSupported: true,
+            currentHousingSituation: true,
+            typeAid: true,
+            currentRent: true,
+            currentPlaceOfResidence: true,
+            reasonForLock: true,
+            housingSpecifications: true,
+            mediaUrls: true,
+            donorImageUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException(
+        this.i18n.t('help-requests.REQUEST_NOT_FOUND', { lang }),
+      );
+    }
+
+    const aidDetails = request.aidDetails
+      ? this.removeNullishAidDetails({
+          academicAchievement: request.aidDetails.academicAchievement,
+          institutionName: this.localizeJsonText(
+            request.aidDetails.institutionName,
+            lang,
+          ),
+          year: request.aidDetails.year,
+          numberIndividuals: request.aidDetails.numberIndividuals,
+          projectName: this.localizeJsonText(
+            request.aidDetails.projectName,
+            lang,
+          ),
+          projectCategory: this.localizeJsonText(
+            request.aidDetails.projectCategory,
+            lang,
+          ),
+          numberOfPeopleSupported: request.aidDetails.numberOfPeopleSupported,
+          currentHousingSituation: this.localizeJsonText(
+            request.aidDetails.currentHousingSituation,
+            lang,
+          ),
+          typeAid: request.aidDetails.typeAid,
+          currentRent: request.aidDetails.currentRent?.toString(),
+          currentPlaceOfResidence: this.localizeJsonText(
+            request.aidDetails.currentPlaceOfResidence,
+            lang,
+          ),
+          reasonForLock: this.localizeJsonText(
+            request.aidDetails.reasonForLock,
+            lang,
+          ),
+          housingSpecifications: this.localizeJsonText(
+            request.aidDetails.housingSpecifications,
+            lang,
+          ),
+          mediaUrls: this.extractMediaUrls(request.aidDetails.mediaUrls),
+          donorImageUrl: request.aidDetails.donorImageUrl,
+        })
+      : {};
+
+    return {
+      id: request.id,
+      categoryId: request.categoryId,
+      subCategoryId: request.subCategoryId,
+      firstName: request.firstName,
+      lastName: request.lastName,
+      beneficiaryFatherName: request.beneficiaryFatherName,
+      socialStatus: request.socialStatus,
+      address: this.localizeJsonText(request.address, lang),
+      age: request.age,
+      isUnemployed: request.isUnemployed,
+      gender: request.gender,
+      number: request.number,
+      title: this.localizeJsonText(request.title, lang),
+      details: this.localizeJsonText(request.details, lang),
+      description: this.localizeJsonText(request.description, lang),
+      cost: request.cost.toString(),
+      currentPayment: request.currentPayment.toString(),
+      compliancePercentage: this.calculateCompliancePercentage(
+        request.cost,
+        request.currentPayment,
+      ),
+      status: request.status,
+      rejectionReason: this.localizeJsonText(request.rejectionReason, lang),
+      isUrgent: request.isUrgent ?? false,
+      createdAt: request.createdAt,
+      reviewedAt: request.reviewedAt,
+      updatedAt: request.updatedAt,
+      category: {
+        id: request.category.id,
+        name: this.localizeJsonText(request.category.name, lang),
+      },
+      subCategory: request.subCategory
+        ? {
+            id: request.subCategory.id,
+            name: this.localizeJsonText(request.subCategory.name, lang),
+          }
+        : null,
+      aidDetails: aidDetails as BeneficiaryAidRequestDetailsDto,
+    };
   }
 
   async cancelRequestAid(
@@ -1041,7 +1311,7 @@ export class RequestAidService {
       reviewedAt: Date | null;
     },
     lang?: string,
-  ): Promise<void> {
+  ): Promise<number> {
     await this.validateCategorySelection(
       tx,
       categoryId,
@@ -1100,6 +1370,8 @@ export class RequestAidService {
         ...this.normalizeBilingualFields(sanitizedAidDetailsFields),
       },
     });
+
+    return requestAid.id;
   }
 
   private findMissingBeneficiarySnapshotFields(beneficiary: {

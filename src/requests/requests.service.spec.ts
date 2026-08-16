@@ -16,6 +16,7 @@ import { RequestAidService } from './requests.service';
 describe('RequestAidService admin APIs', () => {
   let prisma: any;
   let i18n: any;
+  let notificationsService: any;
   let service: RequestAidService;
 
   beforeEach(() => {
@@ -55,7 +56,18 @@ describe('RequestAidService admin APIs', () => {
     i18n = {
       t: jest.fn((key, options) => `${key}:${options?.lang ?? 'ar'}`),
     };
-    service = new RequestAidService(prisma, i18n);
+    notificationsService = {
+      createAndSend: jest.fn().mockResolvedValue({
+        notificationId: 1,
+        pushSent: true,
+      }),
+      createAndSendToPermission: jest.fn().mockResolvedValue({
+        recipientCount: 1,
+        notificationCount: 1,
+        pushSentCount: 1,
+      }),
+    };
+    service = new RequestAidService(prisma, i18n, notificationsService);
   });
 
   it('lists accepted public aid requests by category without descriptions', async () => {
@@ -576,6 +588,7 @@ describe('RequestAidService admin APIs', () => {
     prisma.requestAid.findUnique.mockResolvedValue({
       id: 13,
       status: Status.PENDING,
+      beneficiary: { userId: 19 },
     });
     prisma.employee.findUnique.mockResolvedValue({ id: 7 });
     prisma.requestAid.update.mockResolvedValue({
@@ -634,6 +647,19 @@ describe('RequestAidService admin APIs', () => {
       },
       select: { donorImageUrl: true },
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 19,
+      title: {
+        ar: 'تم قبول طلب الإعانة',
+        en: 'Your assistance request has been accepted',
+      },
+      message: {
+        ar: 'تم قبول طلب الإعانة الخاص بك وأصبح متاحاً للمتبرعين .',
+        en: 'Your assistance request has been accepted and is now available for funding.',
+      },
+      targetType: 'REQUEST_AID',
+      targetId: 13,
+    });
     expect(result).toEqual({
       success: true,
       message: 'help-requests.STATUS_UPDATE_SUCCESS:en',
@@ -685,6 +711,7 @@ describe('RequestAidService admin APIs', () => {
     prisma.requestAid.findUnique.mockResolvedValue({
       id: 13,
       status: Status.PENDING,
+      beneficiary: { userId: 19 },
     });
     prisma.employee.findUnique.mockResolvedValue(null);
     prisma.requestAid.update.mockResolvedValue({
@@ -721,6 +748,19 @@ describe('RequestAidService admin APIs', () => {
       }),
     );
     expect(result.data.rejectionReason).toEqual(rejectionReason);
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 19,
+      title: {
+        ar: 'تم رفض طلب الإعانة',
+        en: 'Your assistance request has been rejected',
+      },
+      message: {
+        ar: `تم رفض طلب الإعانة الخاص بك. لأن: ${rejectionReason.ar}`,
+        en: `Your assistance request has been rejected. because ${rejectionReason.en}`,
+      },
+      targetType: 'REQUEST_AID',
+      targetId: 13,
+    });
   });
 
   it('ignores acceptance-only fields and media when rejecting a request', async () => {
@@ -729,6 +769,7 @@ describe('RequestAidService admin APIs', () => {
     prisma.requestAid.findUnique.mockResolvedValue({
       id: 13,
       status: Status.PENDING,
+      beneficiary: { userId: 19 },
     });
     prisma.employee.findUnique.mockResolvedValue({ id: 7 });
     prisma.requestAid.update.mockResolvedValue({
@@ -792,6 +833,7 @@ describe('RequestAidService admin APIs', () => {
     prisma.requestAid.findUnique.mockResolvedValue({
       id: 13,
       status: Status.PENDING,
+      beneficiary: { userId: 19 },
     });
     prisma.employee.findUnique.mockResolvedValue({ id: 7 });
     prisma.requestAid.update.mockResolvedValue({
@@ -897,6 +939,113 @@ describe('RequestAidService admin APIs', () => {
       { lang: 'ar' },
     );
     expect(prisma.requestAid.update).not.toHaveBeenCalled();
+  });
+
+  it('notifies authorized staff after creating an assistance request', async () => {
+    const requestAidCreate = jest.fn().mockResolvedValue({ id: 31 });
+    const aidDetailsCreate = jest.fn().mockResolvedValue({ id: 50 });
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.category = {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 2,
+        name: { ar: 'صحي', en: 'Health' },
+      }),
+    };
+    prisma.$transaction.mockImplementation((callback) =>
+      callback({
+        requestAid: { create: requestAidCreate },
+        aidDetails: { create: aidDetailsCreate },
+      }),
+    );
+
+    const result = await service.createRequestAid(
+      19,
+      2,
+      null,
+      {
+        firstName: 'Sara',
+        lastName: 'Ahmad',
+        beneficiaryFatherName: 'Mohammad',
+        socialStatus: SocialStatus.MARRIED,
+        address: { ar: 'دمشق', en: 'Damascus' },
+        age: 35,
+        isUnemployed: false,
+        gender: Gender.FEMALE,
+        number: '0991000000',
+        details: { ar: 'تفاصيل', en: 'Details' },
+        cost: 100,
+      },
+      {
+        typeAid: TypeAid.SURGERY,
+        mediaUrls: ['uploads/request-media/report.png'],
+      },
+      'Health',
+    );
+
+    expect(result).toEqual({ message: 'تم تقديم طلب المساعدة بنجاح' });
+    expect(notificationsService.createAndSendToPermission).toHaveBeenCalledWith(
+      'status:aid_requests',
+      {
+        title: {
+          ar: 'طلب إعانة جديد بانتظار المراجعة',
+          en: 'New assistance request awaiting review',
+        },
+        message: {
+          ar: 'تم إنشاء طلب إعانة جديد ويحتاج إلى مراجعة بياناته.',
+          en: 'A new assistance request has been created and requires review.',
+        },
+        targetType: 'AID_REQUEST_REVIEW',
+        targetId: 31,
+      },
+    );
+    expect(aidDetailsCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      notificationsService.createAndSendToPermission.mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('keeps the created assistance request when staff notification fails', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.category = {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 2,
+        name: { ar: 'صحي', en: 'Health' },
+      }),
+    };
+    prisma.$transaction.mockImplementation((callback) =>
+      callback({
+        requestAid: {
+          create: jest.fn().mockResolvedValue({ id: 31 }),
+        },
+        aidDetails: { create: jest.fn() },
+      }),
+    );
+    notificationsService.createAndSendToPermission.mockRejectedValue(
+      new Error('notification database error'),
+    );
+
+    await expect(
+      service.createRequestAid(
+        19,
+        2,
+        null,
+        {
+          firstName: 'Sara',
+          lastName: 'Ahmad',
+          beneficiaryFatherName: 'Mohammad',
+          socialStatus: SocialStatus.MARRIED,
+          address: { ar: 'دمشق', en: 'Damascus' },
+          age: 35,
+          isUnemployed: false,
+          gender: Gender.FEMALE,
+          number: '0991000000',
+          details: { ar: 'تفاصيل', en: 'Details' },
+          cost: 100,
+        },
+        { typeAid: TypeAid.SURGERY },
+        'Health',
+      ),
+    ).resolves.toEqual({ message: 'تم تقديم طلب المساعدة بنجاح' });
   });
 
   it('resets review metadata when a beneficiary edits a non-cancelled request', async () => {
@@ -1072,6 +1221,117 @@ describe('RequestAidService admin APIs', () => {
     expect(i18n.t).toHaveBeenCalledWith(
       'help-requests.BENEFICIARY_PROFILE_REQUIRED',
       { lang: 'en' },
+    );
+  });
+
+  it('returns one owned beneficiary request with localized full details', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.requestAid.findFirst.mockResolvedValue({
+      id: 13,
+      categoryId: 2,
+      subCategoryId: 7,
+      firstName: 'Sara',
+      lastName: 'Ahmad',
+      beneficiaryFatherName: 'Mohammad',
+      socialStatus: SocialStatus.MARRIED,
+      address: { ar: 'دمشق', en: 'Damascus' },
+      age: 35,
+      isUnemployed: false,
+      gender: Gender.FEMALE,
+      number: '0991000000',
+      title: { ar: 'طلب عملية', en: 'Surgery request' },
+      details: { ar: 'تفاصيل الطلب', en: 'Request details' },
+      description: { ar: 'وصف الطلب', en: 'Request description' },
+      cost: new Prisma.Decimal(2500),
+      currentPayment: new Prisma.Decimal(1250),
+      status: Status.ACCEPTED,
+      rejectionReason: null,
+      isUrgent: true,
+      createdAt: new Date('2026-07-30T12:00:00.000Z'),
+      reviewedAt: new Date('2026-07-31T12:00:00.000Z'),
+      updatedAt: new Date('2026-07-31T12:00:00.000Z'),
+      category: { id: 2, name: { ar: 'صحي', en: 'Health' } },
+      subCategory: { id: 7, name: { ar: 'جراحة', en: 'Surgery' } },
+      aidDetails: {
+        academicAchievement: null,
+        institutionName: null,
+        year: null,
+        numberIndividuals: null,
+        projectName: null,
+        projectCategory: null,
+        numberOfPeopleSupported: null,
+        currentHousingSituation: null,
+        typeAid: TypeAid.SURGERY,
+        currentRent: null,
+        currentPlaceOfResidence: null,
+        reasonForLock: null,
+        housingSpecifications: null,
+        mediaUrls: ['uploads/request-media/report.png'],
+        donorImageUrl: 'uploads/request-media/donor.png',
+      },
+    });
+
+    const result = await service.getMyRequestById(19, 13, 'en-US');
+
+    expect(prisma.beneficiary.findUnique).toHaveBeenCalledWith({
+      where: { userId: 19 },
+      select: { id: true },
+    });
+    expect(prisma.requestAid.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 13, beneficiaryId: 5 },
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 13,
+        address: 'Damascus',
+        title: 'Surgery request',
+        details: 'Request details',
+        description: 'Request description',
+        cost: '2500',
+        currentPayment: '1250',
+        compliancePercentage: 50,
+        category: { id: 2, name: 'Health' },
+        subCategory: { id: 7, name: 'Surgery' },
+        aidDetails: {
+          typeAid: TypeAid.SURGERY,
+          mediaUrls: ['uploads/request-media/report.png'],
+          donorImageUrl: 'uploads/request-media/donor.png',
+        },
+      }),
+    );
+  });
+
+  it('does not expose a request that is not owned by the beneficiary', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue({ id: 5 });
+    prisma.requestAid.findFirst.mockResolvedValue(null);
+
+    await expect(service.getMyRequestById(19, 99, 'en')).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(prisma.requestAid.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 99, beneficiaryId: 5 },
+      }),
+    );
+    expect(i18n.t).toHaveBeenCalledWith('help-requests.REQUEST_NOT_FOUND', {
+      lang: 'en',
+    });
+  });
+
+  it('rejects getting one request when the account is not a beneficiary', async () => {
+    prisma.beneficiary.findUnique.mockResolvedValue(null);
+
+    await expect(service.getMyRequestById(19, 13, 'ar')).rejects.toThrow(
+      ForbiddenException,
+    );
+
+    expect(prisma.requestAid.findFirst).not.toHaveBeenCalled();
+    expect(i18n.t).toHaveBeenCalledWith(
+      'help-requests.BENEFICIARY_PROFILE_REQUIRED',
+      { lang: 'ar' },
     );
   });
 });

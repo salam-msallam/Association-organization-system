@@ -15,6 +15,7 @@ describe('AnnualReportService', () => {
   let prisma: any;
   let tx: any;
   let i18n: any;
+  let notificationsService: any;
   let service: AnnualReportService;
 
   const createFiles = () => ({
@@ -40,6 +41,7 @@ describe('AnnualReportService', () => {
           id: 5,
           status: Status.ACCEPTED,
           orphanId: 3,
+          donor: { userId: 40 },
           orphan: {
             updatedAt: new Date('2027-08-01T00:00:00.000Z'),
           },
@@ -76,12 +78,14 @@ describe('AnnualReportService', () => {
       },
       sponsorship: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
       },
       walletTransaction: {
         findFirst: jest.fn(),
       },
       annualReport: {
         findMany: jest.fn(),
+        aggregate: jest.fn(),
       },
       $transaction: jest.fn((callback: (client: any) => unknown) =>
         callback(tx),
@@ -93,7 +97,18 @@ describe('AnnualReportService', () => {
           `${key}:${options?.lang ?? 'ar'}${options?.args?.dueDate ? `:${options.args.dueDate}` : ''}`,
       ),
     };
-    service = new AnnualReportService(prisma, i18n);
+    notificationsService = {
+      createAndSend: jest.fn().mockResolvedValue({
+        notificationId: 30,
+        pushSent: true,
+      }),
+      createAndSendToPermission: jest.fn().mockResolvedValue({
+        recipientCount: 1,
+        notificationCount: 1,
+        pushSentCount: 1,
+      }),
+    };
+    service = new AnnualReportService(prisma, i18n, notificationsService);
   });
 
   afterEach(() => {
@@ -138,6 +153,28 @@ describe('AnnualReportService', () => {
         createdAt: new Date('2027-08-02T09:00:00.000Z'),
       },
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 40,
+      title: {
+        ar: 'تم رفع التقرير السنوي',
+        en: 'Annual report available',
+      },
+      message: {
+        ar: 'أصبح التقرير السنوي الجديد لليتيم المكفول متاحاً، يمكنك الاطلاع عليه الآن.',
+        en: 'A new annual report for your sponsored orphan is now available. You can view it now.',
+      },
+      targetType: 'ANNUAL_REPORT',
+      targetId: 12,
+      additionalData: {
+        sponsorshipId: '5',
+      },
+    });
+    expect(
+      notificationsService.createAndSendToPermission,
+    ).not.toHaveBeenCalled();
+    expect(tx.annualReport.create.mock.invocationCallOrder[0]).toBeLessThan(
+      notificationsService.createAndSend.mock.invocationCallOrder[0],
+    );
   });
 
   it('rejects sending the report before its first anniversary', async () => {
@@ -160,6 +197,7 @@ describe('AnnualReportService', () => {
       id: 5,
       status: Status.ACCEPTED,
       orphanId: 3,
+      donor: { userId: 40 },
       orphan: {
         updatedAt: new Date('2027-07-31T20:00:00.000Z'),
       },
@@ -171,10 +209,88 @@ describe('AnnualReportService', () => {
     );
 
     expect(tx.annualReport.create).not.toHaveBeenCalled();
+    expect(notificationsService.createAndSend).not.toHaveBeenCalled();
+    expect(
+      notificationsService.createAndSendToPermission,
+    ).not.toHaveBeenCalled();
     expect(i18n.t).toHaveBeenCalledWith(
       'annual-report.ORPHAN_UPDATE_REQUIRED',
       expect.objectContaining({ lang: 'ar' }),
     );
+  });
+
+  it('keeps the created report when notification creation fails', async () => {
+    notificationsService.createAndSend.mockRejectedValue(
+      new Error('notification database error'),
+    );
+
+    await expect(service.create(5, 20, createFiles(), 'ar')).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ id: 12 }),
+      }),
+    );
+
+    expect(tx.annualReport.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies authorized staff when one year has passed since the first payment', async () => {
+    const firstPaymentAt = new Date('2026-08-01T09:00:00.000Z');
+    prisma.sponsorship.findMany.mockResolvedValue([{ id: 5, orphanId: 3 }]);
+    prisma.walletTransaction.findFirst.mockResolvedValue({
+      createdAt: firstPaymentAt,
+    });
+    prisma.annualReport.aggregate.mockResolvedValue({
+      _max: { reportNumber: null },
+    });
+
+    const result = await service.notifyDueAnnualReports(
+      new Date('2027-08-02T09:00:00.000Z'),
+    );
+
+    expect(notificationsService.createAndSendToPermission).toHaveBeenCalledWith(
+      'create:annual_reports',
+      {
+        title: {
+          ar: 'حان موعد التقرير السنوي للكفالة',
+          en: 'Sponsorship annual report is due',
+        },
+        message: {
+          ar: 'مضى عام على الكفالة، يرجى تحديث بيانات اليتيم ورفع التقرير السنوي للكفيل.',
+          en: 'The sponsorship annual report is due. Please update the orphan information and upload the annual report for the sponsor.',
+        },
+        targetType: 'ANNUAL_REPORT_DUE',
+        targetId: 5,
+        additionalData: {
+          sponsorshipId: '5',
+          orphanId: '3',
+          reportNumber: '1',
+          dueDate: '2027-08-01',
+        },
+      },
+      'ar',
+      { excludeNotifiedSince: new Date('2027-08-01T09:00:00.000Z') },
+    );
+    expect(result).toBe(1);
+  });
+
+  it('does not notify staff before the first annual report due date', async () => {
+    prisma.sponsorship.findMany.mockResolvedValue([{ id: 5, orphanId: 3 }]);
+    prisma.walletTransaction.findFirst.mockResolvedValue({
+      createdAt: new Date('2026-08-01T09:00:00.000Z'),
+    });
+    prisma.annualReport.aggregate.mockResolvedValue({
+      _max: { reportNumber: null },
+    });
+
+    const result = await service.notifyDueAnnualReports(
+      new Date('2027-07-31T09:00:00.000Z'),
+    );
+
+    expect(
+      notificationsService.createAndSendToPermission,
+    ).not.toHaveBeenCalled();
+    expect(result).toBe(0);
   });
 
   it('requires both localized report images before opening a transaction', async () => {

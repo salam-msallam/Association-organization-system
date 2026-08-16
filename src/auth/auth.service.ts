@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -24,6 +24,8 @@ import {
   normalizeFullPhoneNumber,
   normalizePhoneComponents,
 } from './phone-number.util';
+import { normalizeNotificationLanguage } from '../notifications/notification-language.util';
+import { NotificationsService } from '../notifications/notifications.service';
 
 import {
   BadRequestException,
@@ -35,6 +37,8 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly prisma: PrismaService,
@@ -43,6 +47,7 @@ export class AuthService {
     private readonly i18n: I18nService,
     private usersService: UsersService,
     private jwtService: JwtService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async validateUser(loginDto: LoginDto, lang = 'ar') {
@@ -383,7 +388,12 @@ export class AuthService {
 
   private async createBeneficiaryAccount(
     dto: RegisterBeneficiaryDto,
-    options: { status: Status; lang: string },
+    options: {
+      status: Status;
+      lang: string;
+      notificationRegistrationId?: string;
+      notificationLanguage?: string;
+    },
   ) {
     const normalizedDto = this.normalizeRegistrationDto(dto, options.lang);
 
@@ -439,6 +449,8 @@ export class AuthService {
             gender: normalizedDto.gender,
             password: hashedPassword,
             userType: PrismaUserType.BENEFICIARY,
+            notificationRegistrationId: options.notificationRegistrationId,
+            notificationLanguage: options.notificationLanguage,
           },
         });
 
@@ -657,7 +669,12 @@ export class AuthService {
       if (pendingRegistration.type === 'BENEFICIARY') {
         result = await this.createBeneficiaryAccount(
           pendingData as RegisterBeneficiaryDto,
-          { status: Status.PENDING, lang },
+          {
+            status: Status.PENDING,
+            lang,
+            notificationRegistrationId: dto.registrationId,
+            notificationLanguage: normalizeNotificationLanguage(lang),
+          },
         );
       } else {
         const donorData = pendingData as RegisterDonorDto;
@@ -675,6 +692,8 @@ export class AuthService {
               gender: donorData.gender,
               password: hashedPassword,
               userType: PrismaUserType.DONOR,
+              notificationRegistrationId: dto.registrationId,
+              notificationLanguage: normalizeNotificationLanguage(lang),
             },
           });
 
@@ -693,6 +712,10 @@ export class AuthService {
       await this.otpService.markOtpAsUsed(fullPhoneNumber, dto.code);
       await this.cacheManager.del(cacheKey);
 
+      if (pendingRegistration.type === 'BENEFICIARY') {
+        await this.notifyStaffAboutPendingBeneficiary(result.id);
+      }
+
       return {
         success: true,
         message: this.i18n.t('auth.REGISTER_SUCCESS', { lang }),
@@ -707,6 +730,32 @@ export class AuthService {
 
       throw new InternalServerErrorException(
         this.i18n.t('auth.TRANSACTION_FAILED', { lang }),
+      );
+    }
+  }
+
+  private async notifyStaffAboutPendingBeneficiary(
+    beneficiaryUserId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSendToPermission(
+        'status:beneficiaries',
+        {
+          title: {
+            ar: 'مستفيد جديد بانتظار المراجعة',
+            en: 'New beneficiary awaiting review',
+          },
+          message: {
+            ar: 'تم تسجيل حساب مستفيد جديد ويحتاج إلى مراجعة بياناته.',
+            en: 'A new beneficiary account has been registered and requires review.',
+          },
+          targetType: 'BENEFICIARY_REVIEW',
+          targetId: beneficiaryUserId,
+        },
+      );
+    } catch {
+      this.logger.warn(
+        `Failed to notify staff about pending beneficiary user ${beneficiaryUserId}`,
       );
     }
   }
@@ -782,3 +831,70 @@ export class AuthService {
     };
   }
 }
+// تمام، منبسّط التصميم وما منعمل جدول `NotificationDevice`.
+
+// بما أن كل مستخدم عندك سيستخدم جهة واحدة غالباً:
+
+// - المتبرع والمستفيد: تطبيق Flutter.
+// - الموظف والإدارة: Dashboard React.
+
+// سنضيف معرّف Firebase مباشرة داخل جدول `User`:
+
+// ```prisma
+// enum NotificationPlatform {
+//   ANDROID
+//   IOS
+//   WEB
+// }
+
+// model User {
+//   // الحقول الموجودة...
+
+//   notificationRegistrationId String?               @unique @db.VarChar(512)
+//   notificationPlatform       NotificationPlatform?
+//   notifications              Notification[]
+// }
+// ```
+
+// ويصبح جدول الإشعارات مربوطاً بالمستخدم:
+
+// ```prisma
+// model Notification {
+//   id         Int       @id @default(autoincrement())
+//   userId     Int
+//   title      Json
+//   message    Json
+//   targetType String?
+//   targetId   Int?
+//   isRead     Boolean   @default(false)
+//   readAt     DateTime?
+//   createdAt  DateTime  @default(now())
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@index([userId, isRead, createdAt])
+// }
+// ```
+
+// طريقة العمل:
+
+// ```text
+// Flutter أو React يحصل على registrationId من Firebase
+//                        ↓
+// يرسله إلى NestJS
+//                        ↓
+// NestJS يخزّنه ضمن User
+//                        ↓
+// عند إنشاء إشعار، NestJS يرسله لهذا المعرّف
+// ```
+
+// لكن لازم تكوني عارفة نتيجة هذا القرار: إذا سجّل المستخدم دخوله من جهاز جديد، المعرّف الجديد سيستبدل القديم، وبالتالي تصل الإشعارات إلى آخر جهاز سجّل فقط. وهذا مناسب حسب طلبك.
+
+// الخطوة الثانية المعدّلة ستكون:
+
+// 1. إضافة حقول Firebase إلى `User`.
+// 2. ربط `Notification` مع `User`.
+// 3. إنشاء migration.
+// 4. نوقف ونراجع تصميم قاعدة البيانات قبل إنشاء أي API.
+
+// لن أنفّذها الآن حتى تطلبي البدء بالخطوة الثانية.

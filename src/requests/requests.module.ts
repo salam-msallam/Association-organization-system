@@ -10,10 +10,11 @@ import { RequestsController } from './controllers/request.controller';
 import { AdminHelpRequestsController } from './controllers/admin-help-requests.controller';
 import { CaslModule } from '../casl/casl.module';
 import { PublicDonorAidRequestsController } from './controllers/public-donor-aid-requests.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AdminBeneficiaryRequestsController } from './controllers/admin-beneficiary-requests.controller';
 
 @Module({
-  imports: [PrismaModule, CaslModule],
+  imports: [PrismaModule, CaslModule, NotificationsModule],
   controllers: [
     HealthRequestController,
     FoodRequestController,

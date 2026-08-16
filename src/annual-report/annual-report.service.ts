@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -11,10 +12,12 @@ import {
   UserType,
   WalletTransactionDirection,
 } from '@prisma/client';
+import { Cron } from '@nestjs/schedule';
 import { DateTime } from 'luxon';
 import { I18nService } from 'nestjs-i18n';
 import { unlink } from 'node:fs/promises';
 import { toPublicUploadPath } from '../interceptors/upload-storage.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SPONSORSHIP_TIME_ZONE } from '../sponsorship/sponsorship-billing-period';
 import { CreateAnnualReportResponseDto } from './dto/create-annual-report-response.dto';
@@ -33,11 +36,21 @@ interface AnnualReportDonorPayload {
   userType?: string;
 }
 
+interface AnnualReportCreationResult {
+  response: CreateAnnualReportResponseDto;
+  donorUserId: number;
+  reportId: number;
+  sponsorshipId: number;
+}
+
 @Injectable()
 export class AnnualReportService {
+  private readonly logger = new Logger(AnnualReportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -63,8 +76,10 @@ export class AnnualReportService {
     };
     const now = new Date();
 
+    let creationResult: AnnualReportCreationResult;
+
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      creationResult = await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`
           SELECT id
           FROM Sponsorship
@@ -78,6 +93,11 @@ export class AnnualReportService {
             id: true,
             status: true,
             orphanId: true,
+            donor: {
+              select: {
+                userId: true,
+              },
+            },
             orphan: {
               select: {
                 updatedAt: true,
@@ -177,19 +197,121 @@ export class AnnualReportService {
         });
 
         return {
-          success: true,
-          message: this.t('CREATE_SUCCESS', lang),
-          data: {
-            ...report,
-            orphanId: sponsorship.orphanId,
-            mediaUrl,
+          response: {
+            success: true,
+            message: this.t('CREATE_SUCCESS', lang),
+            data: {
+              ...report,
+              orphanId: sponsorship.orphanId,
+              mediaUrl,
+            },
           },
+          donorUserId: sponsorship.donor.userId,
+          reportId: report.id,
+          sponsorshipId: sponsorship.id,
         };
       });
     } catch (error) {
       await this.removeUploadedFiles(uploadedFiles);
       throw error;
     }
+
+    await this.notifyAnnualReportAvailable(
+      creationResult.donorUserId,
+      creationResult.reportId,
+      creationResult.sponsorshipId,
+    );
+
+    return creationResult.response;
+  }
+
+  @Cron('0 9 * * *', { timeZone: SPONSORSHIP_TIME_ZONE })
+  async handleAnnualReportDueNotifications(): Promise<void> {
+    try {
+      const notificationCount = await this.notifyDueAnnualReports();
+
+      if (notificationCount > 0) {
+        this.logger.log(
+          `Created ${notificationCount} annual report due notification(s).`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Annual report due notification check failed.', error);
+    }
+  }
+
+  async notifyDueAnnualReports(now = new Date()): Promise<number> {
+    const sponsorships = await this.prisma.sponsorship.findMany({
+      where: {
+        status: Status.ACCEPTED,
+        orphanId: { not: null },
+      },
+      select: {
+        id: true,
+        orphanId: true,
+      },
+    });
+    const localNow = DateTime.fromJSDate(now, { zone: 'utc' }).setZone(
+      SPONSORSHIP_TIME_ZONE,
+    );
+    let notificationCount = 0;
+
+    for (const sponsorship of sponsorships) {
+      const firstPayment = await this.prisma.walletTransaction.findFirst({
+        where: {
+          type: TransactionType.SPONSORSHIP_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: SPONSORSHIP_REFERENCE_TYPE,
+          referenceId: sponsorship.id,
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      });
+
+      if (!firstPayment || !sponsorship.orphanId) continue;
+
+      const reportAggregate = await this.prisma.annualReport.aggregate({
+        where: { sponsorshipId: sponsorship.id },
+        _max: { reportNumber: true },
+      });
+      const reportNumber = (reportAggregate._max.reportNumber ?? 0) + 1;
+      const dueAt = DateTime.fromJSDate(firstPayment.createdAt, {
+        zone: 'utc',
+      })
+        .setZone(SPONSORSHIP_TIME_ZONE)
+        .plus({ years: reportNumber });
+
+      if (localNow < dueAt) continue;
+
+      const dueDate = dueAt.toFormat('yyyy-MM-dd');
+      const result = await this.notificationsService.createAndSendToPermission(
+        'create:annual_reports',
+        {
+          title: {
+            ar: 'حان موعد التقرير السنوي للكفالة',
+            en: 'Sponsorship annual report is due',
+          },
+          message: {
+            ar: 'مضى عام على الكفالة، يرجى تحديث بيانات اليتيم ورفع التقرير السنوي للكفيل.',
+            en: 'The sponsorship annual report is due. Please update the orphan information and upload the annual report for the sponsor.',
+          },
+          targetType: 'ANNUAL_REPORT_DUE',
+          targetId: sponsorship.id,
+          additionalData: {
+            sponsorshipId: String(sponsorship.id),
+            orphanId: String(sponsorship.orphanId),
+            reportNumber: String(reportNumber),
+            dueDate,
+          },
+        },
+        'ar',
+        { excludeNotifiedSince: dueAt.toUTC().toJSDate() },
+      );
+
+      notificationCount += result.notificationCount;
+    }
+
+    return notificationCount;
   }
 
   async findForDonor(
@@ -303,6 +425,35 @@ export class AnnualReportService {
     await Promise.all(
       files.map((file) => unlink(file.path).catch(() => undefined)),
     );
+  }
+
+  private async notifyAnnualReportAvailable(
+    donorUserId: number,
+    reportId: number,
+    sponsorshipId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.createAndSend({
+        userId: donorUserId,
+        title: {
+          ar: 'تم رفع التقرير السنوي',
+          en: 'Annual report available',
+        },
+        message: {
+          ar: 'أصبح التقرير السنوي الجديد لليتيم المكفول متاحاً، يمكنك الاطلاع عليه الآن.',
+          en: 'A new annual report for your sponsored orphan is now available. You can view it now.',
+        },
+        targetType: 'ANNUAL_REPORT',
+        targetId: reportId,
+        additionalData: {
+          sponsorshipId: String(sponsorshipId),
+        },
+      });
+    } catch {
+      this.logger.warn(
+        `Failed to create the annual report notification for report ${reportId}`,
+      );
+    }
   }
 
   private t(

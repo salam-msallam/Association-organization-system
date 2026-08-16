@@ -6,9 +6,10 @@ import { PaymentsService } from './payments.service';
 import { SponsorshipFundController } from './sponsorship-fund.controller';
 import { WalletController } from './wallet.controller';
 import { QuickAidFundController } from './quick-aid-fund.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [AuthModule, PrismaModule, NotificationsModule],
   controllers: [
     PaymentsController,
     WalletController,

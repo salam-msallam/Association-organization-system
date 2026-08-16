@@ -24,6 +24,8 @@ import { DonorModule } from './donor/donor.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AnnualReportModule } from './annual-report/annual-report.module';
 import { QuickAidFundModule } from './quick-aid-fund/quick-aid-fund.module';
+import { FirebaseModule } from './firebase/firebase.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { QuickAidFundModule } from './quick-aid-fund/quick-aid-fund.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    FirebaseModule,
+    NotificationsModule,
     ScheduleModule.forRoot(),
     EmployeeModule,
     CaslModule,

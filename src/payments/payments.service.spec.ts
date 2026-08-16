@@ -18,6 +18,7 @@ describe('PaymentsService', () => {
   let configService: any;
   let i18n: any;
   let stripe: any;
+  let notificationsService: any;
   let service: PaymentsService;
 
   const donor = {
@@ -42,6 +43,7 @@ describe('PaymentsService', () => {
       },
       requestAid: {
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
       },
       sponsorship: {
         findFirst: jest.fn(),
@@ -91,7 +93,18 @@ describe('PaymentsService', () => {
         constructEvent: jest.fn(),
       },
     };
-    service = new PaymentsService(prisma, configService, i18n);
+    notificationsService = {
+      createAndSend: jest.fn().mockResolvedValue({
+        notificationId: 1,
+        pushSent: true,
+      }),
+    };
+    service = new PaymentsService(
+      prisma,
+      configService,
+      i18n,
+      notificationsService,
+    );
     (service as any).stripe = stripe;
   });
 
@@ -657,6 +670,46 @@ describe('PaymentsService', () => {
       remainingAmount: '35.00',
       compliancePercentage: '65.00',
     });
+    expect(notificationsService.createAndSend).not.toHaveBeenCalled();
+  });
+
+  it('notifies the beneficiary when a wallet donation fully funds an aid request', async () => {
+    const tx = mockValidWalletDonationSetup();
+    tx.requestAid.findFirst.mockResolvedValue({
+      id: 13,
+      cost: new Prisma.Decimal(100),
+      currentPayment: new Prisma.Decimal(75),
+    });
+    tx.requestAid.findUnique.mockResolvedValue({
+      id: 13,
+      cost: new Prisma.Decimal(100),
+      currentPayment: new Prisma.Decimal(100),
+    });
+    prisma.requestAid.findUnique.mockResolvedValue({
+      beneficiary: { userId: 19 },
+    });
+
+    const result = await service.donateWalletToAidRequest(
+      13,
+      { amount: '25.00' },
+      { id: 7, type: UserType.DONOR },
+      'en',
+    );
+
+    expect(result.remainingAmount).toBe('0.00');
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 19,
+      title: {
+        ar: 'تم تمويل طلب الإعانة بالكامل',
+        en: 'Your assistance request has been fully funded',
+      },
+      message: {
+        ar: 'اكتمل تمويل طلب الإعانة الخاص بك بالكامل.',
+        en: 'Your assistance request has now received full funding.',
+      },
+      targetType: 'REQUEST_AID',
+      targetId: 13,
+    });
   });
 
   it('pays the first accepted sponsorship installment from the wallet without Stripe', async () => {
@@ -712,6 +765,49 @@ describe('PaymentsService', () => {
         paidAt: now,
       },
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'تم دفع دفعة الكفالة بنجاح',
+        en: 'Sponsorship payment successful',
+      },
+      message: {
+        ar: 'تم تسجيل دفعة كفالتك لشهر 2026-07 بقيمة 10.00 دولار أمريكي بنجاح.',
+        en: 'Your sponsorship payment of USD 10.00 for 2026-07 was recorded successfully.',
+      },
+      targetType: 'SPONSORSHIP_PAYMENT',
+      targetId: 115,
+      additionalData: {
+        sponsorshipId: '5',
+        coveredMonth: '2026-07',
+        paidAmount: '10.00',
+      },
+    });
+    expect(
+      tx.walletTransaction.create.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      notificationsService.createAndSend.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps a successful sponsorship payment when notification creation fails', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-10T09:00:00.000Z'));
+    mockValidSponsorshipPaymentSetup();
+    notificationsService.createAndSend.mockRejectedValue(
+      new Error('notification database error'),
+    );
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ walletTransactionId: 115 }),
+      }),
+    );
   });
 
   it('treats a first payment on or after day 20 as next-month coverage', async () => {
@@ -1083,7 +1179,11 @@ describe('PaymentsService', () => {
           .mockResolvedValueOnce({ count: 0 }),
       },
       requestAid: {
-        update: jest.fn(),
+        update: jest.fn().mockResolvedValue({
+          id: 13,
+          cost: new Prisma.Decimal(100),
+          currentPayment: new Prisma.Decimal(100),
+        }),
       },
       wallet: {
         update: jest.fn(),
@@ -1093,6 +1193,9 @@ describe('PaymentsService', () => {
       },
     };
     prisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    prisma.requestAid.findUnique.mockResolvedValue({
+      beneficiary: { userId: 19 },
+    });
     stripe.webhooks.constructEvent.mockReturnValue({
       type: 'payment_intent.succeeded',
       data: { object: { id: 'pi_123' } },
@@ -1106,7 +1209,9 @@ describe('PaymentsService', () => {
     expect(tx.requestAid.update).toHaveBeenCalledWith({
       where: { id: 13 },
       data: { currentPayment: { increment: new Prisma.Decimal(25) } },
+      select: { id: true, cost: true, currentPayment: true },
     });
+    expect(notificationsService.createAndSend).toHaveBeenCalledTimes(1);
   });
 
   it('marks sponsorship fund Stripe donations successful without side effects', async () => {
