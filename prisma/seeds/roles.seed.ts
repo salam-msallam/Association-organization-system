@@ -180,6 +180,36 @@ export async function seedRoles(
     },
   });
 
+  await prisma.role.upsert({
+    where: { name: 'quick_aid_fund_manager' },
+    update: {
+      label: {
+        ar: 'إدارة صندوق المساعدات العاجلة',
+        en: 'Quick Aid Fund Management',
+      },
+      permissions: {
+        deleteMany: {},
+        create: permissionLinks(permissions, [
+          'read:quick_aid_fund',
+          'create:quick_aid_disbursements',
+        ]),
+      },
+    },
+    create: {
+      name: 'quick_aid_fund_manager',
+      label: {
+        ar: 'إدارة صندوق المساعدات العاجلة',
+        en: 'Quick Aid Fund Management',
+      },
+      permissions: {
+        create: permissionLinks(permissions, [
+          'read:quick_aid_fund',
+          'create:quick_aid_disbursements',
+        ]),
+      },
+    },
+  });
+
   return {
     employeeManagerRole,
     donorReaderRole,

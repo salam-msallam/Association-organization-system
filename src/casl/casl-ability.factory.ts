@@ -22,6 +22,8 @@ export type Subjects =
   | 'RequestAid'
   | 'Sponsorship'
   | 'SponsorshipFund'
+  | 'QuickAidFund'
+  | 'QuickAidDisbursement'
   | 'AnnualReport'
   | 'all';
 
@@ -43,6 +45,7 @@ export class CaslAbilityFactory {
       can('read', 'RequestAid');
       can('manage', 'Sponsorship');
       can('read', 'SponsorshipFund');
+      can('read', 'QuickAidFund');
       can('manage', 'AnnualReport');
     }
 
@@ -75,6 +78,8 @@ export class CaslAbilityFactory {
       'aid-requests': 'RequestAid',
       sponsorships: 'Sponsorship',
       sponsorship_fund: 'SponsorshipFund',
+      quick_aid_fund: 'QuickAidFund',
+      quick_aid_disbursements: 'QuickAidDisbursement',
       annual_reports: 'AnnualReport',
     };
     return maps[subject] || null;

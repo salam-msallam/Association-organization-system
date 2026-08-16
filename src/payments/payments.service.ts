@@ -23,13 +23,16 @@ import { getSponsorshipPaymentContext } from '../sponsorship/sponsorship-billing
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
 import { CreateSponsorshipFundPaymentIntentDto } from './dto/create-sponsorship-fund-payment-intent.dto';
 import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
+import { CreateQuickAidFundPaymentIntentDto } from './dto/create-quick-aid-fund-payment-intent.dto';
 import { DonateWalletToSponsorshipFundDto } from './dto/donate-wallet-to-sponsorship-fund.dto';
 import { DonateWalletToAidRequestDto } from './dto/donate-wallet-to-aid-request.dto';
+import { DonateWalletToQuickAidFundDto } from './dto/donate-wallet-to-quick-aid-fund.dto';
 import { PaymentIntentResponseDto } from './dto/payment-intent-response.dto';
 import { WalletBalanceResponseDto } from './dto/wallet-balance-response.dto';
 import { WalletAidRequestDonationResponseDto } from './dto/wallet-aid-request-donation-response.dto';
 import { WalletSponsorshipFundDonationResponseDto } from './dto/wallet-sponsorship-fund-donation-response.dto';
 import { WalletSponsorshipDonationResponseDto } from './dto/wallet-sponsorship-donation-response.dto';
+import { WalletQuickAidFundDonationResponseDto } from './dto/wallet-quick-aid-fund-donation-response.dto';
 
 const REQUEST_AID_REFERENCE_TYPE = 'REQUEST_AID';
 const WALLET_REFERENCE_TYPE = 'WALLET';
@@ -181,6 +184,25 @@ export class PaymentsService {
       type: TransactionType.GENERAL_DONATION,
       metadata: {
         type: TransactionType.GENERAL_DONATION,
+      },
+      lang,
+    });
+  }
+
+  async createQuickAidFundPaymentIntent(
+    dto: CreateQuickAidFundPaymentIntentDto,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<PaymentIntentResponseDto> {
+    const amount = this.parsePaymentAmount(dto.amount, lang);
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    return this.createStripeBackedTransaction({
+      donor,
+      amount,
+      type: TransactionType.QUICK_AID_FUND_DONATION,
+      metadata: {
+        type: TransactionType.QUICK_AID_FUND_DONATION,
       },
       lang,
     });
@@ -566,6 +588,92 @@ export class PaymentsService {
       return {
         success: true,
         message: this.t('SPONSORSHIP_FUND_DONATION_SUCCESS', lang),
+        data: {
+          walletTransactionId: walletTransaction.id,
+          donatedAmount: amount.toFixed(2),
+          balanceAfter: new Prisma.Decimal(
+            updatedWallet.runningBalance,
+          ).toFixed(2),
+          currency: WALLET_CURRENCY,
+        },
+      };
+    });
+  }
+
+  async donateWalletToQuickAidFund(
+    dto: DonateWalletToQuickAidFundDto,
+    user: PaymentUserPayload,
+    lang = 'ar',
+  ): Promise<WalletQuickAidFundDonationResponseDto> {
+    const amount = this.parsePaymentAmount(dto.amount, lang, {
+      requireExactlyTwoDecimals: true,
+    });
+    const donor = await this.getAuthenticatedDonor(user, lang);
+
+    if (donor.isSponsor) {
+      throw new ForbiddenException(
+        this.t('SPONSORS_CANNOT_DONATE_WALLET_TO_QUICK_AID_FUND', lang),
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findUnique({
+        where: { donorId: donor.userId },
+        select: { id: true, runningBalance: true },
+      });
+
+      if (!wallet) {
+        throw new NotFoundException(this.t('WALLET_NOT_FOUND', lang));
+      }
+
+      if (new Prisma.Decimal(wallet.runningBalance).lt(amount)) {
+        throw new BadRequestException(
+          this.t('INSUFFICIENT_WALLET_BALANCE', lang),
+        );
+      }
+
+      const walletUpdate = await tx.wallet.updateMany({
+        where: {
+          id: wallet.id,
+          runningBalance: { gte: amount },
+        },
+        data: { runningBalance: { decrement: amount } },
+      });
+
+      if (walletUpdate.count !== 1) {
+        throw new BadRequestException(
+          this.t('QUICK_AID_FUND_WALLET_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { runningBalance: true },
+      });
+
+      if (!updatedWallet) {
+        throw new BadRequestException(
+          this.t('QUICK_AID_FUND_WALLET_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const walletTransaction = await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          transactionId: null,
+          amount,
+          type: TransactionType.QUICK_AID_FUND_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: null,
+          referenceId: null,
+          balanceAfter: updatedWallet.runningBalance,
+        },
+        select: { id: true },
+      });
+
+      return {
+        success: true,
+        message: this.t('QUICK_AID_FUND_DONATION_SUCCESS', lang),
         data: {
           walletTransactionId: walletTransaction.id,
           donatedAmount: amount.toFixed(2),

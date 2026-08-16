@@ -23,6 +23,7 @@ import { SponsorshipModule } from './sponsorship/sponsorship.module';
 import { DonorModule } from './donor/donor.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AnnualReportModule } from './annual-report/annual-report.module';
+import { QuickAidFundModule } from './quick-aid-fund/quick-aid-fund.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { AnnualReportModule } from './annual-report/annual-report.module';
     SponsorshipModule,
     DonorModule,
     AnnualReportModule,
+    QuickAidFundModule,
   ],
   controllers: [AppController],
   providers: [

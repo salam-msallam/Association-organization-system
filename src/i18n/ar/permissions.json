@@ -23,4 +23,6 @@
   "create:roles": "إنشاء دور جديد",
   "update:roles": "تعديل دور",
   "delete:roles": "حذف دور"
+  ,"read:quick_aid_fund": "عرض صندوق المساعدات العاجلة"
+  ,"create:quick_aid_disbursements": "إنشاء عمليات صرف المساعدات العاجلة"
 }
