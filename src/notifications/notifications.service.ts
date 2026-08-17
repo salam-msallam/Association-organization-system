@@ -217,7 +217,7 @@ export class NotificationsService {
 
     try {
       await this.firebase.messaging.send({
-        fid: result.registrationId,
+        token: result.registrationId,
         notification: {
           title: input.title[pushLanguage],
           body: input.message[pushLanguage],

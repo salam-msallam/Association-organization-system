@@ -45,6 +45,7 @@ type AdminSponsorshipOrphanSummary = {
   id: number;
   firstName: string;
   lastName: string;
+  priority: number;
 };
 
 type AdminSponsorshipOrphanDetails = AdminSponsorshipOrphanSummary & {
@@ -406,7 +407,12 @@ export class SponsorshipService {
             },
           },
           orphan: {
-            select: { id: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              priority: true,
+            },
           },
         },
       }),
@@ -506,13 +512,35 @@ export class SponsorshipService {
       });
 
       if (dto.status === Status.ACCEPTED) {
-        const orphanUpdate = await tx.orphan.updateMany({
-          where: { id: dto.orphanId, isSupported: false },
-          data: { isSupported: true },
+        await tx.$queryRaw`
+          SELECT id
+          FROM Orphan
+          WHERE id = ${dto.orphanId}
+          FOR UPDATE
+        `;
+
+        const orphan = await tx.orphan.findUnique({
+          where: { id: dto.orphanId },
+          select: { id: true },
         });
 
-        if (orphanUpdate.count !== 1) {
-          throw new BadRequestException(this.t('ORPHAN_NOT_AVAILABLE', lang));
+        if (!orphan) {
+          throw new BadRequestException(this.t('ORPHAN_NOT_FOUND', lang));
+        }
+
+        const duplicateSponsorship = await tx.sponsorship.findFirst({
+          where: {
+            donorId: sponsorship.donorId,
+            orphanId: dto.orphanId,
+            status: Status.ACCEPTED,
+          },
+          select: { id: true },
+        });
+
+        if (duplicateSponsorship) {
+          throw new BadRequestException(
+            this.t('DONOR_ALREADY_SPONSORS_ORPHAN', lang),
+          );
         }
 
         const sponsorshipUpdate = await tx.sponsorship.updateMany({
@@ -529,6 +557,11 @@ export class SponsorshipService {
         if (sponsorshipUpdate.count !== 1) {
           throw new BadRequestException(this.t('REVIEW_STATE_CHANGED', lang));
         }
+
+        await tx.orphan.update({
+          where: { id: dto.orphanId },
+          data: { isSupported: true },
+        });
 
         await tx.donor.update({
           where: { id: sponsorship.donorId },
@@ -584,7 +617,12 @@ export class SponsorshipService {
             },
           },
           orphan: {
-            select: { id: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              priority: true,
+            },
           },
         },
       });

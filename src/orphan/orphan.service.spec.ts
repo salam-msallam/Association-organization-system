@@ -25,6 +25,7 @@ describe('OrphanService read responses', () => {
     currentAddress: { ar: 'دمشق', en: 'Damascus' },
     previousAddress: { ar: 'حمص', en: 'Homs' },
     talent: { ar: 'الرسم', en: 'Drawing' },
+    priority: 3,
     isSupported: false,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
@@ -58,6 +59,26 @@ describe('OrphanService read responses', () => {
     expect(result.data[0].currentAddress).toEqual(orphan.currentAddress);
     expect(result.data[0].previousAddress).toEqual(orphan.previousAddress);
     expect(result.data[0].talent).toEqual(orphan.talent);
+    expect(prisma.orphan.findMany).toHaveBeenCalledWith({
+      where: {},
+      skip: 0,
+      take: 10,
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    });
+  });
+
+  it('filters the paginated list by priority', async () => {
+    prisma.orphan.findMany.mockResolvedValue([{ ...orphan, priority: 5 }]);
+    prisma.orphan.count.mockResolvedValue(1);
+
+    await service.findAll(1, 10, undefined, 'en', 5);
+
+    expect(prisma.orphan.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { priority: 5 } }),
+    );
+    expect(prisma.orphan.count).toHaveBeenCalledWith({
+      where: { priority: 5 },
+    });
   });
 
   it('returns bilingual JSON fields in orphan details', async () => {
@@ -73,6 +94,8 @@ describe('OrphanService read responses', () => {
       data: {
         ...orphan,
         sponsorshipId: null,
+        sponsorshipIds: [],
+        activeSponsorsCount: 0,
       },
     });
     expect(prisma.orphan.findUnique).toHaveBeenCalledWith({
@@ -82,7 +105,6 @@ describe('OrphanService read responses', () => {
           where: { status: 'ACCEPTED' },
           select: { id: true },
           orderBy: { id: 'desc' },
-          take: 1,
         },
       },
     });
@@ -91,11 +113,11 @@ describe('OrphanService read responses', () => {
     });
   });
 
-  it('returns only the accepted sponsorship id for a supported orphan', async () => {
+  it('returns all accepted sponsorship ids for a supported orphan', async () => {
     prisma.orphan.findUnique.mockResolvedValue({
       ...orphan,
       isSupported: true,
-      sponsorships: [{ id: 17 }],
+      sponsorships: [{ id: 17 }, { id: 12 }],
     });
 
     const result = await service.findOne(1, 'en');
@@ -104,6 +126,8 @@ describe('OrphanService read responses', () => {
       ...orphan,
       isSupported: true,
       sponsorshipId: 17,
+      sponsorshipIds: [17, 12],
+      activeSponsorsCount: 2,
     });
     expect(result.data).not.toHaveProperty('sponsorships');
   });
@@ -131,6 +155,7 @@ describe('OrphanService read responses', () => {
         bodySize: orphan.bodySize,
         shoesSize: orphan.shoesSize,
         isSupported: orphan.isSupported,
+        priority: 5,
       },
       'en',
     );
@@ -143,6 +168,7 @@ describe('OrphanService read responses', () => {
           currentAddress: orphan.currentAddress,
           previousAddress: orphan.previousAddress,
           talent: orphan.talent,
+          priority: 5,
         }),
       }),
     );
@@ -166,6 +192,7 @@ describe('OrphanService read responses', () => {
       {
         class: JSON.stringify(updatedOrphan.class),
         currentAddress: JSON.stringify(updatedOrphan.currentAddress),
+        priority: 4,
       },
       undefined,
       'en',
@@ -176,6 +203,7 @@ describe('OrphanService read responses', () => {
       data: {
         class: updatedOrphan.class,
         currentAddress: updatedOrphan.currentAddress,
+        priority: 4,
       },
     });
     expect(result).toEqual({

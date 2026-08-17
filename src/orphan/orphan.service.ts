@@ -56,6 +56,7 @@ export class OrphanService {
           ...(dto.isSupported !== undefined && {
             isSupported: dto.isSupported,
           }),
+          ...(dto.priority !== undefined && { priority: dto.priority }),
         },
       }),
       lang,
@@ -72,18 +73,20 @@ export class OrphanService {
     limit: number = 10,
     isSupported?: boolean,
     lang = 'ar',
+    priority?: number,
   ) {
     const skip = (page - 1) * limit;
-    const where = isSupported === undefined ? {} : { isSupported };
+    const where: Prisma.OrphanWhereInput = {
+      ...(isSupported !== undefined && { isSupported }),
+      ...(priority !== undefined && { priority }),
+    };
 
     const [orphans, totalCount] = await Promise.all([
       this.prisma.orphan.findMany({
         where,
         skip,
         take: limit,
-        orderBy: {
-          id: 'desc',
-        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.orphan.count({ where }),
     ]);
@@ -111,7 +114,6 @@ export class OrphanService {
           where: { status: Status.ACCEPTED },
           select: { id: true },
           orderBy: { id: 'desc' },
-          take: 1,
         },
       },
     });
@@ -123,12 +125,17 @@ export class OrphanService {
     }
 
     const { sponsorships, ...orphanData } = orphan;
+    const sponsorshipIds = (sponsorships ?? []).map(
+      (sponsorship) => sponsorship.id,
+    );
 
     return {
       message: this.i18n.t('orphan.FETCH_ONE_SUCCESS', { lang }),
       data: {
         ...orphanData,
-        sponsorshipId: sponsorships?.[0]?.id ?? null,
+        sponsorshipId: sponsorshipIds[0] ?? null,
+        sponsorshipIds,
+        activeSponsorsCount: sponsorshipIds.length,
       },
     };
   }
@@ -180,6 +187,7 @@ export class OrphanService {
       ...(dto.bodySize !== undefined && { bodySize: Number(dto.bodySize) }),
       ...(dto.shoesSize !== undefined && { shoesSize: Number(dto.shoesSize) }),
       ...(dto.isSupported !== undefined && { isSupported: dto.isSupported }),
+      ...(dto.priority !== undefined && { priority: dto.priority }),
     };
 
     const orphan = await this.handleUniqueConstraint(

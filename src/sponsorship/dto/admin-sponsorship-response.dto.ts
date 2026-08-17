@@ -27,6 +27,14 @@ class AdminSponsorshipOrphanDto {
 
   @ApiProperty({ example: 'Ali' })
   lastName!: string;
+
+  @ApiProperty({
+    example: 5,
+    minimum: 1,
+    maximum: 5,
+    description: 'Orphan priority where 5 is the highest priority',
+  })
+  priority!: number;
 }
 
 class AdminSponsorshipOrphanDetailsDto extends AdminSponsorshipOrphanDto {

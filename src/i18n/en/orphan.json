@@ -11,5 +11,6 @@
   "ROLE_REQUIRED": "You do not have the required role.",
   "YOU_ARE_NOT_AUTHORIZED": "You are not authorized to perform this action.",
   "INVALID_SUPPORT_STATUS": "supported must be either true or false.",
+  "INVALID_PRIORITY": "priority must be an integer from 1 to 5.",
   "INVALID_JSON_FIELD": "{field} must be valid JSON."
 }

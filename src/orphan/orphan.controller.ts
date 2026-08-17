@@ -21,6 +21,7 @@ import {
   ApiConsumes,
   ApiHeader,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -88,13 +89,23 @@ export class OrphanController {
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'read', subject: 'Orphan' })
   @ApiOperation({
-    summary: 'Get paginated orphan records with optional support status filter',
+    summary:
+      'Get paginated orphan records with optional support status and priority filters',
+  })
+  @ApiQuery({ name: 'supported', required: false, type: Boolean })
+  @ApiQuery({
+    name: 'priority',
+    required: false,
+    type: Number,
+    minimum: 1,
+    maximum: 5,
   })
   @ApiResponse({ status: 200, description: 'Orphans fetched successfully.' })
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('supported') supported?: string,
+    @Query('priority') priority?: string,
     @I18nLang() lang?: string,
   ) {
     const pageNumber = page ? parseInt(page, 10) : 1;
@@ -113,11 +124,28 @@ export class OrphanController {
       }
     }
 
+    let priorityFilter: number | undefined;
+
+    if (priority !== undefined) {
+      priorityFilter = Number(priority);
+
+      if (
+        !Number.isInteger(priorityFilter) ||
+        priorityFilter < 1 ||
+        priorityFilter > 5
+      ) {
+        throw new BadRequestException(
+          this.i18n.t('orphan.INVALID_PRIORITY', { lang }),
+        );
+      }
+    }
+
     return this.orphanService.findAll(
       pageNumber,
       limitNumber,
       supportedFilter,
       lang,
+      priorityFilter,
     );
   }
 
@@ -125,12 +153,12 @@ export class OrphanController {
   @UseGuards(AuthGuard('jwt'), StaffOnlyGuard, AbilitiesGuard)
   @CheckAbilities({ action: 'read', subject: 'Orphan' })
   @ApiOperation({
-    summary: 'Get orphan record by id with its active sponsorship ID',
+    summary: 'Get orphan record by id with its active sponsorships',
   })
   @ApiResponse({
     status: 200,
     description:
-      'Orphan fetched successfully. sponsorshipId is null when the orphan has no accepted sponsorship.',
+      'Orphan fetched successfully with sponsorshipIds and activeSponsorsCount. sponsorshipId remains available for backward compatibility.',
   })
   findOne(@Param('id') id: string, @I18nLang() lang: string) {
     return this.orphanService.findOne(+id, lang);

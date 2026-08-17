@@ -8,6 +8,8 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
+  Min,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Gender } from '@prisma/client';
@@ -100,6 +102,20 @@ export class CreateOrphanDto {
   @IsBoolean()
   @IsOptional()
   isSupported?: boolean;
+
+  @ApiPropertyOptional({
+    example: 3,
+    default: 3,
+    minimum: 1,
+    maximum: 5,
+    description: 'Orphan priority where 5 is the highest priority',
+  })
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  @IsOptional()
+  priority?: number;
 
   @ApiProperty({ type: 'string', format: 'binary' })
   @IsOptional()

@@ -161,6 +161,7 @@ model Orphan {
   currentAddress         Json
   previousAddress        Json
   talent                 Json
+  priority               Int      @default(3)
   isSupported            Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
@@ -169,6 +170,7 @@ model Orphan {
   emergencyCoverages OrphanEmergencyCoverage[]
 
   @@unique([firstName(length: 50), lastName(length: 50), guardianName(length: 50)])
+  @@index([priority, createdAt])
 }
 
 model AnnualReport {

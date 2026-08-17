@@ -245,7 +245,9 @@ describe('NotificationsService', () => {
   });
 
   it('stores and sends a notification to the registered Firebase installation', async () => {
-    findUser.mockResolvedValue({ notificationRegistrationId: 'fid-123' });
+    findUser.mockResolvedValue({
+      notificationRegistrationId: 'registration-token-123',
+    });
     createNotification.mockResolvedValue({ id: 31 });
     send.mockResolvedValue('firebase-message-id');
 
@@ -261,7 +263,7 @@ describe('NotificationsService', () => {
     ).resolves.toEqual({ notificationId: 31, pushSent: true });
 
     expect(send).toHaveBeenCalledWith({
-      fid: 'fid-123',
+      token: 'registration-token-123',
       notification: {
         title: 'تم القبول',
         body: 'تم قبول طلبك',

@@ -41,6 +41,7 @@ describe('SponsorshipService', () => {
         findUnique: jest.fn(),
       },
       orphan: {
+        findUnique: jest.fn().mockResolvedValue({ id: 3 }),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -634,7 +635,7 @@ describe('SponsorshipService', () => {
     });
   });
 
-  it('accepts a pending sponsorship and atomically reserves an available orphan', async () => {
+  it('accepts a pending sponsorship for an orphan that may already have other sponsors', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
     tx.sponsorship.findUnique
       .mockResolvedValueOnce({ id: 5, donorId: 3, status: Status.PENDING })
@@ -660,7 +661,7 @@ describe('SponsorshipService', () => {
         orphan: { id: 3, firstName: 'Ahmad', lastName: 'Ali' },
       });
     tx.employee.findUnique.mockResolvedValue({ id: 12 });
-    tx.orphan.updateMany.mockResolvedValue({ count: 1 });
+    tx.sponsorship.findFirst.mockResolvedValue(null);
     tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await service.reviewStatus(
@@ -670,8 +671,20 @@ describe('SponsorshipService', () => {
       'en',
     );
 
-    expect(tx.orphan.updateMany).toHaveBeenCalledWith({
-      where: { id: 3, isSupported: false },
+    expect(tx.orphan.findUnique).toHaveBeenCalledWith({
+      where: { id: 3 },
+      select: { id: true },
+    });
+    expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
+      where: {
+        donorId: 3,
+        orphanId: 3,
+        status: Status.ACCEPTED,
+      },
+      select: { id: true },
+    });
+    expect(tx.orphan.update).toHaveBeenCalledWith({
+      where: { id: 3 },
       data: { isSupported: true },
     });
     expect(tx.sponsorship.updateMany).toHaveBeenCalledWith({
@@ -707,14 +720,14 @@ describe('SponsorshipService', () => {
     expect(result.data.status).toBe(Status.ACCEPTED);
   });
 
-  it('rejects an unavailable orphan without accepting the sponsorship', async () => {
+  it('rejects a missing orphan without accepting the sponsorship', async () => {
     tx.sponsorship.findUnique.mockResolvedValue({
       id: 5,
       donorId: 3,
       status: Status.PENDING,
     });
     tx.employee.findUnique.mockResolvedValue({ id: 12 });
-    tx.orphan.updateMany.mockResolvedValue({ count: 0 });
+    tx.orphan.findUnique.mockResolvedValue(null);
 
     await expect(
       service.reviewStatus(5, 20, {
@@ -724,6 +737,32 @@ describe('SponsorshipService', () => {
     ).rejects.toThrow(BadRequestException);
 
     expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('prevents the same donor from sponsoring the same orphan twice', async () => {
+    tx.sponsorship.findUnique.mockResolvedValue({
+      id: 5,
+      donorId: 3,
+      status: Status.PENDING,
+    });
+    tx.employee.findUnique.mockResolvedValue({ id: 12 });
+    tx.sponsorship.findFirst.mockResolvedValue({ id: 4 });
+
+    await expect(
+      service.reviewStatus(
+        5,
+        20,
+        { status: Status.ACCEPTED, orphanId: 3 },
+        'en',
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(i18n.t).toHaveBeenCalledWith(
+      'sponsorship.DONOR_ALREADY_SPONSORS_ORPHAN',
+      { lang: 'en', args: undefined },
+    );
+    expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
+    expect(tx.orphan.update).not.toHaveBeenCalled();
   });
 
   it('rejects a pending sponsorship with a bilingual reason', async () => {
