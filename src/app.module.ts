@@ -26,6 +26,7 @@ import { AnnualReportModule } from './annual-report/annual-report.module';
 import { QuickAidFundModule } from './quick-aid-fund/quick-aid-fund.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ZakatModule } from './zakat/zakat.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     DonorModule,
     AnnualReportModule,
     QuickAidFundModule,
+    ZakatModule,
   ],
   controllers: [AppController],
   providers: [
