@@ -10,6 +10,7 @@ import {
 } from './seeds/donor-financial-history.seed';
 import { ensureSeedMediaFiles } from './seeds/media.seed';
 import { seedPermissions } from './seeds/permissions.seed';
+import { seedQuickAidFundTransactions } from './seeds/quick-aid-fund-transactions.seed';
 import { seedRequestAids } from './seeds/request-aids.seed';
 import { seedRoles } from './seeds/roles.seed';
 import { seedSponsorshipEmergencyCoverage } from './seeds/sponsorship-emergency-coverage.seed';
@@ -40,6 +41,7 @@ async function main() {
     beneficiaries.acceptedBeneficiaries,
   );
   const emergencyCoverageSeed = await seedSponsorshipEmergencyCoverage(prisma);
+  const quickAidFundSeed = await seedQuickAidFundTransactions(prisma);
 
   console.log('\nSeeded beneficiary test accounts:');
   console.table(beneficiaries.accounts);
@@ -56,6 +58,12 @@ async function main() {
   );
   console.log('\nSeeded sponsorship emergency coverage scenarios:');
   console.table(emergencyCoverageSeed);
+  console.log(
+    `\nSeeded ${quickAidFundSeed.createdCount} new quick aid fund transaction(s).`,
+  );
+  console.log(
+    `Quick aid fund seeded transaction balance: $${quickAidFundSeed.totalAmount}.`,
+  );
   console.log('Run this seeder with: npm run seed');
 }
 
