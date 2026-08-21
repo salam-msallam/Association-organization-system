@@ -72,3 +72,9 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Firebase service account credentials
 *-firebase-adminsdk-*.json
+
+# Local TypeScript workspace files
+*space.ts
+
+# Local agent skills
+/.agents/skills/stripe-best-practices/
