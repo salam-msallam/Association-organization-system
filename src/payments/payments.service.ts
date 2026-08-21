@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -413,42 +414,47 @@ export class PaymentsService {
         throw new NotFoundException(this.t('SPONSORSHIP_NOT_FOUND', lang));
       }
 
-      const anyPreviousPayment = await tx.walletTransaction.findFirst({
+      const currentMonthPayments = await tx.walletTransaction.findMany({
         where: {
           type: TransactionType.SPONSORSHIP_DONATION,
           direction: WalletTransactionDirection.DEBIT,
           referenceType: SPONSORSHIP_REFERENCE_TYPE,
           referenceId: sponsorship.id,
+          createdAt: {
+            gte: paymentContext.currentMonthStart,
+            lt: paymentContext.nextMonthStart,
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, createdAt: true },
+      });
+
+      const paymentBeforeCurrentMonth = await tx.walletTransaction.findFirst({
+        where: {
+          type: TransactionType.SPONSORSHIP_DONATION,
+          direction: WalletTransactionDirection.DEBIT,
+          referenceType: SPONSORSHIP_REFERENCE_TYPE,
+          referenceId: sponsorship.id,
+          createdAt: { lt: paymentContext.currentMonthStart },
         },
         select: { id: true },
       });
 
-      if (anyPreviousPayment && !paymentContext.isRenewalWindowOpen) {
+      const isFirstMonthRenewal =
+        paymentContext.isRenewalWindowOpen &&
+        currentMonthPayments.length === 1 &&
+        currentMonthPayments[0].createdAt.getTime() <
+          paymentContext.renewalWindowStart.getTime() &&
+        !paymentBeforeCurrentMonth;
+
+      if (currentMonthPayments.length > 0 && !isFirstMonthRenewal) {
+        throw new ConflictException(this.t('SPONSORSHIP_ALREADY_PAID', lang));
+      }
+
+      if (paymentBeforeCurrentMonth && !paymentContext.isRenewalWindowOpen) {
         throw new BadRequestException(
           this.t('SPONSORSHIP_RENEWAL_NOT_OPEN', lang),
         );
-      }
-
-      if (paymentContext.isRenewalWindowOpen) {
-        const paymentInCurrentWindow = await tx.walletTransaction.findFirst({
-          where: {
-            type: TransactionType.SPONSORSHIP_DONATION,
-            direction: WalletTransactionDirection.DEBIT,
-            referenceType: SPONSORSHIP_REFERENCE_TYPE,
-            referenceId: sponsorship.id,
-            createdAt: {
-              gte: paymentContext.renewalWindowStart,
-              lt: paymentContext.renewalWindowEnd,
-            },
-          },
-          select: { id: true },
-        });
-
-        if (paymentInCurrentWindow) {
-          throw new BadRequestException(
-            this.t('SPONSORSHIP_ALREADY_PAID', lang),
-          );
-        }
       }
 
       const amount = new Prisma.Decimal(sponsorship.amount);

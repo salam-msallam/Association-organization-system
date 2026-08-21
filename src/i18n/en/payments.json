@@ -37,7 +37,7 @@
   "SPONSORSHIP_FUND_DONATION_SUCCESS": "The sponsorship continuity fund donation was confirmed successfully.",
   "SPONSORSHIP_NOT_FOUND": "The accepted sponsorship was not found for this donor.",
   "SPONSORSHIP_RENEWAL_NOT_OPEN": "The next sponsorship payment can be confirmed starting on day 20 of the month.",
-  "SPONSORSHIP_ALREADY_PAID": "The sponsorship payment for this billing period was already confirmed.",
+  "SPONSORSHIP_ALREADY_PAID": "The sponsorship for the current month has already been paid.",
   "SPONSORSHIP_PAYMENT_CONCURRENT_UPDATE": "The sponsorship payment could not be completed because its state or wallet balance changed. Please try again.",
   "SPONSORSHIP_PAYMENT_SUCCESS": "The sponsorship payment was confirmed successfully.",
   "SPONSORS_CANNOT_DONATE_WALLET_TO_QUICK_AID_FUND": "Sponsors cannot donate to the quick aid fund from wallet balance.",

@@ -12,6 +12,7 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -140,7 +141,10 @@ export class WalletController {
   @ApiOkResponse({ type: WalletSponsorshipDonationResponseDto })
   @ApiBadRequestResponse({
     description:
-      'Insufficient balance, renewal window is not open, payment already exists, or the state changed concurrently.',
+      'Insufficient balance, renewal window is not open, or the state changed concurrently.',
+  })
+  @ApiConflictResponse({
+    description: 'The sponsorship for the current month has already been paid.',
   })
   @ApiForbiddenResponse({
     description: 'The authenticated user is not a donor.',

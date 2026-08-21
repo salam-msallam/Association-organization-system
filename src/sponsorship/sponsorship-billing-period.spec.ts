@@ -11,6 +11,12 @@ describe('sponsorship billing periods', () => {
 
     expect(context.isRenewalWindowOpen).toBe(false);
     expect(context.coveredMonth).toBe('2026-07');
+    expect(context.currentMonthStart).toEqual(
+      new Date('2026-06-30T21:00:00.000Z'),
+    );
+    expect(context.nextMonthStart).toEqual(
+      new Date('2026-07-31T21:00:00.000Z'),
+    );
   });
 
   it('opens renewal on day 20 in Damascus and covers the following month', () => {
@@ -25,6 +31,23 @@ describe('sponsorship billing periods', () => {
     );
     expect(context.renewalWindowEnd).toEqual(
       new Date('2026-07-31T21:00:00.000Z'),
+    );
+  });
+
+  it('calculates month boundaries across the end of the year in Damascus', () => {
+    const context = getSponsorshipPaymentContext(
+      new Date('2027-01-25T09:00:00.000Z'),
+    );
+
+    expect(context.coveredMonth).toBe('2027-02');
+    expect(context.currentMonthStart).toEqual(
+      new Date('2026-12-31T21:00:00.000Z'),
+    );
+    expect(context.renewalWindowStart).toEqual(
+      new Date('2027-01-19T21:00:00.000Z'),
+    );
+    expect(context.nextMonthStart).toEqual(
+      new Date('2027-01-31T21:00:00.000Z'),
     );
   });
 

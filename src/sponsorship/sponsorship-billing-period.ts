@@ -6,6 +6,8 @@ export const SPONSORSHIP_RENEWAL_DAY = 20;
 export interface SponsorshipPaymentContext {
   coveredMonth: string;
   isRenewalWindowOpen: boolean;
+  currentMonthStart: Date;
+  nextMonthStart: Date;
   renewalWindowStart: Date;
   renewalWindowEnd: Date;
 }
@@ -45,7 +47,7 @@ export function getSponsorshipPaymentContext(
   const renewalWindowStart = currentMonthStart.set({
     day: SPONSORSHIP_RENEWAL_DAY,
   });
-  const renewalWindowEnd = currentMonthStart.plus({ months: 1 });
+  const nextMonthStart = currentMonthStart.plus({ months: 1 });
   const isRenewalWindowOpen = localNow.day >= SPONSORSHIP_RENEWAL_DAY;
   const coveredMonth = (
     isRenewalWindowOpen ? localNow.plus({ months: 1 }) : localNow
@@ -54,8 +56,10 @@ export function getSponsorshipPaymentContext(
   return {
     coveredMonth,
     isRenewalWindowOpen,
+    currentMonthStart: toUtcDate(currentMonthStart),
+    nextMonthStart: toUtcDate(nextMonthStart),
     renewalWindowStart: toUtcDate(renewalWindowStart),
-    renewalWindowEnd: toUtcDate(renewalWindowEnd),
+    renewalWindowEnd: toUtcDate(nextMonthStart),
   };
 }
 

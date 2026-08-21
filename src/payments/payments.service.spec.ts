@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -229,6 +230,7 @@ describe('PaymentsService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       walletTransaction: {
+        findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({
           id: 115,
@@ -728,6 +730,30 @@ describe('PaymentsService', () => {
       where: { id: 5, donorId: 3, status: Status.ACCEPTED },
       select: { id: true, amount: true },
     });
+    expect(tx.walletTransaction.findMany).toHaveBeenCalledWith({
+      where: {
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: 'SPONSORSHIP',
+        referenceId: 5,
+        createdAt: {
+          gte: new Date('2026-06-30T21:00:00.000Z'),
+          lt: new Date('2026-07-31T21:00:00.000Z'),
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true },
+    });
+    expect(tx.walletTransaction.findFirst).toHaveBeenCalledWith({
+      where: {
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: 'SPONSORSHIP',
+        referenceId: 5,
+        createdAt: { lt: new Date('2026-06-30T21:00:00.000Z') },
+      },
+      select: { id: true },
+    });
     expect(tx.wallet.updateMany).toHaveBeenCalledWith({
       where: {
         id: 9,
@@ -822,22 +848,105 @@ describe('PaymentsService', () => {
     });
 
     expect(result.data.coveredMonth).toBe('2026-08');
-    expect(tx.walletTransaction.findFirst).toHaveBeenCalledTimes(2);
+    expect(tx.walletTransaction.findMany).toHaveBeenCalledTimes(1);
+    expect(tx.walletTransaction.findFirst).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects a duplicate sponsorship payment in the same renewal window', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
+  it('allows the first sponsorship payment before day 20 and its renewal after day 20 in the same month', async () => {
+    const now = new Date('2026-07-25T09:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
     const tx = mockValidSponsorshipPaymentSetup();
-    tx.walletTransaction.findFirst
-      .mockResolvedValueOnce({ id: 100 })
-      .mockResolvedValueOnce({ id: 101 });
+    tx.walletTransaction.findMany.mockResolvedValueOnce([
+      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+    ]);
+    tx.walletTransaction.create.mockResolvedValue({ id: 116, createdAt: now });
+
+    const result = await service.donateWalletToSponsorship(5, {
+      id: 7,
+      type: UserType.DONOR,
+    });
+
+    expect(result.data.coveredMonth).toBe('2026-08');
+    expect(tx.wallet.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.walletTransaction.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a duplicate sponsorship payment before day 20 with conflict', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-15T09:00:00.000Z'));
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.findMany.mockResolvedValueOnce([
+      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+    ]);
 
     await expect(
       service.donateWalletToSponsorship(5, {
         id: 7,
         type: UserType.DONOR,
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrow(ConflictException);
+
+    expect(tx.wallet.findUnique).not.toHaveBeenCalled();
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+    expect(notificationsService.createAndSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a duplicate sponsorship payment after day 20 with conflict', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.findMany.mockResolvedValueOnce([
+      { id: 101, createdAt: new Date('2026-07-22T09:00:00.000Z') },
+    ]);
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(ConflictException);
+
+    expect(tx.wallet.findUnique).not.toHaveBeenCalled();
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+    expect(notificationsService.createAndSend).not.toHaveBeenCalled();
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.walletTransaction.findMany.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('rejects a third same-month payment after the first-month renewal', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.findMany.mockResolvedValueOnce([
+      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+      { id: 101, createdAt: new Date('2026-07-22T09:00:00.000Z') },
+    ]);
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(ConflictException);
+
+    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('does not allow the first-month exception when an older payment exists', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.walletTransaction.findMany.mockResolvedValueOnce([
+      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+    ]);
+    tx.walletTransaction.findFirst.mockResolvedValueOnce({ id: 99 });
+
+    await expect(
+      service.donateWalletToSponsorship(5, {
+        id: 7,
+        type: UserType.DONOR,
+      }),
+    ).rejects.toThrow(ConflictException);
 
     expect(tx.wallet.updateMany).not.toHaveBeenCalled();
     expect(tx.walletTransaction.create).not.toHaveBeenCalled();
