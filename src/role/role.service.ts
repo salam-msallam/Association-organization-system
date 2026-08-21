@@ -15,6 +15,7 @@ import {
 } from './dto/role.dto';
 
 const PROTECTED_SYSTEM_ROLE_NAMES = new Set([
+  'admin',
   'orphan_manager',
   'employee_manager',
   'donor_reader',
@@ -287,7 +288,9 @@ export class RoleService {
       .replace(/^_+|_+$/g, '');
 
     if (!normalizedName) {
-      throw new BadRequestException(this.i18n.t('role.NAME_REQUIRED', { lang }));
+      throw new BadRequestException(
+        this.i18n.t('role.NAME_REQUIRED', { lang }),
+      );
     }
 
     return normalizedName;
@@ -350,7 +353,9 @@ export class RoleService {
     };
   }
 
-  private toBilingualText(value: Prisma.JsonValue): RoleDetailResponseDto['label'] {
+  private toBilingualText(
+    value: Prisma.JsonValue,
+  ): RoleDetailResponseDto['label'] {
     if (typeof value === 'string') {
       try {
         return this.toBilingualText(JSON.parse(value));

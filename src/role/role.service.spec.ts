@@ -49,7 +49,9 @@ describe('RoleService', () => {
       $transaction: jest.fn(),
     };
     i18n = {
-      t: jest.fn((key: string, options?: any) => `${key}:${options?.lang ?? 'ar'}`),
+      t: jest.fn(
+        (key: string, options?: any) => `${key}:${options?.lang ?? 'ar'}`,
+      ),
     };
 
     service = new RoleService(prisma, i18n);
@@ -308,6 +310,17 @@ describe('RoleService', () => {
 
     await expect(service.remove('6', 'en')).rejects.toThrow(ConflictException);
     expect(prisma.userRole.count).not.toHaveBeenCalled();
+  });
+
+  it('rejects deletion of the admin system role', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 7,
+      name: 'admin',
+    });
+
+    await expect(service.remove('7', 'en')).rejects.toThrow(ConflictException);
+    expect(prisma.userRole.count).not.toHaveBeenCalled();
+    expect(prisma.role.delete).not.toHaveBeenCalled();
   });
 
   it('deletes an unused role', async () => {

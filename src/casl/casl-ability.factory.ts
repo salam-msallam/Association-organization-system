@@ -36,19 +36,6 @@ export class CaslAbilityFactory {
       createMongoAbility,
     );
 
-    if (user.userType === 'ADMIN') {
-      can('manage', 'Employee');
-      can('manage', 'Role');
-      can('read', 'Donor');
-      can('read', 'Orphan');
-      can('read', 'Beneficiary');
-      can('read', 'RequestAid');
-      can('manage', 'Sponsorship');
-      can('read', 'SponsorshipFund');
-      can('read', 'QuickAidFund');
-      can('manage', 'AnnualReport');
-    }
-
     const userPermissions: string[] = user.permissions || [];
 
     userPermissions.forEach((permission) => {

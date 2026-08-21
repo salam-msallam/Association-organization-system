@@ -10,6 +10,7 @@ import {
 export type PermissionMap = Record<string, Permission>;
 
 export interface SeededRoles {
+  adminRole: Role;
   employeeManagerRole: Role;
   donorReaderRole: Role;
   roleManagerRole: Role;

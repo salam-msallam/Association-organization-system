@@ -11,6 +11,7 @@ export async function seedAdminUser(prisma: PrismaClient, roles: SeededRoles) {
       password: hashedPassword,
       number: '123456789',
       countryCode: '+963',
+      userType: UserType.ADMIN,
     },
     create: {
       firstName: 'admin',
@@ -22,25 +23,14 @@ export async function seedAdminUser(prisma: PrismaClient, roles: SeededRoles) {
       countryCode: '+963',
       gender: Gender.MALE,
       userType: UserType.ADMIN,
-      roles: {
-        create: [
-          { roleId: roles.employeeManagerRole.id },
-          { roleId: roles.donorReaderRole.id },
-          { roleId: roles.roleManagerRole.id },
-          { roleId: roles.aidRequestManagerRole.id },
-        ],
-      },
     },
   });
 
-  await prisma.userRole.createMany({
-    data: [
-      { userId: adminUser.id, roleId: roles.employeeManagerRole.id },
-      { userId: adminUser.id, roleId: roles.donorReaderRole.id },
-      { userId: adminUser.id, roleId: roles.roleManagerRole.id },
-      { userId: adminUser.id, roleId: roles.aidRequestManagerRole.id },
-    ],
-    skipDuplicates: true,
+  await prisma.$transaction(async (tx) => {
+    await tx.userRole.deleteMany({ where: { userId: adminUser.id } });
+    await tx.userRole.create({
+      data: { userId: adminUser.id, roleId: roles.adminRole.id },
+    });
   });
 
   return adminUser;

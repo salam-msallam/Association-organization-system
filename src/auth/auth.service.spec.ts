@@ -232,7 +232,7 @@ describe('AuthService', () => {
     expect(result.email).toBe('admin@gmail.com');
   });
 
-  it('returns staff roles with permission objects on login', async () => {
+  it('returns the admin role with permission objects on login', async () => {
     jwtService.sign.mockReturnValueOnce('staff-token');
 
     const result = await service.login(
@@ -244,8 +244,8 @@ describe('AuthService', () => {
           {
             role: {
               id: 2,
-              name: 'employee_manager',
-              label: 'Employee Management',
+              name: 'admin',
+              label: 'System Administrator',
               permissions: [
                 {
                   permission: {
@@ -260,14 +260,6 @@ describe('AuthService', () => {
                   },
                 },
               ],
-            },
-          },
-          {
-            role: {
-              id: 3,
-              name: 'donor_reader',
-              label: 'Donor Reader',
-              permissions: [],
             },
           },
         ],
@@ -288,8 +280,8 @@ describe('AuthService', () => {
       roles: [
         {
           id: 2,
-          name: 'employee_manager',
-          label: 'Employee Management',
+          name: 'admin',
+          label: 'System Administrator',
           permissions: [
             {
               id: 7,
@@ -300,12 +292,6 @@ describe('AuthService', () => {
               name: 'create:employees',
             },
           ],
-        },
-        {
-          id: 3,
-          name: 'donor_reader',
-          label: 'Donor Reader',
-          permissions: [],
         },
       ],
     });

@@ -1,10 +1,46 @@
 import { PrismaClient } from '@prisma/client';
 import { PermissionMap, SeededRoles } from './seed.types';
 
+export const ADMIN_PERMISSION_NAMES = [
+  'create:employees',
+  'delete:employees',
+  'read:employees',
+  'update:employees',
+  'create:roles',
+  'delete:roles',
+  'read:roles',
+  'update:roles',
+  'read:aid_requests',
+  'read:beneficiaries',
+  'read:donors',
+  'read:orphans',
+  'read:quick_aid_fund',
+  'read:sponsorship_fund',
+  'read:sponsorships',
+] as const;
+
 export async function seedRoles(
   prisma: PrismaClient,
   permissions: PermissionMap,
 ): Promise<SeededRoles> {
+  const adminRole = await prisma.role.upsert({
+    where: { name: 'admin' },
+    update: {
+      label: { ar: 'مدير النظام', en: 'System Administrator' },
+      permissions: {
+        deleteMany: {},
+        create: permissionLinks(permissions, ADMIN_PERMISSION_NAMES),
+      },
+    },
+    create: {
+      name: 'admin',
+      label: { ar: 'مدير النظام', en: 'System Administrator' },
+      permissions: {
+        create: permissionLinks(permissions, ADMIN_PERMISSION_NAMES),
+      },
+    },
+  });
+
   await prisma.role.upsert({
     where: { name: 'orphan_manager' },
     update: {
@@ -211,6 +247,7 @@ export async function seedRoles(
   });
 
   return {
+    adminRole,
     employeeManagerRole,
     donorReaderRole,
     roleManagerRole,
@@ -219,6 +256,6 @@ export async function seedRoles(
   };
 }
 
-function permissionLinks(permissions: PermissionMap, names: string[]) {
+function permissionLinks(permissions: PermissionMap, names: readonly string[]) {
   return names.map((name) => ({ permissionId: permissions[name].id }));
 }

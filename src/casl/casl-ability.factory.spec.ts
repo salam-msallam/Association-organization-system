@@ -1,4 +1,5 @@
 import { UserType } from '@prisma/client';
+import { ADMIN_PERMISSION_NAMES } from '../../prisma/seeds/roles.seed';
 import { AdminBeneficiariesController } from '../beneficiary/beneficiary.controller';
 import { CHECK_ABILITY } from '../decorators/abilities.decorator';
 import { CaslAbilityFactory } from './casl-ability.factory';
@@ -37,15 +38,56 @@ describe('CaslAbilityFactory beneficiary review permission', () => {
     expect(ability.can('status', 'Sponsorship')).toBe(true);
   });
 
-  it('allows admins to manage sponsorships', () => {
+  it('does not grant admins permissions that are absent from their role', () => {
     const ability = factory.createForUser({
       id: 4,
       userType: UserType.ADMIN,
       permissions: [],
     });
 
+    expect(ability.can('read', 'Sponsorship')).toBe(false);
+    expect(ability.can('update', 'Orphan')).toBe(false);
+    expect(ability.can('create', 'AnnualReport')).toBe(false);
+  });
+
+  it('grants admins only the permissions supplied by their role', () => {
+    const ability = factory.createForUser({
+      id: 4,
+      userType: UserType.ADMIN,
+      permissions: ['create:employees', 'read:employees', 'read:sponsorships'],
+    });
+
+    expect(ability.can('create', 'Employee')).toBe(true);
+    expect(ability.can('read', 'Employee')).toBe(true);
     expect(ability.can('read', 'Sponsorship')).toBe(true);
-    expect(ability.can('status', 'Sponsorship')).toBe(true);
+    expect(ability.can('delete', 'Employee')).toBe(false);
+    expect(ability.can('status', 'Sponsorship')).toBe(false);
+  });
+
+  it.each([
+    ['create', 'Employee'],
+    ['delete', 'Employee'],
+    ['read', 'Employee'],
+    ['update', 'Employee'],
+    ['create', 'Role'],
+    ['delete', 'Role'],
+    ['read', 'Role'],
+    ['update', 'Role'],
+    ['read', 'RequestAid'],
+    ['read', 'Beneficiary'],
+    ['read', 'Donor'],
+    ['read', 'Orphan'],
+    ['read', 'QuickAidFund'],
+    ['read', 'SponsorshipFund'],
+    ['read', 'Sponsorship'],
+  ] as const)('maps the admin role permission to %s:%s', (action, subject) => {
+    const ability = factory.createForUser({
+      id: 4,
+      userType: UserType.ADMIN,
+      permissions: ADMIN_PERMISSION_NAMES,
+    });
+
+    expect(ability.can(action, subject)).toBe(true);
   });
 
   it('maps annual report creation permission for authorized staff', () => {
