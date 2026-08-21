@@ -23,7 +23,7 @@ export class ZakatService {
       : type === ZakatType.GOLD
         ? this.goldNisabGrams
         : this.silverNisabGrams;
-    const eligible = amount.greaterThan(nisabAmount);
+    const eligible = amount.greaterThanOrEqualTo(nisabAmount);
     const assetValue = isMoney ? amount : amount.mul(gramPrice);
     const zakatDue = eligible
       ? assetValue.mul(this.zakatRate)

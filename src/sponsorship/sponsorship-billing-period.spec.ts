@@ -1,6 +1,9 @@
 import {
+  getFirstSponsorshipCoveredMonth,
+  getPaidSponsorshipMonths,
   getPreviousRenewalWindow,
   getSponsorshipPaymentContext,
+  getSponsorshipReminderContext,
 } from './sponsorship-billing-period';
 
 describe('sponsorship billing periods', () => {
@@ -65,5 +68,47 @@ describe('sponsorship billing periods', () => {
     expect(window.databaseCurrentMonthStart).toEqual(
       new Date('2028-03-01T00:00:00.000Z'),
     );
+  });
+
+  it('keeps the first installment in the acceptance month when accepted before day 20', () => {
+    expect(
+      getFirstSponsorshipCoveredMonth(new Date('2026-08-12T00:00:00.000Z')),
+    ).toBe('2026-08');
+  });
+
+  it('moves the first installment to the next month when accepted on day 20 or later', () => {
+    expect(
+      getFirstSponsorshipCoveredMonth(new Date('2026-08-20T00:00:00.000Z')),
+    ).toBe('2026-09');
+  });
+
+  it('interprets a legacy delayed first payment using the first-payment rule', () => {
+    const paidMonths = getPaidSponsorshipMonths(
+      new Date('2026-08-12T00:00:00.000Z'),
+      [
+        {
+          coveredMonth: null,
+          createdAt: new Date('2026-08-22T09:00:00.000Z'),
+        },
+      ],
+    );
+
+    expect(paidMonths.has('2026-08')).toBe(true);
+    expect(paidMonths.has('2026-09')).toBe(false);
+  });
+
+  it('creates reminders only on day 20, day 25, and the actual final day', () => {
+    expect(
+      getSponsorshipReminderContext(new Date('2028-02-19T21:00:00.000Z')),
+    ).toMatchObject({ coveredMonth: '2028-03', stage: 'DAY_20' });
+    expect(
+      getSponsorshipReminderContext(new Date('2028-02-24T21:00:00.000Z')),
+    ).toMatchObject({ coveredMonth: '2028-03', stage: 'DAY_25' });
+    expect(
+      getSponsorshipReminderContext(new Date('2028-02-28T21:00:00.000Z')),
+    ).toMatchObject({ coveredMonth: '2028-03', stage: 'FINAL_DAY' });
+    expect(
+      getSponsorshipReminderContext(new Date('2028-02-26T09:00:00.000Z')),
+    ).toBeNull();
   });
 });

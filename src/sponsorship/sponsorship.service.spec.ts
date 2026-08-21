@@ -50,6 +50,7 @@ describe('SponsorshipService', () => {
       },
       walletTransaction: {
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
     prisma = {
@@ -65,6 +66,9 @@ describe('SponsorshipService', () => {
       walletTransaction: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
+      },
+      notification: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       $transaction: jest.fn((callback: (client: any) => unknown) =>
         callback(tx),
@@ -711,11 +715,15 @@ describe('SponsorshipService', () => {
         en: 'Your sponsorship request has been accepted',
       },
       message: {
-        ar: 'تم قبول طلب الكفالة الخاص بك، ويمكنك الآن متابعة تفاصيل الكفالة.',
-        en: 'Your sponsorship request has been accepted. You can now view the sponsorship details.',
+        ar: 'تم قبول طلب الكفالة الخاص بك. يرجى دفع الدفعة الأولى المستحقة لشهر 2026-08.',
+        en: 'Your sponsorship request has been accepted. Please pay the first installment due for 2026-08.',
       },
       targetType: 'SPONSORSHIP',
       targetId: 5,
+      additionalData: {
+        sponsorshipId: '5',
+        coveredMonth: '2026-08',
+      },
     });
     expect(result.data.status).toBe(Status.ACCEPTED);
   });
@@ -980,9 +988,109 @@ describe('SponsorshipService', () => {
     expect(tx.sponsorship.updateMany).not.toHaveBeenCalled();
   });
 
+  it('reminds about the overdue first installment on day 20', async () => {
+    prisma.sponsorship.findMany.mockResolvedValue([
+      {
+        id: 5,
+        startDate: new Date('2026-08-12T00:00:00.000Z'),
+        donor: { userId: 7 },
+      },
+    ]);
+    prisma.walletTransaction.findMany.mockResolvedValue([]);
+
+    const result = await service.sendSponsorshipPaymentReminders(
+      new Date('2026-08-20T09:00:00.000Z'),
+    );
+
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith({
+      userId: 7,
+      title: {
+        ar: 'موعد دفع الكفالة',
+        en: 'Sponsorship payment is due',
+      },
+      message: {
+        ar: 'يرجى دفع دفعة الكفالة المستحقة لشهر 2026-08.',
+        en: 'Please pay the sponsorship installment due for 2026-08.',
+      },
+      targetType: 'SPONSORSHIP_PAYMENT_REMINDER_DAY_20',
+      targetId: 5,
+      additionalData: {
+        sponsorshipId: '5',
+        coveredMonth: '2026-08',
+        reminderStage: 'DAY_20',
+      },
+    });
+    expect(result).toBe(1);
+  });
+
+  it('reminds about the next month on day 25 after the first installment was paid late', async () => {
+    prisma.sponsorship.findMany.mockResolvedValue([
+      {
+        id: 5,
+        startDate: new Date('2026-08-12T00:00:00.000Z'),
+        donor: { userId: 7 },
+      },
+    ]);
+    prisma.walletTransaction.findMany.mockResolvedValue([
+      {
+        referenceId: 5,
+        coveredMonth: '2026-08',
+        createdAt: new Date('2026-08-22T09:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.sendSponsorshipPaymentReminders(
+      new Date('2026-08-25T09:00:00.000Z'),
+    );
+
+    expect(notificationsService.createAndSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: 'SPONSORSHIP_PAYMENT_REMINDER_DAY_25',
+        targetId: 5,
+        additionalData: {
+          sponsorshipId: '5',
+          coveredMonth: '2026-09',
+          reminderStage: 'DAY_25',
+        },
+      }),
+    );
+    expect(result).toBe(1);
+  });
+
+  it('does not send a reminder when the covered month is already paid', async () => {
+    prisma.sponsorship.findMany.mockResolvedValue([
+      {
+        id: 5,
+        startDate: new Date('2026-08-12T00:00:00.000Z'),
+        donor: { userId: 7 },
+      },
+    ]);
+    prisma.walletTransaction.findMany.mockResolvedValue([
+      {
+        referenceId: 5,
+        coveredMonth: '2026-08',
+        createdAt: new Date('2026-08-12T09:00:00.000Z'),
+      },
+      {
+        referenceId: 5,
+        coveredMonth: '2026-09',
+        createdAt: new Date('2026-08-22T09:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.sendSponsorshipPaymentReminders(
+      new Date('2026-08-25T09:00:00.000Z'),
+    );
+
+    expect(notificationsService.createAndSend).not.toHaveBeenCalled();
+    expect(result).toBe(0);
+  });
+
   it('automatically cancels an accepted sponsorship missing the previous renewal payment', async () => {
     const now = new Date('2026-08-01T09:00:00.000Z');
-    prisma.sponsorship.findMany.mockResolvedValue([{ id: 5 }]);
+    prisma.sponsorship.findMany.mockResolvedValue([
+      { id: 5, startDate: new Date('2026-07-10T00:00:00.000Z') },
+    ]);
     prisma.walletTransaction.findMany.mockResolvedValue([]);
     tx.sponsorship.findFirst.mockResolvedValue({
       id: 5,
@@ -990,8 +1098,9 @@ describe('SponsorshipService', () => {
       donor: { userId: 7 },
       orphanId: 3,
       status: Status.ACCEPTED,
+      startDate: new Date('2026-07-10T00:00:00.000Z'),
     });
-    tx.walletTransaction.findFirst.mockResolvedValue(null);
+    tx.walletTransaction.findMany.mockResolvedValue([]);
     tx.sponsorship.updateMany.mockResolvedValue({ count: 1 });
     tx.sponsorship.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
 
@@ -1053,8 +1162,16 @@ describe('SponsorshipService', () => {
   });
 
   it('keeps an accepted sponsorship when the previous renewal payment exists', async () => {
-    prisma.sponsorship.findMany.mockResolvedValue([{ id: 5 }]);
-    prisma.walletTransaction.findMany.mockResolvedValue([{ referenceId: 5 }]);
+    prisma.sponsorship.findMany.mockResolvedValue([
+      { id: 5, startDate: new Date('2026-06-10T00:00:00.000Z') },
+    ]);
+    prisma.walletTransaction.findMany.mockResolvedValue([
+      {
+        referenceId: 5,
+        coveredMonth: '2026-08',
+        createdAt: new Date('2026-07-22T09:00:00.000Z'),
+      },
+    ]);
 
     const result = await service.cancelOverdueSponsorships(
       new Date('2026-08-01T09:00:00.000Z'),

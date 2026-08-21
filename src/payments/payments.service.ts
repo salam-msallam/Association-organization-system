@@ -22,7 +22,11 @@ import Stripe from 'stripe';
 import { I18nService } from 'nestjs-i18n';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { getSponsorshipPaymentContext } from '../sponsorship/sponsorship-billing-period';
+import {
+  getFirstSponsorshipCoveredMonth,
+  getPaidSponsorshipMonths,
+  getSponsorshipPaymentContext,
+} from '../sponsorship/sponsorship-billing-period';
 import { CreateAidRequestPaymentIntentDto } from './dto/create-aid-request-payment-intent.dto';
 import { CreateSponsorshipFundPaymentIntentDto } from './dto/create-sponsorship-fund-payment-intent.dto';
 import { CreateWalletTopUpPaymentIntentDto } from './dto/create-wallet-top-up-payment-intent.dto';
@@ -407,51 +411,63 @@ export class PaymentsService {
           donorId: donor.id,
           status: Status.ACCEPTED,
         },
-        select: { id: true, amount: true },
+        select: { id: true, amount: true, startDate: true },
       });
 
       if (!sponsorship) {
         throw new NotFoundException(this.t('SPONSORSHIP_NOT_FOUND', lang));
       }
 
-      const currentMonthPayments = await tx.walletTransaction.findMany({
+      if (!sponsorship.startDate) {
+        throw new BadRequestException(
+          this.t('SPONSORSHIP_PAYMENT_CONCURRENT_UPDATE', lang),
+        );
+      }
+
+      const sponsorshipPayments = await tx.walletTransaction.findMany({
         where: {
           type: TransactionType.SPONSORSHIP_DONATION,
           direction: WalletTransactionDirection.DEBIT,
           referenceType: SPONSORSHIP_REFERENCE_TYPE,
           referenceId: sponsorship.id,
-          createdAt: {
-            gte: paymentContext.currentMonthStart,
-            lt: paymentContext.nextMonthStart,
-          },
         },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, createdAt: true },
+        select: { id: true, coveredMonth: true, createdAt: true },
       });
 
-      const paymentBeforeCurrentMonth = await tx.walletTransaction.findFirst({
-        where: {
-          type: TransactionType.SPONSORSHIP_DONATION,
-          direction: WalletTransactionDirection.DEBIT,
-          referenceType: SPONSORSHIP_REFERENCE_TYPE,
-          referenceId: sponsorship.id,
-          createdAt: { lt: paymentContext.currentMonthStart },
-        },
-        select: { id: true },
-      });
+      const paidMonths = getPaidSponsorshipMonths(
+        sponsorship.startDate,
+        sponsorshipPayments,
+      );
+      const firstCoveredMonth = getFirstSponsorshipCoveredMonth(
+        sponsorship.startDate,
+      );
+      let coveredMonth = firstCoveredMonth;
 
-      const isFirstMonthRenewal =
-        paymentContext.isRenewalWindowOpen &&
-        currentMonthPayments.length === 1 &&
-        currentMonthPayments[0].createdAt.getTime() <
-          paymentContext.renewalWindowStart.getTime() &&
-        !paymentBeforeCurrentMonth;
+      if (paidMonths.has(firstCoveredMonth)) {
+        if (!paymentContext.isRenewalWindowOpen) {
+          if (paidMonths.has(paymentContext.coveredMonth)) {
+            throw new ConflictException(
+              this.t('SPONSORSHIP_ALREADY_PAID', lang),
+            );
+          }
 
-      if (currentMonthPayments.length > 0 && !isFirstMonthRenewal) {
+          throw new BadRequestException(
+            this.t('SPONSORSHIP_RENEWAL_NOT_OPEN', lang),
+          );
+        }
+
+        coveredMonth = paymentContext.coveredMonth;
+      }
+
+      if (paidMonths.has(coveredMonth)) {
         throw new ConflictException(this.t('SPONSORSHIP_ALREADY_PAID', lang));
       }
 
-      if (paymentBeforeCurrentMonth && !paymentContext.isRenewalWindowOpen) {
+      if (
+        coveredMonth !== firstCoveredMonth &&
+        !paymentContext.isRenewalWindowOpen
+      ) {
         throw new BadRequestException(
           this.t('SPONSORSHIP_RENEWAL_NOT_OPEN', lang),
         );
@@ -507,6 +523,7 @@ export class PaymentsService {
           direction: WalletTransactionDirection.DEBIT,
           referenceType: SPONSORSHIP_REFERENCE_TYPE,
           referenceId: sponsorship.id,
+          coveredMonth,
           balanceAfter: updatedWallet.runningBalance,
           createdAt: now,
         },
@@ -523,7 +540,19 @@ export class PaymentsService {
           balanceAfter: new Prisma.Decimal(
             updatedWallet.runningBalance,
           ).toFixed(2),
-          coveredMonth: paymentContext.coveredMonth,
+          coveredMonth,
+          nextDueMonth:
+            paymentContext.isRenewalWindowOpen &&
+            coveredMonth === firstCoveredMonth &&
+            coveredMonth !== paymentContext.coveredMonth &&
+            !paidMonths.has(paymentContext.coveredMonth)
+              ? paymentContext.coveredMonth
+              : null,
+          hasAnotherDuePayment:
+            paymentContext.isRenewalWindowOpen &&
+            coveredMonth === firstCoveredMonth &&
+            coveredMonth !== paymentContext.coveredMonth &&
+            !paidMonths.has(paymentContext.coveredMonth),
           paidAt: walletTransaction.createdAt,
         },
       };

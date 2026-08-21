@@ -28,18 +28,18 @@ describe('ZakatService', () => {
     expect(result.message).toBe('المال لم يبلغ النصاب بعد');
   });
 
-  it('does not calculate gold zakat at exactly 85 grams', () => {
+  it('calculates gold zakat at exactly 85 grams', () => {
     const result = service.calculate(ZakatType.GOLD, {
       amount: '85',
       gramPrice: '100',
     });
 
-    expect(result.eligible).toBe(false);
+    expect(result.eligible).toBe(true);
     expect(result.amount).toBe('85.000');
     expect(result.amountUnit).toBe('GRAMS');
     expect(result.nisabAmount).toBe('85.000');
     expect(result.assetValue).toBe('8500.00');
-    expect(result.zakatDue).toBe('0.00');
+    expect(result.zakatDue).toBe('212.50');
   });
 
   it('calculates gold zakat above 85 grams', () => {

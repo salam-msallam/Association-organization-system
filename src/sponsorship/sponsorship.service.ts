@@ -22,7 +22,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSponsorshipDto } from './dto/review-sponsorship.dto';
 import {
+  getFirstSponsorshipCoveredMonth,
+  getPaidSponsorshipMonths,
   getPreviousRenewalWindow,
+  getSponsorshipReminderContext,
+  type SponsorshipReminderStage,
   SPONSORSHIP_TIME_ZONE,
   toSponsorshipDatabaseDate,
 } from './sponsorship-billing-period';
@@ -643,11 +647,16 @@ export class SponsorshipService {
           data: this.toAdminSponsorshipResponse(reviewed, lang),
         },
         donorUserId: reviewed.donor.userId,
+        startDate: reviewed.startDate,
       };
     });
 
     if (dto.status === Status.ACCEPTED) {
-      await this.notifySponsorshipAccepted(result.donorUserId, sponsorshipId);
+      await this.notifySponsorshipAccepted(
+        result.donorUserId,
+        sponsorshipId,
+        result.startDate!,
+      );
     }
 
     if (dto.status === Status.REJECTED) {
@@ -664,7 +673,10 @@ export class SponsorshipService {
   private async notifySponsorshipAccepted(
     donorUserId: number,
     sponsorshipId: number,
+    startDate: Date,
   ): Promise<void> {
+    const coveredMonth = getFirstSponsorshipCoveredMonth(startDate);
+
     try {
       await this.notificationsService.createAndSend({
         userId: donorUserId,
@@ -673,11 +685,15 @@ export class SponsorshipService {
           en: 'Your sponsorship request has been accepted',
         },
         message: {
-          ar: 'تم قبول طلب الكفالة الخاص بك، ويمكنك الآن متابعة تفاصيل الكفالة.',
-          en: 'Your sponsorship request has been accepted. You can now view the sponsorship details.',
+          ar: `تم قبول طلب الكفالة الخاص بك. يرجى دفع الدفعة الأولى المستحقة لشهر ${coveredMonth}.`,
+          en: `Your sponsorship request has been accepted. Please pay the first installment due for ${coveredMonth}.`,
         },
         targetType: 'SPONSORSHIP',
         targetId: sponsorshipId,
+        additionalData: {
+          sponsorshipId: String(sponsorshipId),
+          coveredMonth,
+        },
       });
     } catch {
       this.logger.warn(
@@ -852,6 +868,171 @@ export class SponsorshipService {
     }
   }
 
+  @Cron('0 9 * * *', { timeZone: SPONSORSHIP_TIME_ZONE })
+  async handleSponsorshipPaymentReminders(): Promise<void> {
+    try {
+      const notificationCount = await this.sendSponsorshipPaymentReminders();
+
+      if (notificationCount > 0) {
+        this.logger.log(
+          `Created ${notificationCount} sponsorship payment reminder(s).`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Sponsorship payment reminders failed.', error);
+    }
+  }
+
+  async sendSponsorshipPaymentReminders(now = new Date()): Promise<number> {
+    const reminder = getSponsorshipReminderContext(now);
+    if (!reminder) return 0;
+
+    const sponsorships = await this.prisma.sponsorship.findMany({
+      where: {
+        status: Status.ACCEPTED,
+        startDate: { not: null },
+      },
+      select: {
+        id: true,
+        startDate: true,
+        donor: { select: { userId: true } },
+      },
+    });
+
+    if (sponsorships.length === 0) return 0;
+
+    const sponsorshipIds = sponsorships.map(({ id }) => id);
+    const payments = await this.prisma.walletTransaction.findMany({
+      where: {
+        type: TransactionType.SPONSORSHIP_DONATION,
+        direction: WalletTransactionDirection.DEBIT,
+        referenceType: SPONSORSHIP_REFERENCE_TYPE,
+        referenceId: { in: sponsorshipIds },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        referenceId: true,
+        coveredMonth: true,
+        createdAt: true,
+      },
+    });
+    const paymentsBySponsorship = new Map<
+      number,
+      { coveredMonth: string | null; createdAt: Date }[]
+    >();
+
+    for (const payment of payments) {
+      if (payment.referenceId === null) continue;
+      const sponsorshipPayments =
+        paymentsBySponsorship.get(payment.referenceId) ?? [];
+      sponsorshipPayments.push(payment);
+      paymentsBySponsorship.set(payment.referenceId, sponsorshipPayments);
+    }
+
+    let notificationCount = 0;
+
+    for (const sponsorship of sponsorships) {
+      if (!sponsorship.startDate) continue;
+
+      const paidMonths = getPaidSponsorshipMonths(
+        sponsorship.startDate,
+        paymentsBySponsorship.get(sponsorship.id) ?? [],
+      );
+      const firstCoveredMonth = getFirstSponsorshipCoveredMonth(
+        sponsorship.startDate,
+      );
+      const coveredMonth = paidMonths.has(firstCoveredMonth)
+        ? reminder.coveredMonth
+        : firstCoveredMonth;
+
+      if (
+        coveredMonth > reminder.coveredMonth ||
+        paidMonths.has(coveredMonth)
+      ) {
+        continue;
+      }
+
+      const targetType = this.getPaymentReminderTargetType(reminder.stage);
+      const existingNotification = await this.prisma.notification.findFirst({
+        where: {
+          userId: sponsorship.donor.userId,
+          targetType,
+          targetId: sponsorship.id,
+          createdAt: { gte: reminder.notificationDayStart },
+        },
+        select: { id: true },
+      });
+
+      if (existingNotification) continue;
+
+      const created = await this.notifySponsorshipPaymentReminder(
+        sponsorship.donor.userId,
+        sponsorship.id,
+        coveredMonth,
+        reminder.stage,
+      );
+
+      if (created) notificationCount += 1;
+    }
+
+    return notificationCount;
+  }
+
+  private getPaymentReminderTargetType(
+    stage: SponsorshipReminderStage,
+  ): string {
+    return `SPONSORSHIP_PAYMENT_REMINDER_${stage}`;
+  }
+
+  private async notifySponsorshipPaymentReminder(
+    donorUserId: number,
+    sponsorshipId: number,
+    coveredMonth: string,
+    stage: SponsorshipReminderStage,
+  ): Promise<boolean> {
+    const copy = {
+      DAY_20: {
+        arTitle: 'موعد دفع الكفالة',
+        enTitle: 'Sponsorship payment is due',
+        arMessage: `يرجى دفع دفعة الكفالة المستحقة لشهر ${coveredMonth}.`,
+        enMessage: `Please pay the sponsorship installment due for ${coveredMonth}.`,
+      },
+      DAY_25: {
+        arTitle: 'تذكير بدفع الكفالة',
+        enTitle: 'Sponsorship payment reminder',
+        arMessage: `لم تُدفع دفعة الكفالة المستحقة لشهر ${coveredMonth} بعد. يرجى دفعها قبل نهاية الشهر.`,
+        enMessage: `The sponsorship installment due for ${coveredMonth} has not been paid yet. Please pay it before month-end.`,
+      },
+      FINAL_DAY: {
+        arTitle: 'التذكير الأخير بدفع الكفالة',
+        enTitle: 'Final sponsorship payment reminder',
+        arMessage: `هذا هو التذكير الأخير لدفع كفالة شهر ${coveredMonth}. ستُلغى الكفالة تلقائياً عند بدء الشهر الجديد إذا لم يتم الدفع.`,
+        enMessage: `This is the final reminder to pay the ${coveredMonth} sponsorship installment. The sponsorship will be cancelled automatically when the new month starts if it remains unpaid.`,
+      },
+    }[stage];
+
+    try {
+      await this.notificationsService.createAndSend({
+        userId: donorUserId,
+        title: { ar: copy.arTitle, en: copy.enTitle },
+        message: { ar: copy.arMessage, en: copy.enMessage },
+        targetType: this.getPaymentReminderTargetType(stage),
+        targetId: sponsorshipId,
+        additionalData: {
+          sponsorshipId: String(sponsorshipId),
+          coveredMonth,
+          reminderStage: stage,
+        },
+      });
+      return true;
+    } catch {
+      this.logger.warn(
+        `Failed to create ${stage} payment reminder for sponsorship ${sponsorshipId}`,
+      );
+      return false;
+    }
+  }
+
   @Cron('5 0 * * *', { timeZone: SPONSORSHIP_TIME_ZONE })
   async handleAutomaticCancellation(): Promise<void> {
     try {
@@ -874,7 +1055,7 @@ export class SponsorshipService {
         status: Status.ACCEPTED,
         startDate: { lt: window.databaseCurrentMonthStart },
       },
-      select: { id: true },
+      select: { id: true, startDate: true },
     });
 
     if (candidates.length === 0) return 0;
@@ -886,19 +1067,31 @@ export class SponsorshipService {
         direction: WalletTransactionDirection.DEBIT,
         referenceType: SPONSORSHIP_REFERENCE_TYPE,
         referenceId: { in: candidateIds },
-        createdAt: {
-          gte: window.renewalWindowStart,
-          lt: window.renewalWindowEnd,
-        },
       },
-      select: { referenceId: true },
+      orderBy: { createdAt: 'asc' },
+      select: { referenceId: true, coveredMonth: true, createdAt: true },
     });
-    const paidSponsorshipIds = new Set(
-      payments.flatMap(({ referenceId }) =>
-        referenceId === null ? [] : [referenceId],
-      ),
-    );
-    const overdueIds = candidateIds.filter((id) => !paidSponsorshipIds.has(id));
+    const paymentsBySponsorship = new Map<
+      number,
+      { coveredMonth: string | null; createdAt: Date }[]
+    >();
+
+    for (const payment of payments) {
+      if (payment.referenceId === null) continue;
+      const sponsorshipPayments =
+        paymentsBySponsorship.get(payment.referenceId) ?? [];
+      sponsorshipPayments.push(payment);
+      paymentsBySponsorship.set(payment.referenceId, sponsorshipPayments);
+    }
+
+    const overdueIds = candidates.flatMap((sponsorship) => {
+      if (!sponsorship.startDate) return [];
+      const paidMonths = getPaidSponsorshipMonths(
+        sponsorship.startDate,
+        paymentsBySponsorship.get(sponsorship.id) ?? [],
+      );
+      return paidMonths.has(window.coveredMonth) ? [] : [sponsorship.id];
+    });
 
     let cancelledCount = 0;
 
@@ -924,26 +1117,31 @@ export class SponsorshipService {
             orphanId: true,
             amount: true,
             status: true,
+            startDate: true,
           },
         });
 
         if (!sponsorship) return null;
 
-        const payment = await tx.walletTransaction.findFirst({
+        if (!sponsorship.startDate) return null;
+
+        const sponsorshipPayments = await tx.walletTransaction.findMany({
           where: {
             type: TransactionType.SPONSORSHIP_DONATION,
             direction: WalletTransactionDirection.DEBIT,
             referenceType: SPONSORSHIP_REFERENCE_TYPE,
             referenceId: sponsorship.id,
-            createdAt: {
-              gte: window.renewalWindowStart,
-              lt: window.renewalWindowEnd,
-            },
           },
-          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+          select: { coveredMonth: true, createdAt: true },
         });
 
-        if (payment) return null;
+        const paidMonths = getPaidSponsorshipMonths(
+          sponsorship.startDate,
+          sponsorshipPayments,
+        );
+
+        if (paidMonths.has(window.coveredMonth)) return null;
 
         const updateResult = await tx.sponsorship.updateMany({
           where: { id: sponsorship.id, status: Status.ACCEPTED },

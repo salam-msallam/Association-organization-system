@@ -13,6 +13,8 @@
     "matches": "صيغة البيانات المدخلة غير صحيحة ولا تطابق النمط المطلوب.",
     "INVALID_COUNTRY_CODE": "رمز الدولة غير صالح. يجب أن يبدأ بعلامة + متبوعة بـ 1 إلى 4 أرقام (مثال: +963).",
     "INVALID_DATE_OF_BIRTH": "يجب أن يكون تاريخ الميلاد بصيغة صحيحة.",
+    "DATE_OF_BIRTH_CANNOT_BE_IN_FUTURE": "لا يمكن أن يكون تاريخ الميلاد في المستقبل.",
+    "DATE_OF_BIRTH_EXCEEDS_MAX_AGE": "يجب ألا يتجاوز عمر المستخدم 100 سنة.",
     "ROLE_IDS_MUST_BE_ARRAY": "يجب أن تكون roleIds مصفوفة.",
     "ROLE_ID_MUST_BE_NUMBER": "يجب أن يكون كل عنصر في roleIds رقماً.",
     "VALID_PHONE_NUMBER": "يرجى إدخال رقم هاتف صحيح.",

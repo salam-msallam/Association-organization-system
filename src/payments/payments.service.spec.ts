@@ -215,6 +215,7 @@ describe('PaymentsService', () => {
         findFirst: jest.fn().mockResolvedValue({
           id: 5,
           amount: new Prisma.Decimal(10),
+          startDate: new Date('2026-07-10T00:00:00.000Z'),
         }),
       },
       wallet: {
@@ -231,7 +232,6 @@ describe('PaymentsService', () => {
       },
       walletTransaction: {
         findMany: jest.fn().mockResolvedValue([]),
-        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({
           id: 115,
           createdAt: new Date('2026-07-10T09:00:00.000Z'),
@@ -728,7 +728,7 @@ describe('PaymentsService', () => {
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.sponsorship.findFirst).toHaveBeenCalledWith({
       where: { id: 5, donorId: 3, status: Status.ACCEPTED },
-      select: { id: true, amount: true },
+      select: { id: true, amount: true, startDate: true },
     });
     expect(tx.walletTransaction.findMany).toHaveBeenCalledWith({
       where: {
@@ -736,23 +736,9 @@ describe('PaymentsService', () => {
         direction: WalletTransactionDirection.DEBIT,
         referenceType: 'SPONSORSHIP',
         referenceId: 5,
-        createdAt: {
-          gte: new Date('2026-06-30T21:00:00.000Z'),
-          lt: new Date('2026-07-31T21:00:00.000Z'),
-        },
       },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, createdAt: true },
-    });
-    expect(tx.walletTransaction.findFirst).toHaveBeenCalledWith({
-      where: {
-        type: TransactionType.SPONSORSHIP_DONATION,
-        direction: WalletTransactionDirection.DEBIT,
-        referenceType: 'SPONSORSHIP',
-        referenceId: 5,
-        createdAt: { lt: new Date('2026-06-30T21:00:00.000Z') },
-      },
-      select: { id: true },
+      select: { id: true, coveredMonth: true, createdAt: true },
     });
     expect(tx.wallet.updateMany).toHaveBeenCalledWith({
       where: {
@@ -772,6 +758,7 @@ describe('PaymentsService', () => {
         direction: WalletTransactionDirection.DEBIT,
         referenceType: 'SPONSORSHIP',
         referenceId: 5,
+        coveredMonth: '2026-07',
         balanceAfter: new Prisma.Decimal(90),
         createdAt: now,
       },
@@ -788,6 +775,8 @@ describe('PaymentsService', () => {
         paidAmount: '10.00',
         balanceAfter: '90.00',
         coveredMonth: '2026-07',
+        nextDueMonth: null,
+        hasAnotherDuePayment: false,
         paidAt: now,
       },
     });
@@ -836,7 +825,7 @@ describe('PaymentsService', () => {
     );
   });
 
-  it('treats a first payment on or after day 20 as next-month coverage', async () => {
+  it('keeps a delayed first payment on or after day 20 assigned to its original month', async () => {
     const now = new Date('2026-07-25T09:00:00.000Z');
     jest.useFakeTimers().setSystemTime(now);
     const tx = mockValidSponsorshipPaymentSetup();
@@ -847,9 +836,29 @@ describe('PaymentsService', () => {
       type: UserType.DONOR,
     });
 
-    expect(result.data.coveredMonth).toBe('2026-08');
+    expect(result.data.coveredMonth).toBe('2026-07');
+    expect(result.data.nextDueMonth).toBe('2026-08');
+    expect(result.data.hasAnotherDuePayment).toBe(true);
     expect(tx.walletTransaction.findMany).toHaveBeenCalledTimes(1);
-    expect(tx.walletTransaction.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats the first installment of a sponsorship accepted after day 20 as next-month coverage', async () => {
+    const now = new Date('2026-07-25T09:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+    const tx = mockValidSponsorshipPaymentSetup();
+    tx.sponsorship.findFirst.mockResolvedValue({
+      id: 5,
+      amount: new Prisma.Decimal(10),
+      startDate: new Date('2026-07-25T00:00:00.000Z'),
+    });
+
+    const result = await service.donateWalletToSponsorship(5, {
+      id: 7,
+      type: UserType.DONOR,
+    });
+
+    expect(result.data.coveredMonth).toBe('2026-08');
+    expect(result.data.hasAnotherDuePayment).toBe(false);
   });
 
   it('allows the first sponsorship payment before day 20 and its renewal after day 20 in the same month', async () => {
@@ -857,7 +866,11 @@ describe('PaymentsService', () => {
     jest.useFakeTimers().setSystemTime(now);
     const tx = mockValidSponsorshipPaymentSetup();
     tx.walletTransaction.findMany.mockResolvedValueOnce([
-      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+      {
+        id: 100,
+        coveredMonth: '2026-07',
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+      },
     ]);
     tx.walletTransaction.create.mockResolvedValue({ id: 116, createdAt: now });
 
@@ -867,6 +880,7 @@ describe('PaymentsService', () => {
     });
 
     expect(result.data.coveredMonth).toBe('2026-08');
+    expect(result.data.nextDueMonth).toBeNull();
     expect(tx.wallet.updateMany).toHaveBeenCalledTimes(1);
     expect(tx.walletTransaction.create).toHaveBeenCalledTimes(1);
   });
@@ -875,7 +889,11 @@ describe('PaymentsService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-15T09:00:00.000Z'));
     const tx = mockValidSponsorshipPaymentSetup();
     tx.walletTransaction.findMany.mockResolvedValueOnce([
-      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+      {
+        id: 100,
+        coveredMonth: '2026-07',
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+      },
     ]);
 
     await expect(
@@ -895,7 +913,16 @@ describe('PaymentsService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
     const tx = mockValidSponsorshipPaymentSetup();
     tx.walletTransaction.findMany.mockResolvedValueOnce([
-      { id: 101, createdAt: new Date('2026-07-22T09:00:00.000Z') },
+      {
+        id: 100,
+        coveredMonth: '2026-07',
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+      },
+      {
+        id: 101,
+        coveredMonth: '2026-08',
+        createdAt: new Date('2026-07-22T09:00:00.000Z'),
+      },
     ]);
 
     await expect(
@@ -918,8 +945,16 @@ describe('PaymentsService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
     const tx = mockValidSponsorshipPaymentSetup();
     tx.walletTransaction.findMany.mockResolvedValueOnce([
-      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
-      { id: 101, createdAt: new Date('2026-07-22T09:00:00.000Z') },
+      {
+        id: 100,
+        coveredMonth: '2026-07',
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+      },
+      {
+        id: 101,
+        coveredMonth: '2026-08',
+        createdAt: new Date('2026-07-22T09:00:00.000Z'),
+      },
     ]);
 
     await expect(
@@ -933,29 +968,42 @@ describe('PaymentsService', () => {
     expect(tx.walletTransaction.create).not.toHaveBeenCalled();
   });
 
-  it('does not allow the first-month exception when an older payment exists', async () => {
+  it('allows the normal next-month renewal when the first installment exists', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-25T09:00:00.000Z'));
     const tx = mockValidSponsorshipPaymentSetup();
     tx.walletTransaction.findMany.mockResolvedValueOnce([
-      { id: 100, createdAt: new Date('2026-07-10T09:00:00.000Z') },
+      {
+        id: 100,
+        coveredMonth: '2026-07',
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+      },
     ]);
-    tx.walletTransaction.findFirst.mockResolvedValueOnce({ id: 99 });
 
-    await expect(
-      service.donateWalletToSponsorship(5, {
-        id: 7,
-        type: UserType.DONOR,
-      }),
-    ).rejects.toThrow(ConflictException);
+    const result = await service.donateWalletToSponsorship(5, {
+      id: 7,
+      type: UserType.DONOR,
+    });
 
-    expect(tx.wallet.updateMany).not.toHaveBeenCalled();
-    expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+    expect(result.data.coveredMonth).toBe('2026-08');
+    expect(tx.wallet.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.walletTransaction.create).toHaveBeenCalledTimes(1);
   });
 
   it('rejects renewal before day 20 when a first payment already exists', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-19T09:00:00.000Z'));
     const tx = mockValidSponsorshipPaymentSetup();
-    tx.walletTransaction.findFirst.mockResolvedValueOnce({ id: 100 });
+    tx.sponsorship.findFirst.mockResolvedValue({
+      id: 5,
+      amount: new Prisma.Decimal(10),
+      startDate: new Date('2026-06-10T00:00:00.000Z'),
+    });
+    tx.walletTransaction.findMany.mockResolvedValueOnce([
+      {
+        id: 100,
+        coveredMonth: '2026-06',
+        createdAt: new Date('2026-06-10T09:00:00.000Z'),
+      },
+    ]);
 
     await expect(
       service.donateWalletToSponsorship(5, {

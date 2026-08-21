@@ -13,6 +13,10 @@ import {
   BilingualTextDto,
   ParseBilingualText,
 } from '../../requests/dto/bilingual-text.dto';
+import {
+  IsDateOfBirthNotInFuture,
+  IsDateOfBirthWithinYears,
+} from '../../decorators/date-of-birth.decorator';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
   value === '' ? undefined : value;
@@ -59,6 +63,12 @@ export class UpdateProfileDto {
   })
   @IsOptional()
   @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
+  @IsDateOfBirthNotInFuture({
+    message: 'validation.DATE_OF_BIRTH_CANNOT_BE_IN_FUTURE',
+  })
+  @IsDateOfBirthWithinYears(100, {
+    message: 'validation.DATE_OF_BIRTH_EXCEEDS_MAX_AGE',
+  })
   @Transform(emptyToUndefined)
   dateOfBirth?: string;
 

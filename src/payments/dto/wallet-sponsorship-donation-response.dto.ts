@@ -16,6 +16,12 @@ class WalletSponsorshipDonationDataDto {
   @ApiProperty({ example: '2026-08' })
   coveredMonth!: string;
 
+  @ApiProperty({ example: '2026-09', nullable: true })
+  nextDueMonth!: string | null;
+
+  @ApiProperty({ example: true })
+  hasAnotherDuePayment!: boolean;
+
   @ApiProperty({ example: '2026-07-25T10:00:00.000Z' })
   paidAt!: Date;
 }

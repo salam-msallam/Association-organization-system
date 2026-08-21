@@ -11,6 +11,10 @@ import {
 import { Gender } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import {
+  IsDateOfBirthNotInFuture,
+  IsDateOfBirthWithinYears,
+} from '../../decorators/date-of-birth.decorator';
 
 export class CreateEmployeeDto {
   @IsString()
@@ -41,6 +45,12 @@ export class CreateEmployeeDto {
   personalPhoto: any;
 
   @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
+  @IsDateOfBirthNotInFuture({
+    message: 'validation.DATE_OF_BIRTH_CANNOT_BE_IN_FUTURE',
+  })
+  @IsDateOfBirthWithinYears(100, {
+    message: 'validation.DATE_OF_BIRTH_EXCEEDS_MAX_AGE',
+  })
   dateOfBirth: string;
 
   @ApiProperty({

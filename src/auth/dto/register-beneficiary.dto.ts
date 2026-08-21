@@ -13,6 +13,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SocialStatus } from '@prisma/client';
 import { BaseRegisterDto } from './base-register.dto';
 import { Transform, Type } from 'class-transformer';
+import {
+  IsDateOfBirthNotInFuture,
+  IsDateOfBirthWithinYears,
+} from '../../decorators/date-of-birth.decorator';
 
 export class RegisterBeneficiaryDto extends BaseRegisterDto {
   @ApiProperty({ example: '+963' })
@@ -27,6 +31,12 @@ export class RegisterBeneficiaryDto extends BaseRegisterDto {
     example: '1990-05-20',
   })
   @IsDateString({}, { message: 'validation.INVALID_DATE_OF_BIRTH' })
+  @IsDateOfBirthNotInFuture({
+    message: 'validation.DATE_OF_BIRTH_CANNOT_BE_IN_FUTURE',
+  })
+  @IsDateOfBirthWithinYears(100, {
+    message: 'validation.DATE_OF_BIRTH_EXCEEDS_MAX_AGE',
+  })
   dateOfBirth!: string;
 
   @ApiProperty({ type: 'string', format: 'binary' })
